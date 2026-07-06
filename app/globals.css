@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-studio-border;
+  }
+  html,
+  body {
+    @apply h-full bg-studio-void text-ink-primary antialiased;
+    font-family: var(--font-body);
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    @apply bg-signal/30 text-ink-primary;
+  }
+}
+
+/* ── Legacy component classes, ported & restyled to studio palette ──
+   These class names are referenced directly throughout ported editor
+   components (Screen, TimeLine, PlayerControls, StartupScreen, etc).
+   Keeping the names stable avoided a full rewrite of every component,
+   while the values below are 100% new to match the ClipFlow studio look. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.12);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+.resizer-h {
+  width: 4px; flex-shrink: 0; cursor: col-resize;
+  transition: background .12s; z-index: 10;
+  background: rgba(255,255,255,.05);
+  touch-action: none;
+}
+.resizer-h:hover, .resizer-h:active { background: #FF6A3D; }
+
+.resizer-v {
+  height: 4px; flex-shrink: 0; cursor: row-resize;
+  transition: background .12s; z-index: 10;
+  background: rgba(255,255,255,.05);
+  touch-action: none;
+}
+.resizer-v:hover, .resizer-v:active { background: #FF6A3D; }
+
+.player-bar {
+  background: #14171C;
+  border-top: 1px solid #262B33;
+}
+
+.player-tbtn {
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .12s; flex-shrink: 0;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #262B33;
+  color: rgba(237,239,242,.85);
+  border-radius: 8px;
+}
+.player-tbtn:hover { background: rgba(255,255,255,.1); border-color: #323844; }
+
+.player-tbtn-large {
+  background: linear-gradient(135deg, #FF6A3D 0%, #FF8259 100%) !important;
+  border: 1px solid transparent !important;
+  color: #0B0D10 !important;
+  box-shadow: 0 2px 16px rgba(255,106,61,.4);
+}
+.player-tbtn-large:hover { opacity: .92; }
+
+.player-time-display {
+  padding: 3px 9px; border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: .5px; white-space: nowrap;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #262B33;
+  color: #B4BAC4;
+}
+
+.ctrl-btn {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background .1s;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #262B33;
+  color: #B4BAC4;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,.1); color: #EDEFF2; }
+
+.ctrl-label {
+  font-size: 11px; font-weight: 600;
+  color: #8A919E;
+}
+
+.ctrl-range { accent-color: #FF6A3D; cursor: pointer; }
+
+.ctrl-select {
+  font-size: 11.5px; padding: 3px 22px 3px 8px; border-radius: 7px;
+  font-family: inherit; appearance: none; font-weight: 600; cursor: pointer;
+  background: rgba(255,255,255,.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(237,239,242,.6)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 6px center;
+  border: 1px solid #262B33;
+  color: #EDEFF2;
+  transition: border-color .12s;
+}
+.ctrl-select:focus { outline: none; border-color: #FF6A3D; }
+.ctrl-select option { background: #1C2027; color: #EDEFF2; }
+
+.grid-background {
+  background-color: #0F1216;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.03) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,106,61,.10) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 80%, rgba(79,209,197,.08) 0%, transparent 55%),
+    #0B0D10;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity .25s ease;
+  overflow-y: auto;
+  padding: 20px;
+}
+.startup-overlay.closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@layer utilities {
+  /* Slim studio scrollbars */
+  .studio-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .studio-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .studio-scroll::-webkit-scrollbar-thumb {
+    @apply bg-studio-borderLight rounded-full;
+  }
+  .studio-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-faint;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .glass-panel {
+    @apply bg-studio-surface/95 backdrop-blur-xl border border-studio-border;
+  }
+}
