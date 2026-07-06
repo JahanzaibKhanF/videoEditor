@@ -1,0 +1,390 @@
+"use client";
+
+import { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { TiDelete } from "react-icons/ti";
+import { BiPlus } from "react-icons/bi";
+import { MdBlurOn } from "react-icons/md";
+import { CiText } from "react-icons/ci";
+import { AiOutlineSplitCells } from "react-icons/ai";
+import { useAppDetailsContext } from "../../context/useAppContext";
+import { addClipToTimeline } from "../../utils/addClipToTimeline";
+import { deleteVideo } from "../../utils/deleteVideo";
+import { spliteLayer } from "../../utils/spliteLayer";
+import { formatVideoSize } from "../../utils/formatVideoSize";
+import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
+import TemplatesPanel from "./TemplatesPanel";
+import { useLocalMediaFolder, LocalMediaFile } from "../../hooks/useLocalMediaFolder";
+
+export default function MediaPanel({ activeTab }: { activeTab: string }) {
+  const {
+    videos, setVideos, clipsDetails, setClipsDetails, setTotalTime, setPrimaryVideoDimensions, setAudioDetails, audioDetails,
+    imagesDetails, setImagesDetails, setSelectedImageID, imageRefs, setImageRefs,
+    textsDetails, setTextsDetails, setSelectedTextId, selectedTextId,
+    blursDetails, setBlursDetails, setSelectedBlurId, selectedBlurId, selectedImageID, totalTime, containerDimenions, currentTime,
+    setMediaImportError,
+  } = useAppDetailsContext();
+
+  const localFolder = useLocalMediaFolder();
+  const [showLocalFolder, setShowLocalFolder] = useState(false);
+
+  // Route templates tab directly to TemplatesPanel
+  if (activeTab === "templates") return <TemplatesPanel />;
+
+  // Shared by both the native <input type=file> picker AND files pulled
+  // from a linked local folder (File System Access API) — either path
+  // ends up with plain File objects, so the ingestion logic is identical.
+  const ingestFiles = (files: File[]) => {
+    const newImages = [...imagesDetails];
+    const newRefs = { ...imageRefs };
+    files.forEach((file, index) => {
+      if (file.type.startsWith("video/")) {
+        setMediaImportError("");
+        const vName = `video${Date.now()}_${index}`;
+        const newVid = { video: file, name: vName };
+        setVideos(prev => [...prev, newVid]);
+        // Auto-add to timeline
+        addClipToTimeline({ video: newVid, setTotalTime, clipsDetails, setClipsDetails, setPrimaryVideoDimensions, setAudioDetails });
+      } else if (file.type.startsWith("image/")) {
+        const imgEl = new Image();
+        imgEl.src = URL.createObjectURL(file);
+        imgEl.onload = () => {
+          newRefs[index] = imgEl;
+          const id = uuidv4();
+          const reader = new FileReader();
+          reader.onload = () => {
+            newImages.push({ id, src: imgEl.src, image: file, opacity: 1, imageX: index * 100, imageY: 0, width: imgEl.width, height: imgEl.height, scaleX: .4, scaleY: .4, startTime: 0, endTime: totalTime, animation: "none" });
+            setImagesDetails([...newImages]);
+            setImageRefs({ ...newRefs });
+            setSelectedImageID(id);
+          };
+          reader.readAsDataURL(file);
+        };
+      }
+    });
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = clipsDetails.length > 0 ? "image/*,video/mp4" : "video/mp4";
+    input.multiple = true;
+    input.click();
+    input.onchange = (event) => {
+      const files = (event.target as HTMLInputElement).files;
+      if (!files) return;
+      ingestFiles(Array.from(files));
+    };
+  };
+
+  const handleImportFromLocalFolder = async (entry: LocalMediaFile) => {
+    const file = await entry.getFile();
+    ingestFiles([file]);
+  };
+
+  const addText = () => {
+    const t = { text: "New Text", textColor: "white", backgroundColor: "transparent", shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 3, shadowOffsetY: 1, fontFamily: "Arial", textX: (containerDimenions.width - 220) / 2, textY: (containerDimenions.height - 100) / 2, width: 220, height: 100, fontSize: 100, lineHeight: 1, isBold: false, isItalic: false, isUnderline: false, opacity: 1, id: uuidv4(), startTime: 0, endTime: totalTime || 100, animation: "none" };
+    setTextsDetails(prev => [...prev, t]);
+    setSelectedTextId(t.id);
+  };
+
+  const addBlur = () => {
+    const b = { id: uuidv4(), x: (containerDimenions.width - 200) / 2, y: 100, width: 400, height: 200, blurAmount: 10, startTime: 0, endTime: totalTime };
+    setBlursDetails(prev => [...prev, b]);
+    setSelectedBlurId(b.id);
+  };
+
+  const sectionLabel = "text-[10px] font-bold uppercase tracking-[.7px] text-ink-secondary px-3 pt-3 pb-1.5";
+  const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all border-l-2";
+  const emptyMsg = "flex items-center justify-center h-20 text-ink-secondary text-xs italic text-center px-4";
+
+  const addGradBtn = (onClick: () => void, disabled = false, grad = "linear-gradient(135deg,#FF6A3D,#FF8259)") => (
+    <button onClick={onClick} disabled={disabled}
+      style={{ width: 30, height: 30, borderRadius: 9, background: disabled ? undefined : grad, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .4 : 1, flexShrink: 0 }}
+      className="bg-studio-raised disabled:bg-studio-raised">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.6" strokeLinecap="round"/></svg>
+    </button>
+  );
+
+  /* ─── MEDIA TAB ─── */
+  if (activeTab === "media") return (
+    <div className="flex flex-col h-full bg-studio-surface">
+      <div className="px-3 py-3 border-b border-studio-border flex items-center justify-between flex-shrink-0">
+        <div>
+          <div className="text-[13px] font-bold text-ink-primary">Media Library</div>
+          <div className="text-[11px] text-ink-secondary mt-0.5">{videos.length} video{videos.length !== 1 ? "s" : ""} · {imagesDetails.length} image{imagesDetails.length !== 1 ? "s" : ""}</div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {localFolder.supported && (
+            <button
+              title={localFolder.folderName ? `Linked: ${localFolder.folderName}` : "Link a local media folder"}
+              onClick={() => setShowLocalFolder(s => !s)}
+              className={`w-[30px] h-[30px] rounded-[9px] flex items-center justify-center flex-shrink-0 border transition-colors ${
+                showLocalFolder ? "border-signal bg-signal/10 text-signal" : "border-studio-border bg-studio-raised text-ink-secondary hover:text-ink-primary"
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                <path d="M1.5 3.5a1 1 0 011-1h2.7l1 1.2h4.3a1 1 0 011 1v5.3a1 1 0 01-1 1h-8a1 1 0 01-1-1v-6.5z" stroke="currentColor" strokeWidth="1.1"/>
+              </svg>
+            </button>
+          )}
+          {addGradBtn(handleImport)}
+        </div>
+      </div>
+
+      {showLocalFolder && localFolder.supported && (
+        <div className="border-b border-studio-border bg-studio-void/40 flex-shrink-0">
+          {!localFolder.folderName ? (
+            <div className="p-3">
+              <button
+                onClick={localFolder.linkFolder}
+                disabled={localFolder.linking}
+                className="w-full text-[12px] font-semibold py-2 rounded-lg border border-dashed border-studio-borderLight text-ink-secondary hover:border-signal hover:text-signal transition-colors disabled:opacity-50"
+              >
+                {localFolder.linking ? "Linking…" : "Link a local media folder"}
+              </button>
+              <p className="text-[10.5px] text-ink-faint mt-1.5 px-0.5">
+                Browse and import clips directly from your disk — nothing is uploaded.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11.5px] font-semibold text-ink-primary truncate">
+                  📁 {localFolder.folderName}
+                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {localFolder.permissionState !== "granted" && (
+                    <button onClick={localFolder.reconnectFolder} className="text-[10.5px] font-semibold text-signal hover:underline">
+                      Reconnect
+                    </button>
+                  )}
+                  <button onClick={localFolder.forgetFolder} className="text-[10.5px] font-semibold text-ink-faint hover:text-danger">
+                    Unlink
+                  </button>
+                </div>
+              </div>
+              {localFolder.error && (
+                <div className="text-[10.5px] text-danger bg-danger/10 border border-danger/25 rounded-md px-2 py-1 mb-2">
+                  {localFolder.error}
+                </div>
+              )}
+              {localFolder.permissionState === "granted" && (
+                localFolder.files.filter(f => f.kind !== "other").length === 0 ? (
+                  <div className="text-[11px] text-ink-faint italic py-2 text-center">No video or image files found in this folder.</div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5 max-h-[140px] overflow-y-auto scrollbar-thin">
+                    {localFolder.files.filter(f => f.kind !== "other").map(f => (
+                      <button
+                        key={f.name}
+                        onClick={() => handleImportFromLocalFolder(f)}
+                        title={f.name}
+                        className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-studio-raised border border-studio-border hover:border-signal transition-colors"
+                      >
+                        <span className="text-base">{f.kind === "video" ? "🎬" : "🖼️"}</span>
+                        <span className="text-[9.5px] text-ink-secondary truncate w-full text-center">{f.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {videos.length === 0 && imagesDetails.length === 0 ? (
+          <div className="m-4 border-[1.5px] border-dashed border-studio-borderLight rounded-xl p-6 text-center cursor-pointer hover:border-signal hover:bg-signal/5 transition-all" onClick={handleImport}>
+            <div className="text-2xl mb-2">📂</div>
+            <div className="text-[13px] font-semibold text-ink-secondary">Import your media</div>
+            <div className="text-[11px] text-ink-secondary mt-1">Click to browse files</div>
+          </div>
+        ) : (<>
+          {videos.length > 0 && <>
+            <div className={sectionLabel}>Videos ({videos.length})</div>
+            {videos.map((v, i) => (
+              <div key={i} className={`${rowBase} border-transparent hover:bg-studio-hover`}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#111]">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2.5l6 3.5-6 3.5V2.5z" fill="rgba(255,255,255,.6)"/></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary truncate">{v.video.name.slice(0, 26)}{v.video.name.length > 26 ? "…" : ""}</div>
+                  <div className="text-[10.5px] text-ink-secondary">{formatVideoSize(v.video.size)}</div>
+                </div>
+                <button title="Add to timeline" onClick={() => addClipToTimeline({ video: v, setTotalTime, clipsDetails, setClipsDetails, setPrimaryVideoDimensions, setAudioDetails })}
+                  className="w-6 h-6 rounded-md flex items-center justify-center cursor-pointer bg-[rgba(91,79,232,.1)] dark:bg-[rgba(91,79,232,.2)] text-signal border-none hover:bg-[rgba(91,79,232,.2)] dark:hover:bg-[rgba(91,79,232,.3)] transition-all">
+                  <BiPlus size={13} />
+                </button>
+                <button title="Remove" disabled={v.name === "video1"} onClick={() => deleteVideo({ video: v, setVideos, setClipsDetails, setTotalTime })}
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-danger border-none bg-transparent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover:bg-[rgba(239,68,68,.1)] transition-all">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                </button>
+              </div>
+            ))}
+          </>}
+          {imagesDetails.length > 0 && <>
+            <div className={sectionLabel}>Images ({imagesDetails.length})</div>
+            <div className="grid grid-cols-2 gap-2 px-3 pb-2">
+              {imagesDetails.map(img => (
+                <div key={img.id}
+                  className={`relative rounded-lg overflow-hidden cursor-pointer aspect-video bg-black border-[1.5px] transition-all ${selectedImageID === img.id ? "border-signal" : "border-studio-border"}`}
+                  onClick={() => { setSelectedImageID(img.id); }}>
+                  <img src={img.src} className="w-full h-full object-cover" />
+                  <TiDelete className="absolute top-1 right-1 text-danger bg-studio-void/80 rounded-full text-base cursor-pointer"
+                    onClick={e => { e.stopPropagation(); setImagesDetails(prev => prev.filter(p => p.id !== img.id)); }} />
+                </div>
+              ))}
+            </div>
+          </>}
+        </>)}
+      </div>
+    </div>
+  );
+
+  /* ─── TEXT TAB ─── */
+  if (activeTab === "text") return (
+    <div className="flex flex-col h-full bg-studio-surface">
+      <div className="px-3 py-3 border-b border-studio-border flex items-center justify-between flex-shrink-0">
+        <div className="text-[13px] font-bold text-ink-primary">Text Layers</div>
+        {addGradBtn(addText, videos.length === 0)}
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {textsDetails.length === 0 ? <div className={emptyMsg}>No text layers.<br/>Click + to add one.</div>
+          : textsDetails.map(t => {
+            const active = selectedTextId === t.id;
+            return (
+              <div key={t.id}
+                className={`${rowBase} ${active ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
+                onClick={() => { setSelectedTextId(t.id); }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#DBEAFE,#EDE9FE)] dark:bg-[linear-gradient(135deg,#1e3a5f,#2d1b5e)]">
+                  <CiText size={14} className="text-[#3730A3] dark:text-[#93C5FD]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary truncate">{t.text.slice(0, 24)}{t.text.length > 24 ? "…" : ""}</div>
+                  <div className="text-[10.5px] text-ink-secondary">{t.fontFamily} · {Math.trunc(t.fontSize)}px</div>
+                </div>
+                <TiDelete className="text-danger cursor-pointer text-base flex-shrink-0"
+                  onClick={e => { e.stopPropagation(); setTextsDetails(prev => prev.filter(d => d.id !== t.id)); }} />
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+
+  /* ─── EFFECTS TAB ─── */
+  if (activeTab === "effects") return (
+    <div className="flex flex-col h-full bg-studio-surface">
+      <div className="px-3 py-3 border-b border-studio-border flex items-center justify-between flex-shrink-0">
+        <div className="text-[13px] font-bold text-ink-primary">Blur Regions</div>
+        {addGradBtn(addBlur, videos.length === 0, "linear-gradient(135deg,#10B981,#06B6D4)")}
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {blursDetails.length === 0 ? <div className={emptyMsg}>No blur regions.<br/>Click + to add one.</div>
+          : blursDetails.map((b, i) => {
+            const active = selectedBlurId === b.id;
+            return (
+              <div key={b.id}
+                className={`${rowBase} ${active ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
+                onClick={() => setSelectedBlurId(b.id)}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#D1FAE5,#A7F3D0)] dark:bg-[linear-gradient(135deg,#052e1c,#064e3b)]">
+                  <MdBlurOn size={14} className="text-[#065F46] dark:text-[#6EE7B7]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary">Blur Region {i + 1}</div>
+                  <div className="text-[10.5px] text-ink-secondary">Intensity {b.blurAmount}</div>
+                </div>
+                <TiDelete className="text-danger cursor-pointer text-base flex-shrink-0"
+                  onClick={e => { e.stopPropagation(); setBlursDetails(prev => prev.filter(d => d.id !== b.id)); }} />
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+
+  /* ─── LAYERS TAB ─── */
+  if (activeTab === "layers") return (
+    <div className="flex flex-col h-full bg-studio-surface">
+      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
+        <div className="text-[13px] font-bold text-ink-primary">All Layers</div>
+        <div className="text-[11px] text-ink-secondary mt-0.5">{clipsDetails.length + textsDetails.length + imagesDetails.length + blursDetails.length} layers total</div>
+      </div>
+      <div className="px-3 py-2 border-b border-studio-border flex flex-wrap gap-1.5 flex-shrink-0">
+        {[
+          { label: "Import", icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v8M2 9l4.5 3.5L11 9M1 12h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>, onClick: handleImport, disabled: false },
+          { label: "Text",   icon: <CiText size={13}/>, onClick: addText, disabled: videos.length === 0 },
+          { label: "Blur",   icon: <MdBlurOn size={13}/>, onClick: addBlur, disabled: videos.length === 0 },
+          { label: "Split",  icon: <AiOutlineSplitCells size={13}/>, onClick: () => spliteLayer(null, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
+        ].map(btn => (
+          <button key={btn.label} onClick={btn.onClick} disabled={btn.disabled}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary text-[11px] font-semibold cursor-pointer hover:bg-signal/10 hover:border-signal/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-[inherit]">
+            {btn.icon}{btn.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {clipsDetails.length === 0 && textsDetails.length === 0 && imagesDetails.length === 0 && blursDetails.length === 0
+          ? <div className={emptyMsg}>No layers. Import a video to start.</div>
+          : <>
+            {clipsDetails.length > 0 && <div className={sectionLabel}>Video Clips</div>}
+            {clipsDetails.map(c => (
+              <div key={c.id} className={`${rowBase} border-transparent`}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#1e3a5f,#2d1b5e)]">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 2l5 3-5 3V2z" fill="rgba(255,255,255,.7)"/></svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary truncate">{c.name}</div>
+                  <div className="text-[10.5px] text-ink-secondary">{(c.endPosition - c.startPosition).toFixed(1)}s</div>
+                </div>
+              </div>
+            ))}
+            {textsDetails.length > 0 && <div className={sectionLabel}>Text Layers</div>}
+            {textsDetails.map(t => (
+              <div key={t.id} className={`${rowBase} ${selectedTextId === t.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
+                onClick={() => setSelectedTextId(t.id)}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#FCE7F3,#FEF3C7)] dark:bg-[linear-gradient(135deg,#4a1030,#3d2a00)]">
+                  <CiText size={13} className="text-[#BE185D] dark:text-[#F9A8D4]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary truncate">{t.text.slice(0, 20)}</div>
+                  <div className="text-[10.5px] text-ink-secondary">{t.fontFamily}</div>
+                </div>
+                <TiDelete className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setTextsDetails(prev => prev.filter(d => d.id !== t.id)); }} />
+              </div>
+            ))}
+            {blursDetails.length > 0 && <div className={sectionLabel}>Blur Regions</div>}
+            {blursDetails.map((b, i) => (
+              <div key={b.id} className={`${rowBase} ${selectedBlurId === b.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
+                onClick={() => setSelectedBlurId(b.id)}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#D1FAE5,#A7F3D0)] dark:bg-[linear-gradient(135deg,#052e1c,#064e3b)]">
+                  <MdBlurOn size={13} className="text-[#065F46] dark:text-[#6EE7B7]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-ink-primary">Blur {i + 1}</div>
+                  <div className="text-[10.5px] text-ink-secondary">Intensity {b.blurAmount}</div>
+                </div>
+                <TiDelete className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setBlursDetails(prev => prev.filter(d => d.id !== b.id)); }} />
+              </div>
+            ))}
+          </>}
+      </div>
+    </div>
+  );
+
+  /* ─── TRANSITIONS TAB ─── */
+  if (activeTab === "transitions") return (
+    <div className="flex flex-col h-full bg-studio-surface overflow-hidden">
+      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
+        <div className="text-[13px] font-bold text-ink-primary">Transitions</div>
+        <div className="text-[11px] text-ink-secondary mt-0.5">Select a clip then pick transition</div>
+      </div>
+      <div className="flex-1 overflow-hidden scrollbar-thin">
+        <ClipTransitionSelector />
+      </div>
+    </div>
+  );
+
+  return null;
+}
