@@ -8,6 +8,7 @@
  */
 import { useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
+import { CheckCircle2, XCircle, Ban, Film, X, Download } from "@/utils/icons";
 import { clientRender, cancelRenderJob } from "../../utils/clientRender";
 
 export default function RenderButton() {
@@ -29,7 +30,7 @@ export default function RenderButton() {
   const barColor = activeJob?.processName === "Completed" ? "#10B981"
     : activeJob?.processName === "Failed" ? "#EF4444"
     : activeJob?.processName === "Cancelled" ? "#6B7280"
-    : "#FF6A3D";
+    : "#8B5CFF";
 
   const handleRender = async () => {
     setShowModal(true);
@@ -114,17 +115,15 @@ export default function RenderButton() {
         disabled={disabled}
         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-bold border-none cursor-pointer font-[inherit] transition-all flex-shrink-0
           ${disabled
-            ? "bg-[#262B33] dark:bg-[rgba(255,255,255,.08)] text-ink-muted dark:text-[rgba(255,255,255,.3)] cursor-not-allowed"
+            ? "bg-[rgba(255,255,255,.08)] text-[rgba(255,255,255,.3)] cursor-not-allowed"
             : "text-white hover:opacity-90 active:scale-95"
           }`}
         style={disabled ? {} : {
-          background: "linear-gradient(135deg,#FF6A3D 0%,#FF8259 40%,#FF6A3D 100%)",
-          boxShadow: "0 2px 10px rgba(91,79,232,.35)",
+          background: "linear-gradient(135deg,#8B5CFF 0%,#A47CFF 40%,#8B5CFF 100%)",
+          boxShadow: "0 2px 10px rgba(139,92,255,.35)",
         }}
       >
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-          <path d="M6 1v7M3 6l3 3 3-3M1 10.5h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <Download size={13} strokeWidth={2.2} />
         Export
       </button>
 
@@ -137,25 +136,25 @@ export default function RenderButton() {
         }}>
           <div style={{
             width: 420, borderRadius: 20, overflow: "hidden",
-            boxShadow: "0 32px 64px rgba(0,0,0,.4)",
-            background: "#FFFFFF",
-          }} className="dark:bg-[#1a1d27]">
+            boxShadow: "0 32px 64px rgba(0,0,0,.55)",
+            background: "#111120", border: "1px solid #211F33",
+          }}>
 
             {/* Header */}
             <div style={{
               padding: "20px 24px 16px",
               background: isDone
                 ? (activeJob?.processName === "Completed" ? "linear-gradient(135deg,#059669,#10B981)" : "linear-gradient(135deg,#EF4444,#F87171)")
-                : "linear-gradient(135deg,#FF6A3D,#FF8259,#FF6A3D)",
+                : "linear-gradient(135deg,#8B5CFF,#A47CFF,#8B5CFF)",
               display: "flex", alignItems: "flex-start", justifyContent: "space-between",
             }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "white", marginBottom: 4 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "white", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
                   {!activeJob ? "Starting export…"
-                    : activeJob.processName === "Completed" ? "✅ Export complete!"
-                    : activeJob.processName === "Failed" ? "❌ Export failed"
-                    : activeJob.processName === "Cancelled" ? "🚫 Cancelled"
-                    : `🎬 ${activeJob.processName}…`}
+                    : activeJob.processName === "Completed" ? (<><CheckCircle2 size={17} /> Export complete!</>)
+                    : activeJob.processName === "Failed" ? (<><XCircle size={17} /> Export failed</>)
+                    : activeJob.processName === "Cancelled" ? (<><Ban size={17} /> Cancelled</>)
+                    : (<><Film size={16} /> {activeJob.processName}…</>)}
                 </div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,.8)", fontWeight: 500 }}>
                   {activeJob?.name ?? videos[0]?.video.name ?? "export"}
@@ -167,17 +166,16 @@ export default function RenderButton() {
                 width: 28, height: 28, cursor: "pointer", color: "white",
                 fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center",
                 justifyContent: "center", flexShrink: 0, lineHeight: 1,
-              }}>×</button>
+              }}><X size={14} strokeWidth={2.4} /></button>
             </div>
 
             <div style={{ padding: "20px 24px" }}>
               {/* Progress bar */}
-              <div style={{ height: 8, borderRadius: 4, background: "#F2F4F7", marginBottom: 10, overflow: "hidden" }}
-                className="dark:bg-[rgba(255,255,255,.07)]">
+              <div style={{ height: 8, borderRadius: 4, background: "#1F1F35", marginBottom: 10, overflow: "hidden" }}>
                 <div style={{
                   height: "100%", borderRadius: 4,
                   width: `${activeJob?.progress ?? 0}%`,
-                  background: isDone ? barColor : "linear-gradient(90deg,#FF6A3D,#FF8259)",
+                  background: isDone ? barColor : "linear-gradient(90deg,#8B5CFF,#A47CFF)",
                   transition: "width .4s ease",
                 }} />
               </div>
@@ -186,8 +184,7 @@ export default function RenderButton() {
                 <span style={{ fontSize: 28, fontWeight: 900, color: barColor, fontFamily: "monospace" }}>
                   {activeJob?.progress ?? 0}%
                 </span>
-                <span style={{ fontSize: 12, color: "#9DA3B4", textAlign: "right" }}
-                  className="dark:text-[rgba(255,255,255,.4)]">
+                <span style={{ fontSize: 12, color: "#89859F", textAlign: "right" }}>
                   {activeJob?.processName ?? "Initializing"}
                 </span>
               </div>
@@ -198,7 +195,7 @@ export default function RenderButton() {
                 <div style={{
                   marginBottom: 14, padding: "10px 12px", borderRadius: 10,
                   background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.25)",
-                  fontSize: 11.5, color: "#B91C1C", lineHeight: 1.5, wordBreak: "break-word",
+                  fontSize: 11.5, color: "#FF8FA3", lineHeight: 1.5, wordBreak: "break-word",
                 }}>
                   {activeJob.error}
                 </div>
@@ -207,10 +204,10 @@ export default function RenderButton() {
               <div style={{ display: "flex", gap: 8 }}>
                 {!isDone && (
                   <button onClick={handleSeeLater} style={{
-                    flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #262B33",
+                    flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #211F33",
                     background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700,
-                    color: "#6B7280",
-                  }} className="dark:border-[rgba(255,255,255,.12)] dark:text-[rgba(255,255,255,.6)]">
+                    color: "#B8B4D1",
+                  }}>
                     See Later
                   </button>
                 )}
@@ -218,19 +215,19 @@ export default function RenderButton() {
                   <>
                     <button onClick={handleWatch} style={{
                       flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
-                      background: "linear-gradient(135deg,#FF6A3D,#FF8259)", cursor: "pointer",
+                      background: "linear-gradient(135deg,#8B5CFF,#A47CFF)", cursor: "pointer",
                       fontSize: 12.5, fontWeight: 700, color: "white",
                     }}>Watch Video</button>
                     <button onClick={handleDone} style={{
-                      flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #262B33",
-                      background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#6B7280",
-                    }} className="dark:border-[rgba(255,255,255,.12)]">Close</button>
+                      flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #211F33",
+                      background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#B8B4D1",
+                    }}>Close</button>
                   </>
                 )}
                 {isDone && activeJob?.processName !== "Completed" && (
                   <button onClick={handleDone} style={{
-                    flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #262B33",
-                    background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#6B7280",
+                    flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #211F33",
+                    background: "transparent", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#B8B4D1",
                   }}>Close</button>
                 )}
               </div>

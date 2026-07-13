@@ -7,6 +7,7 @@
  * X on each job: cancels if active, dismisses if done.
  */
 import { useState } from "react";
+import { X } from "@/utils/icons";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { cancelRenderJob } from "../../utils/clientRender";
 
@@ -39,7 +40,7 @@ export default function RenderingLoader() {
   };
 
   const statusColor = (s: string) =>
-    s === "Completed" ? "#10B981" : s === "Failed" ? "#EF4444" : s === "Cancelled" ? "#6B7280" : "#FF6A3D";
+    s === "Completed" ? "#10B981" : s === "Failed" ? "#EF4444" : s === "Cancelled" ? "#6B7280" : "#8B5CFF";
 
   const totalPct = activeJobs.length > 0
     ? Math.round(activeJobs.reduce((s, j) => s + (j.progress ?? 0), 0) / activeJobs.length)
@@ -51,21 +52,23 @@ export default function RenderingLoader() {
       {expanded && (
         <div style={{
           width: 320, borderRadius: 14, overflow: "hidden",
-          background: "#fff", border: "1px solid #262B33",
-          boxShadow: "0 8px 32px rgba(0,0,0,.18)",
+          background: "#111120", border: "1px solid #211F33",
+          boxShadow: "0 8px 32px rgba(0,0,0,.5)",
           marginBottom: 6,
-        }} className="dark:bg-[#1a1d27] dark:border-[rgba(255,255,255,.1)]">
+        }}>
           {/* Panel header */}
           <div style={{
             padding: "9px 14px", display: "flex", alignItems: "center", gap: 8,
-            borderBottom: "1px solid #F2F4F7",
-          }} className="dark:border-[rgba(255,255,255,.07)]">
-            <span style={{ fontSize: 12, fontWeight: 700, flex: 1, color: "#0F1117" }} className="dark:text-white">
+            borderBottom: "1px solid #211F33",
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, flex: 1, color: "#F3F1FA" }}>
               Render Queue
             </span>
-            <span style={{ fontSize: 10.5, color: "#9DA3B4" }}>{renderJobs.length} job{renderJobs.length !== 1 ? "s" : ""}</span>
+            <span style={{ fontSize: 10.5, color: "#89859F" }}>{renderJobs.length} job{renderJobs.length !== 1 ? "s" : ""}</span>
             <button onClick={() => setExpanded(false)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#9DA3B4", fontSize: 16, lineHeight: 1, padding: "0 2px" }}>×</button>
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#89859F", display: "flex", alignItems: "center", padding: "0 2px" }}>
+              <X size={13} strokeWidth={2.4} />
+            </button>
           </div>
 
           {/* Job list */}
@@ -74,14 +77,12 @@ export default function RenderingLoader() {
               const isDone = ["Completed","Failed","Cancelled"].includes(job.processName);
               const bc = statusColor(job.processName);
               return (
-                <div key={job.jobId} style={{ padding: "10px 14px", borderBottom: "1px solid #F2F4F7" }}
-                  className="dark:border-[rgba(255,255,255,.05)]">
+                <div key={job.jobId} style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, background: `${bc}18`, color: bc, borderRadius: 4, padding: "2px 5px", flexShrink: 0 }}>
                       {job.processName}
                     </span>
-                    <span style={{ fontSize: 11, color: "#6B7280", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      className="dark:text-[rgba(255,255,255,.4)]">{job.name}</span>
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,.4)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</span>
                     {/* X always present — cancels active, dismisses done */}
                     <button onClick={() => handleX(job.jobId)}
                       style={{
@@ -89,17 +90,17 @@ export default function RenderingLoader() {
                         border: "none", borderRadius: 5, padding: "2px 7px",
                         cursor: "pointer", fontSize: 10, fontWeight: 700,
                         color: isDone ? "#6B7280" : "#EF4444", flexShrink: 0,
-                      }}>✕</button>
+                        display: "flex", alignItems: "center",
+                      }}><X size={10} strokeWidth={2.6} /></button>
                   </div>
 
                   {/* Progress bar */}
-                  <div style={{ height: 4, borderRadius: 2, background: "#F2F4F7", marginBottom: 5, overflow: "hidden" }}
-                    className="dark:bg-[rgba(255,255,255,.07)]">
+                  <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,.07)", marginBottom: 5, overflow: "hidden" }}>
                     <div style={{
                       height: "100%", borderRadius: 2, width: `${job.progress}%`,
                       background: job.processName === "Failed" ? "#EF4444"
                         : job.processName === "Cancelled" ? "#6B7280"
-                        : "linear-gradient(90deg,#FF6A3D,#FF8259)",
+                        : "linear-gradient(90deg,#8B5CFF,#A47CFF)",
                       transition: "width .4s ease",
                     }} />
                   </div>
@@ -112,7 +113,7 @@ export default function RenderingLoader() {
                         setIsShowProcessedVideo(true);
                         setExpanded(false);
                       }} style={{
-                        background: "#FF6A3D", border: "none", color: "white",
+                        background: "#8B5CFF", border: "none", color: "white",
                         borderRadius: 5, padding: "2px 8px", cursor: "pointer", fontSize: 9.5, fontWeight: 700,
                       }}>Watch</button>
                     )}
@@ -130,7 +131,7 @@ export default function RenderingLoader() {
         padding: "6px 12px", borderRadius: 20, border: "none",
         cursor: "pointer",
         background: activeJobs.length
-          ? "linear-gradient(135deg,#FF6A3D,#FF8259)"
+          ? "linear-gradient(135deg,#8B5CFF,#A47CFF)"
           : "#10B981",
         color: "white",
         boxShadow: "0 2px 12px rgba(0,0,0,.2)",
