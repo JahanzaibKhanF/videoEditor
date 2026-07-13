@@ -5,10 +5,13 @@ import { useAuth } from "../../context/useAuthContext";
 import { formatVideoSize } from "../../utils/formatVideoSize";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import RenderButton from "../ui/RenderButton";
+import { SlidersHorizontal, Cloud, CloudOff, Loader2 } from "@/utils/icons";
+import { useProjectAutosave } from "../../hooks/useProjectAutosave";
 
 export default function Header() {
   const { totalTime, videos, clipsDetails, setIsCompostionSettingsOpen, fps } = useAppDetailsContext();
   const { user, logout, promptLogin } = useAuth();
+  const { status: saveStatus } = useProjectAutosave();
   const primary = videos.find(v => v.name === clipsDetails[0]?.name);
 
   return (
@@ -18,8 +21,8 @@ export default function Header() {
       <div className="flex items-center gap-2 mr-1 flex-shrink-0">
         <div className="w-[30px] h-[30px] rounded-[9px] bg-signal flex items-center justify-center shadow-glow">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#0B0D10" strokeWidth="1.4" />
-            <path d="M5.5 5l4 2-4 2V5z" fill="#0B0D10" />
+            <rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#07070C" strokeWidth="1.4" />
+            <path d="M5.5 5l4 2-4 2V5z" fill="#07070C" />
           </svg>
         </div>
         <span className="font-display text-sm font-bold text-ink-primary tracking-tight">
@@ -56,12 +59,33 @@ export default function Header() {
 
       {/* Right actions */}
       <div className="flex items-center gap-2 flex-shrink-0">
+        {user && (
+          <span
+            title={
+              saveStatus === "error" ? "Couldn't save — check your connection"
+              : saveStatus === "saving" ? "Saving…"
+              : saveStatus === "saved" ? "All changes saved"
+              : "No changes to save yet"
+            }
+            className={`hidden sm:flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full ${
+              saveStatus === "error" ? "text-danger bg-danger/10"
+              : saveStatus === "saving" ? "text-ink-muted bg-studio-hover"
+              : "text-ink-faint"
+            }`}
+          >
+            {saveStatus === "saving" && <Loader2 size={11} className="animate-spin" />}
+            {saveStatus === "saved" && <Cloud size={11} />}
+            {saveStatus === "error" && <CloudOff size={11} />}
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : ""}
+          </span>
+        )}
+
         <button
           disabled={videos.length === 0}
           onClick={() => setIsCompostionSettingsOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary hover:bg-studio-hover hover:text-ink-primary text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2"/><path d="M4 6h4M6 4v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+          <SlidersHorizontal size={12} strokeWidth={2.2} />
           Composition
         </button>
 

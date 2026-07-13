@@ -126,9 +126,11 @@ export default function FabricOverlay({ width, height }: Props) {
         width: (clip.width ?? width) * (clip.scale ?? 1),
         height: (clip.height ?? height) * (clip.scale ?? 1),
         fill: "transparent",
-        stroke: "rgba(255,0,255,0)",
-        cornerColor: "#FF00FF",
-        borderColor: "#FF00FF",
+        stroke: "rgba(255,182,72,0)",
+        cornerColor: "#FFB648",
+        borderColor: "#FFB648",
+        cornerStyle: "circle",
+        cornerSize: 9,
         lockRotation: true,
         transparentCorners: false,
         opacity: 0.001,
@@ -158,8 +160,11 @@ export default function FabricOverlay({ width, height }: Props) {
         scaleX: detail.scaleX,
         scaleY: detail.scaleY,
         opacity: 0.001,
-        cornerColor: "#007AFF",
-        borderColor: "#007AFF",
+        cornerColor: "#4C8CFF",
+        borderColor: "#4C8CFF",
+        cornerStyle: "circle",
+        cornerSize: 9,
+        borderScaleFactor: 1.5,
         transparentCorners: false,
         visible:
           currentTime >= detail.startTime && currentTime <= detail.endTime,
@@ -201,8 +206,11 @@ export default function FabricOverlay({ width, height }: Props) {
         fontFamily: detail.fontFamily ?? "Arial",
         fill: "rgba(0,0,0,0)", // transparent: CompositorCanvas draws the text
         backgroundColor: "transparent",
-        cornerColor: "#00FFFF",
-        borderColor: "#00FFFF",
+        cornerColor: "#8B5CFF",
+        borderColor: "#8B5CFF",
+        cornerStyle: "circle",
+        cornerSize: 9,
+        borderScaleFactor: 1.5,
         transparentCorners: false,
         fontStyle: detail.isItalic ? "italic" : "normal",
         fontWeight: detail.isBold ? "bold" : "normal",
@@ -281,11 +289,14 @@ export default function FabricOverlay({ width, height }: Props) {
         width: blur.width,
         height: blur.height,
         fill: "rgba(0,0,0,0.001)",
-        stroke: "rgba(16,185,129,0.6)",
+        stroke: "rgba(51,216,160,0.7)",
         strokeWidth: 2,
         strokeDashArray: [6, 3],
-        cornerColor: "#10B981",
-        borderColor: "#10B981",
+        cornerColor: "#33D8A0",
+        borderColor: "#33D8A0",
+        cornerStyle: "circle",
+        cornerSize: 9,
+        borderScaleFactor: 1.5,
         lockRotation: true,
         transparentCorners: false,
         visible: currentTime >= blur.startTime && currentTime <= blur.endTime,
@@ -372,8 +383,8 @@ export default function FabricOverlay({ width, height }: Props) {
         obj.left = width / 2 - (obj.width * obj.scaleX) / 2;
         if (!xLine) {
           xLine = new fabric.Line([width / 2, 0, width / 2, height], {
-            stroke: "#FF6A3D",
-            strokeWidth: 1,
+            stroke: "#FFB648",
+            strokeWidth: 1.5,
             selectable: false,
             evented: false,
           });
@@ -389,8 +400,8 @@ export default function FabricOverlay({ width, height }: Props) {
         obj.top = height / 2 - (obj.height * obj.scaleY) / 2;
         if (!yLine) {
           yLine = new fabric.Line([0, height / 2, width, height / 2], {
-            stroke: "#FF6A3D",
-            strokeWidth: 1,
+            stroke: "#FFB648",
+            strokeWidth: 1.5,
             selectable: false,
             evented: false,
           });

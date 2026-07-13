@@ -1,7 +1,7 @@
 "use client";
 
+import { FaBold, FaItalic, FaUnderline } from "@/utils/icons";
 import { useEffect, useState, useRef } from "react";
-import { FaBold, FaItalic, FaUnderline } from "react-icons/fa";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import Slider from "../ui/Slider";
 
@@ -71,7 +71,7 @@ export default function TextEditor() {
   }, [fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight]);
 
   const sectionLabel = "text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-secondary mb-2.5";
-  const divider = "h-px bg-[#262B33] dark:bg-[rgba(255,255,255,.07)] my-3";
+  const divider = "h-px bg-[#211F33] dark:bg-[rgba(255,255,255,.07)] my-3";
 
   return (
     <div className="bg-studio-raised border border-studio-border rounded-xl p-3.5">
@@ -114,7 +114,7 @@ export default function TextEditor() {
             <div key={i} onClick={() => set(!s)}
               className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-[1.5px]
                 ${s
-                  ? "border-signal bg-[rgba(91,79,232,.1)] dark:bg-[rgba(91,79,232,.2)] text-signal"
+                  ? "border-signal bg-[rgba(139,92,255,.1)] dark:bg-[rgba(139,92,255,.2)] text-signal"
                   : "border-studio-border bg-studio-surface text-ink-secondary hover:border-signal hover:text-signal"}`}>
               <Icon size={11} />
             </div>
@@ -141,7 +141,7 @@ export default function TextEditor() {
           {colorMode === "background" && (
             <div onClick={() => setBackgroundColor("transparent")}
               className={`w-[22px] h-[22px] rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
-                ${backgroundColor === "transparent" ? "border-signal shadow-[0_0_0_2px_rgba(91,79,232,.2)]" : "border-[#262B33] dark:border-[#3d4758]"}`}>
+                ${backgroundColor === "transparent" ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : "border-[#211F33] dark:border-[#3d4758]"}`}>
               <div className="absolute top-1/2 left-0 w-full h-[1.5px] bg-red-500 rotate-[-35deg]" />
             </div>
           )}
@@ -149,7 +149,7 @@ export default function TextEditor() {
             const sel = colorMode === "text" ? c.value === textColor : c.value === backgroundColor;
             return (
               <div key={c.value} className={`${c.cls} w-[22px] h-[22px] rounded-[5px] cursor-pointer transition-all border-[1.5px]
-                ${sel ? "border-signal shadow-[0_0_0_2px_rgba(91,79,232,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#262B33] dark:border-[#3d4758]" : "border-transparent"}
+                ${sel ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#211F33] dark:border-[#3d4758]" : "border-transparent"}
                 hover:scale-110`}
                 onClick={() => colorMode === "text" ? setTextColor(c.value) : setBackgroundColor(c.value)} />
             );
@@ -162,12 +162,12 @@ export default function TextEditor() {
           <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-studio-surface border border-studio-border">
             <div onClick={() => setShadowColor("transparent")}
               className={`w-[22px] h-[22px] rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
-                ${shadowColor === "transparent" ? "border-signal" : "border-[#262B33] dark:border-[#3d4758]"}`}>
+                ${shadowColor === "transparent" ? "border-signal" : "border-[#211F33] dark:border-[#3d4758]"}`}>
               <div className="absolute top-1/2 left-0 w-full h-[1.5px] bg-red-500 rotate-[-35deg]" />
             </div>
             {colors.map(c => (
               <div key={c.value} className={`${c.cls} w-[22px] h-[22px] rounded-[5px] cursor-pointer transition-all border-[1.5px] hover:scale-110
-                ${c.value === shadowColor ? "border-signal shadow-[0_0_0_2px_rgba(91,79,232,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#262B33] dark:border-[#3d4758]" : "border-transparent"}`}
+                ${c.value === shadowColor ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#211F33] dark:border-[#3d4758]" : "border-transparent"}`}
                 onClick={() => setShadowColor(c.value)} />
             ))}
           </div>

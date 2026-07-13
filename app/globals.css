@@ -54,7 +54,7 @@ html, body, #root {
   background: rgba(255,255,255,.05);
   touch-action: none;
 }
-.resizer-h:hover, .resizer-h:active { background: #FF6A3D; }
+.resizer-h:hover, .resizer-h:active { background: #8B5CFF; }
 
 .resizer-v {
   height: 4px; flex-shrink: 0; cursor: row-resize;
@@ -62,28 +62,28 @@ html, body, #root {
   background: rgba(255,255,255,.05);
   touch-action: none;
 }
-.resizer-v:hover, .resizer-v:active { background: #FF6A3D; }
+.resizer-v:hover, .resizer-v:active { background: #8B5CFF; }
 
 .player-bar {
-  background: #14171C;
-  border-top: 1px solid #262B33;
+  background: #111120;
+  border-top: 1px solid #211F33;
 }
 
 .player-tbtn {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; transition: all .12s; flex-shrink: 0;
   background: rgba(255,255,255,.05);
-  border: 1px solid #262B33;
+  border: 1px solid #211F33;
   color: rgba(237,239,242,.85);
   border-radius: 8px;
 }
-.player-tbtn:hover { background: rgba(255,255,255,.1); border-color: #323844; }
+.player-tbtn:hover { background: rgba(255,255,255,.1); border-color: #35334F; }
 
 .player-tbtn-large {
-  background: linear-gradient(135deg, #FF6A3D 0%, #FF8259 100%) !important;
+  background: linear-gradient(135deg, #8B5CFF 0%, #A47CFF 100%) !important;
   border: 1px solid transparent !important;
-  color: #0B0D10 !important;
-  box-shadow: 0 2px 16px rgba(255,106,61,.4);
+  color: #07070C !important;
+  box-shadow: 0 2px 16px rgba(139,92,255,.45);
 }
 .player-tbtn-large:hover { opacity: .92; }
 
@@ -92,8 +92,8 @@ html, body, #root {
   font-family: var(--font-mono);
   font-size: 11px; letter-spacing: .5px; white-space: nowrap;
   background: rgba(255,255,255,.05);
-  border: 1px solid #262B33;
-  color: #B4BAC4;
+  border: 1px solid #211F33;
+  color: #B8B4D1;
 }
 
 .ctrl-btn {
@@ -101,31 +101,31 @@ html, body, #root {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0; transition: background .1s;
   background: rgba(255,255,255,.05);
-  border: 1px solid #262B33;
-  color: #B4BAC4;
+  border: 1px solid #211F33;
+  color: #B8B4D1;
 }
-.ctrl-btn:hover { background: rgba(255,255,255,.1); color: #EDEFF2; }
+.ctrl-btn:hover { background: rgba(255,255,255,.1); color: #F3F1FA; }
 
 .ctrl-label {
   font-size: 11px; font-weight: 600;
-  color: #8A919E;
+  color: #89859F;
 }
 
-.ctrl-range { accent-color: #FF6A3D; cursor: pointer; }
+.ctrl-range { accent-color: #8B5CFF; cursor: pointer; }
 
 .ctrl-select {
   font-size: 11.5px; padding: 3px 22px 3px 8px; border-radius: 7px;
   font-family: inherit; appearance: none; font-weight: 600; cursor: pointer;
   background: rgba(255,255,255,.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(237,239,242,.6)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 6px center;
-  border: 1px solid #262B33;
-  color: #EDEFF2;
+  border: 1px solid #211F33;
+  color: #F3F1FA;
   transition: border-color .12s;
 }
-.ctrl-select:focus { outline: none; border-color: #FF6A3D; }
-.ctrl-select option { background: #1C2027; color: #EDEFF2; }
+.ctrl-select:focus { outline: none; border-color: #8B5CFF; }
+.ctrl-select option { background: #171728; color: #F3F1FA; }
 
 .grid-background {
-  background-color: #0F1216;
+  background-color: #0A0A13;
   background-image:
     linear-gradient(45deg, rgba(255,255,255,.03) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(255,255,255,.03) 25%, transparent 25%),
@@ -142,9 +142,9 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(255,106,61,.10) 0%, transparent 55%),
-    radial-gradient(ellipse at 75% 80%, rgba(79,209,197,.08) 0%, transparent 55%),
-    #0B0D10;
+    radial-gradient(ellipse at 30% 20%, rgba(139,92,255,.10) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 80%, rgba(255,182,72,.08) 0%, transparent 55%),
+    #07070C;
   z-index: 9999;
   opacity: 1;
   transition: opacity .25s ease;

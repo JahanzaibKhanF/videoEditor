@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MousePointerClick, VolumeX, Volume2 } from "@/utils/icons";
 import TextEditor from "./TextEditor";
 import AnimationSelection from "../animations/AnimationSelection";
 import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
@@ -71,7 +72,7 @@ export default function PropertiesPanel() {
                         color: isMuted ? "#EF4444" : "#10B981",
                         opacity: audio ? 1 : 0.4,
                       }}>
-                      {isMuted ? "🔇 Muted" : "🔊 Audio On"}
+                      {isMuted ? <><VolumeX size={12} /> Muted</> : <><Volume2 size={12} /> Audio On</>}
                     </button>
                   </div>
 
@@ -159,10 +160,7 @@ export default function PropertiesPanel() {
           {/* ── Empty state ──────────────────────────────────── */}
           {!selectedClipId && textsDetails.length === 0 && blursDetails.length === 0 && imagesDetails.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-ink-muted dark:text-[rgba(255,255,255,.2)]">
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none" opacity=".5">
-                <rect x="4" y="4" width="28" height="28" rx="6" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M12 18h12M18 12v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <MousePointerClick size={30} strokeWidth={1.4} className="opacity-50" />
               <p className="text-[12px] text-center font-medium">Select an element<br />to edit its properties</p>
             </div>
           )}

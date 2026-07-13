@@ -1,21 +1,4 @@
-import {
-  FaBan,
-  FaArrowLeft,
-  FaArrowRight,
-  FaEye,
-  FaSearchPlus,
-  FaSyncAlt,
-  FaExpandAlt,
-  FaMeteor,
-  FaArrowDown,
-  FaArrowUp,
-  FaBolt,
-  FaAngleDoubleDown,
-  FaAngleDoubleRight,
-  FaLayerGroup,
-  FaMagic,
-  FaCubes,
-} from "react-icons/fa";
+import { FaBan, FaArrowLeft, FaArrowRight, FaEye, FaSearchPlus, FaSyncAlt, FaExpandAlt, FaMeteor, FaArrowDown, FaArrowUp, FaBolt, FaAngleDoubleDown, FaAngleDoubleRight, FaLayerGroup, FaMagic, FaCubes } from "@/utils/icons";
 export const transitionOptions = [
   { name: "None", key: "none", Icon: FaBan },
   { name: "Cross Dissolve", key: "crossDissolve", Icon: FaEye },

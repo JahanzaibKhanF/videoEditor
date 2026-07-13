@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppContextProvider, EngineControlsProvider } from "@/context/useAppContext";
 import { useAppDetailsContext } from "@/context/useAppContext";
 import { AuthProvider, useAuth } from "@/context/useAuthContext";
@@ -9,9 +9,22 @@ import Editor from "@/components/Editor";
 import StartupScreen from "@/components/startup/StartupScreen";
 import { AspectRatio } from "@/types/types";
 import { Template } from "@/utils/templates";
+import { restoreProjectMedia } from "@/utils/restoreProjectMedia";
 
-function EditorWithSetup({ initialAspect, template }: { initialAspect: AspectRatio; template?: Template }) {
-  const { setSelectedAspectRatio, setTextsDetails, setBlursDetails } = useAppDetailsContext();
+interface ResumeData {
+  id: string;
+  aspectRatio: AspectRatio;
+  projectJson: Record<string, any>;
+}
+
+function EditorWithSetup({
+  initialAspect, template, resumeData,
+}: { initialAspect: AspectRatio; template?: Template; resumeData?: ResumeData }) {
+  const {
+    setSelectedAspectRatio, setTextsDetails, setBlursDetails,
+    setClipsDetails, setImagesDetails, setAudioDetails, setLayerOrder,
+    setTotalTime, setVideos, setResumedProjectId, setMissingMediaNames,
+  } = useAppDetailsContext();
 
   useEffect(() => { setSelectedAspectRatio(initialAspect); }, [initialAspect]);
 
@@ -24,6 +37,33 @@ function EditorWithSetup({ initialAspect, template }: { initialAspect: AspectRat
     if (blurs.length > 0) setBlursDetails(blurs);
   }, [template]);
 
+  // Hydrate editor state from a resumed (previously saved) project — runs
+  // once. No local folder is matched yet at this point, so every clip/image
+  // comes back with an empty src and gets listed in missingMediaNames;
+  // MediaRelinkBanner (mounted inside Editor) picks up the retry the moment
+  // the user links or reconnects their media folder.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!resumeData || hydrated.current) return;
+    hydrated.current = true;
+
+    const json = resumeData.projectJson ?? {};
+    const savedClips = Array.isArray(json.clips) ? json.clips : [];
+    const savedImages = Array.isArray(json.images) ? json.images : [];
+    const result = restoreProjectMedia(savedClips, savedImages, new Map());
+
+    setClipsDetails(result.clips);
+    setImagesDetails(result.images);
+    setVideos(result.videos);
+    setTextsDetails(Array.isArray(json.texts) ? json.texts : []);
+    setBlursDetails(Array.isArray(json.blurs) ? json.blurs : []);
+    setAudioDetails(Array.isArray(json.audio) ? json.audio : []);
+    setLayerOrder(Array.isArray(json.layerOrder) ? json.layerOrder : []);
+    setTotalTime(typeof json.totalTime === "number" ? json.totalTime : 0);
+    setMissingMediaNames(result.missingNames);
+    setResumedProjectId(resumeData.id);
+  }, [resumeData]);
+
   return <Editor pendingTemplate={template} />;
 }
 
@@ -31,6 +71,9 @@ function ClipFlowAppInner() {
   const { loading } = useAuth();
   const [initialAspect, setInitialAspect] = useState<AspectRatio | null>(null);
   const [template, setTemplate] = useState<Template | undefined>(undefined);
+  const [resumeData, setResumeData] = useState<ResumeData | undefined>(undefined);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   useEffect(() => {
     const disableZoom = (e: KeyboardEvent | WheelEvent) => {
@@ -49,6 +92,26 @@ function ClipFlowAppInner() {
     };
   }, []);
 
+  const handleResumeProject = async (projectId: string) => {
+    setResuming(true);
+    setResumeError(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not load that project.");
+      const project = data.project;
+      setResumeData({
+        id: project.id,
+        aspectRatio: project.aspect_ratio,
+        projectJson: project.project_json ?? {},
+      });
+      setInitialAspect(project.aspect_ratio as AspectRatio);
+    } catch (err) {
+      setResumeError((err as Error).message);
+      setResuming(false);
+    }
+  };
+
   // `loading` here just means "checking whether a session cookie already
   // exists" — it does NOT block guests from using the app. It only avoids
   // a one-frame flash of "Sign in" before we know someone's already
@@ -64,11 +127,18 @@ function ClipFlowAppInner() {
   return (
     <div className="select-none">
       {initialAspect === null ? (
-        <StartupScreen onStart={(aspect, tpl) => { setTemplate(tpl); setInitialAspect(tpl ? tpl.aspectRatio : aspect); }} />
+        <>
+          <StartupScreen
+            onStart={(aspect, tpl) => { setTemplate(tpl); setInitialAspect(tpl ? tpl.aspectRatio : aspect); }}
+            onResumeProject={handleResumeProject}
+            resuming={resuming}
+            resumeError={resumeError}
+          />
+        </>
       ) : (
         <AppContextProvider>
           <EngineControlsProvider>
-            <EditorWithSetup initialAspect={initialAspect} template={template} />
+            <EditorWithSetup initialAspect={initialAspect} template={template} resumeData={resumeData} />
           </EngineControlsProvider>
         </AppContextProvider>
       )}

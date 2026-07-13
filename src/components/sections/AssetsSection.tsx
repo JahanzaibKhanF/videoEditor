@@ -1,9 +1,6 @@
 "use client";
 
-import { TiDelete } from "react-icons/ti";
-import { CiText } from "react-icons/ci";
-import { MdBlurOn } from "react-icons/md";
-import { BiPlus, BiX } from "react-icons/bi";
+import { X, Type, Droplets, Plus } from "@/utils/icons";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoSize } from "../../utils/formatVideoSize";
 import { addClipToTimeline } from "../../utils/addClipToTimeline";
@@ -95,7 +92,7 @@ export default function AssetsSection() {
                           Object.assign(chip.style, {
                             width: "90px",
                             height: "40px",
-                            backgroundColor: "#FF6A3D",
+                            backgroundColor: "#8B5CFF",
                             borderRadius: "10px",
                             position: "fixed",
                             top: `${e.clientY - 20}px`,
@@ -138,10 +135,10 @@ export default function AssetsSection() {
                         }}
                         className="p-1 text-ink-secondary hover:bg-signal/20 hover:text-signal rounded-full transition-colors"
                       >
-                        <BiPlus size={16} />
+                        <Plus size={16} />
                       </button>
                       <button
-                        title="Delete video"
+                        aria-label="Delete video"
                         disabled={video.name === "video1"}
                         onClick={() => {
                           deleteVideo({
@@ -153,7 +150,7 @@ export default function AssetsSection() {
                         }}
                         className="p-1 text-ink-secondary hover:bg-danger/20 hover:text-danger rounded-full disabled:opacity-50 transition-colors"
                       >
-                        <BiX size={16} />
+                        <X size={16} />
                       </button>
                     </div>
                   </div>
@@ -186,9 +183,9 @@ export default function AssetsSection() {
                           alt=""
                           className="w-full h-full object-cover"
                         />
-                        <TiDelete
+                        <X
                           className="absolute top-1 right-1 p-1 text-red-500 bg-[#1e1e1e] rounded-full text-lg opacity-0 group-hover:opacity-100 transition hover:scale-110"
-                          title="Delete image"
+                          aria-label="Delete image"
                           onClick={(e) => {
                             e.stopPropagation();
                             setImagesDetails((prev) =>
@@ -223,11 +220,11 @@ export default function AssetsSection() {
                             : "border-transparent"
                         } hover:border-signal/50`}
                       >
-                        <CiText size={16} />
+                        <Type size={16} />
                         <p className="truncate flex-1">{detail.text}</p>
-                        <TiDelete
+                        <X
                           className="absolute right-2 top-2 text-ink-secondary hover:text-danger cursor-pointer text-base opacity-0 group-hover:opacity-100 transition-colors"
-                          title="Delete text"
+                          aria-label="Delete text"
                           onClick={(e) => {
                             e.stopPropagation();
                             setTextsDetails((prev) =>
@@ -260,13 +257,13 @@ export default function AssetsSection() {
                             : "border-transparent"
                         } hover:border-signal/50`}
                       >
-                        <MdBlurOn size={16} />
+                        <Droplets size={16} />
                         <p className="truncate flex-1">
                           Blur {index + 1} ({detail.blurAmount})
                         </p>
-                        <TiDelete
+                        <X
                           className="absolute right-2 top-2 text-ink-secondary hover:text-danger cursor-pointer text-base opacity-0 group-hover:opacity-100 transition-colors"
-                          title="Delete blur"
+                          aria-label="Delete blur"
                           onClick={(e) => {
                             e.stopPropagation();
                             setBlursDetails((prev) =>

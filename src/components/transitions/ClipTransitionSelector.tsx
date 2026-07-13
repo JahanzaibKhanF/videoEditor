@@ -33,7 +33,7 @@ export default function ClipTransitionSelector() {
               }}
               className={`border-[1.5px] rounded-lg py-2 px-1.5 flex flex-col items-center justify-center text-center cursor-pointer transition-all gap-1 font-[inherit]
                 ${active
-                  ? "border-signal bg-[rgba(91,79,232,.1)] dark:bg-[rgba(91,79,232,.2)] text-signal"
+                  ? "border-signal bg-[rgba(139,92,255,.1)] dark:bg-[rgba(139,92,255,.2)] text-signal"
                   : "border-studio-border bg-studio-raised text-ink-secondary hover:bg-studio-hover hover:border-signal/40"}`}>
               <Icon size={14} />
               <div className="text-[10px] font-medium">{name}</div>

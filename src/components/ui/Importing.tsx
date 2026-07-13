@@ -12,20 +12,20 @@ export default function Importing() {
   }, []);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", backdropFilter: "blur(8px)", zIndex: 10, display: "flex", justifyContent: "center", alignItems: "center" }}>
-      <div style={{ background: "#FFFFFF", border: "1px solid #262B33", borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, boxShadow: "0 24px 48px rgba(0,0,0,.12)", minWidth: 220 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", backdropFilter: "blur(8px)", zIndex: 1500, display: "flex", justifyContent: "center", alignItems: "center" }}>
+      <div style={{ background: "#111120", border: "1px solid #211F33", borderRadius: 16, padding: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 16, boxShadow: "0 24px 48px rgba(0,0,0,.5)", minWidth: 220 }}>
         <div style={{ display: "flex", gap: 6 }}>
           {[0, 1, 2].map(i => (
             <div key={i} style={{
               width: 10, height: 10, borderRadius: "50%",
-              background: `hsl(${[250, 290, 330][i]}, 80%, 65%)`,
-              boxShadow: `0 0 8px hsl(${[250, 290, 330][i]}, 80%, 65%)`,
+              background: `hsl(${[255, 270, 290][i]}, 90%, 72%)`,
+              boxShadow: `0 0 8px hsl(${[255, 270, 290][i]}, 90%, 72%)`,
               animation: "bounce 1.2s infinite",
               animationDelay: `${i * 0.15}s`,
             }} />
           ))}
         </div>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "#555B6E", fontFamily: "'JetBrains Mono',monospace", textAlign: "center" }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "#B8B4D1", fontFamily: "'JetBrains Mono',monospace", textAlign: "center" }}>
           {steps[stepIndex]}
         </p>
       </div>

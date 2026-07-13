@@ -4,7 +4,7 @@
  * TemplatesPanel — CapCut-style template browser.
  *
  * Flow:
- *  1. Browse templates
+ *  1. Browse templates (built-in defaults + anything published from /settings)
  *  2. Click template → opens slot picker modal (one file input per video slot)
  *  3. User assigns videos → "Apply Template" applies it
  *  4. Template mode activates: timeline locked, only text editable on canvas,
@@ -17,15 +17,22 @@
  *  - Duration fixed = sum of slot durations
  *  - Aspect ratio locked to template's ratio
  *  - "Exit template" button clears everything
+ *
+ * Template source: TEMPLATES (built-in, always available, works offline) is
+ * merged with whatever /api/templates returns (admin-authored, from Neon).
+ * Both flow through the exact same `Template` shape via templateInterpreter,
+ * so there's no special-casing between "built-in" and "admin-created" here.
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { TEMPLATES, Template, templateDuration } from "../../utils/templates";
+import { buildTemplatesFromRecords, TemplateRecord } from "../../utils/templateInterpreter";
 import { v4 as uuidv4 } from "uuid";
+import { LayoutTemplate, Check, Plus, Sparkles, Film, ImageIcon, X, Maximize2 } from "@/utils/icons";
 
 const CATEGORIES = ["all", "title", "lower-third", "social", "minimal"] as const;
 const catColors: Record<string, string> = {
-  title: "#6366F1", "lower-third": "#3B82F6", social: "#FF6A3D", minimal: "#8B5CF6",
+  title: "#8B5CFF", "lower-third": "#4C8CFF", social: "#FFB648", minimal: "#33D8A0", text: "#8B5CFF",
 };
 
 export default function TemplatesPanel() {
@@ -37,12 +44,41 @@ export default function TemplatesPanel() {
   } = useAppDetailsContext();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [dbTemplates, setDbTemplates] = useState<Template[]>([]);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [pendingTpl, setPendingTpl] = useState<Template | null>(null); // slot picker open for this
   const [slotFiles, setSlotFiles] = useState<(File | null)[]>([]);
   const [applying, setApplying] = useState(false);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const filtered = TEMPLATES.filter(t => activeCategory === "all" || t.category === activeCategory);
+  // Pull in anything published from the admin panel. Fails silently (falls
+  // back to just the built-in templates) if Neon isn't configured yet.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/templates");
+        if (!res.ok) return;
+        const data = await res.json();
+        const records: TemplateRecord[] = Array.isArray(data.templates) ? data.templates : [];
+        if (!cancelled) setDbTemplates(buildTemplatesFromRecords(records));
+      } catch {
+        // offline / no DB configured yet — built-in templates still work
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Merge built-ins with DB templates, DB wins on id collision (lets an
+  // admin override a default template's config without changing its id).
+  const allTemplates: Template[] = (() => {
+    const byId = new Map<string, Template>();
+    for (const t of TEMPLATES) byId.set(t.id, t);
+    for (const t of dbTemplates) byId.set(t.id, t);
+    return Array.from(byId.values());
+  })();
+
+  const filtered = allTemplates.filter(t => activeCategory === "all" || t.category === activeCategory);
 
   // ── Open slot picker for a template ──────────────────────────────────────
   const openTemplate = (tpl: Template) => {
@@ -146,6 +182,10 @@ export default function TemplatesPanel() {
       // 6. Activate template mode
       setActiveTemplate({
         templateId: tpl.id,
+        templateName: tpl.name,
+        accentColor: tpl.accentColor,
+        coverImage: tpl.coverImage,
+        aspectRatio: tpl.aspectRatio,
         slots: tpl.videoSlots.map((sl, i) => ({
           slotIndex: i,
           label: sl.label,
@@ -165,151 +205,242 @@ export default function TemplatesPanel() {
   return (
     <div className="flex flex-col h-full bg-studio-surface">
       {/* Header */}
-      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary">Templates</div>
-        <div className="text-[11px] text-ink-secondary mt-0.5">
-          {TEMPLATES.length} templates · select to apply
+      <div className="px-3.5 py-3.5 border-b border-studio-border flex-shrink-0 flex items-center justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <LayoutTemplate size={14} className="text-signal" />
+            <span className="text-[13px] font-bold text-ink-primary font-display">Templates</span>
+          </div>
+          <div className="text-[11px] text-ink-muted mt-0.5">
+            {allTemplates.length} template{allTemplates.length !== 1 ? "s" : ""} · select to apply
+          </div>
         </div>
+        <button
+          onClick={() => setBrowseOpen(true)}
+          title="Browse full-size grid"
+          className="flex-shrink-0 w-7 h-7 rounded-lg border border-studio-border bg-studio-raised hover:border-signal/40 hover:text-signal text-ink-secondary flex items-center justify-center transition-colors"
+        >
+          <Maximize2 size={12} />
+        </button>
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 px-2.5 py-2 border-b border-studio-border flex-shrink-0 overflow-x-auto scrollbar-thin">
+      <div className="flex gap-1.5 px-3 py-2.5 border-b border-studio-border flex-shrink-0 overflow-x-auto scrollbar-thin">
         {CATEGORIES.map(cat => (
           <button key={cat} onClick={() => setActiveCategory(cat)}
             className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10.5px] font-bold cursor-pointer border transition-all font-[inherit]
               ${activeCategory === cat
-                ? "text-white border-transparent"
-                : "bg-transparent text-ink-secondary border-studio-border hover:border-[rgba(91,79,232,.4)] hover:text-signal"}`}
+                ? "text-white border-transparent shadow-glow"
+                : "bg-transparent text-ink-secondary border-studio-border hover:border-signal/40 hover:text-signal"}`}
             style={activeCategory === cat
-              ? { background: cat === "all" ? "linear-gradient(135deg,#FF6A3D,#FF8259)" : catColors[cat] ?? "#FF6A3D" }
+              ? { background: cat === "all" ? "linear-gradient(135deg,#8B5CFF,#A47CFF)" : catColors[cat] ?? "#8B5CFF" }
               : {}}>
             {cat.charAt(0).toUpperCase() + cat.slice(1)}
           </button>
         ))}
       </div>
 
-      {/* Template grid */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-2.5 flex flex-col gap-2">
+      {/* Template grid — real cover-image cards, not emoji tiles */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-2.5 grid grid-cols-1 gap-2.5 auto-rows-max">
         {filtered.map(tpl => {
-          const color = catColors[tpl.category] ?? "#FF6A3D";
-          const isVertical = ["9:16","ytshorts","instareels","tiktok"].includes(tpl.aspectRatio);
-          const isSquare = tpl.aspectRatio === "1:1";
+          const color = catColors[tpl.category] ?? "#8B5CFF";
           const textCount = tpl.buildTexts(100, 100, 10).length;
           const hasAnim = tpl.buildTexts(100, 100, 10).some(t => t.animation !== "none");
 
           return (
             <button key={tpl.id}
               onClick={() => openTemplate(tpl)}
-              className="w-full text-left border border-studio-border rounded-xl p-3 cursor-pointer transition-all flex gap-3 items-start font-[inherit] bg-studio-raised hover:border-signal/40 hover:bg-signal/5 active:scale-[.98]">
+              className="group w-full text-left rounded-xl overflow-hidden border border-studio-border bg-studio-raised hover:border-signal/40 transition-all active:scale-[.98] font-[inherit]">
 
-              {/* Aspect ratio preview */}
-              <div className="flex-shrink-0 flex items-center justify-center rounded-lg border border-studio-border bg-gradient-to-br from-[#1a1a2e] to-[#16213e]"
-                style={{ width: isVertical ? 28 : isSquare ? 38 : 52, height: isVertical ? 50 : isSquare ? 38 : 30 }}>
-                <span style={{ fontSize: 14 }}>{tpl.emoji}</span>
+              {/* Cover image */}
+              <div className="relative aspect-video bg-studio-base overflow-hidden">
+                {tpl.coverImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tpl.coverImage}
+                    alt={tpl.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-studio-raised to-studio-base">
+                    <ImageIcon size={22} className="text-ink-faint" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                <span className="absolute top-2 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-sm"
+                  style={{ background: `${color}30`, color: "#fff", border: `1px solid ${color}55` }}>
+                  {tpl.aspectRatio}
+                </span>
+                {tpl.videoSlots.length === 0 && (
+                  <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-success/25 text-white border border-success/50 backdrop-blur-sm">
+                    No video
+                  </span>
+                )}
+                <div className="absolute bottom-2 left-2.5 right-2.5">
+                  <div className="text-[13px] font-bold text-white leading-tight drop-shadow">{tpl.name}</div>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                  <span className="text-[12px] font-bold text-ink-primary">{tpl.name}</span>
-                  <span className="text-[9px] font-bold px-1.5 py-px rounded-full"
-                    style={{ background: `${color}18`, color, border: `1px solid ${color}35` }}>
-                    {tpl.aspectRatio}
-                  </span>
-                  {tpl.videoSlots.length === 0 && (
-                    <span className="text-[9px] font-bold px-1.5 py-px rounded-full bg-[rgba(16,185,129,.1)] text-[#10B981] border border-[rgba(16,185,129,.25)]">
-                      No video
+              {/* Meta row */}
+              <div className="px-3 py-2.5">
+                <p className="text-[10.5px] text-ink-secondary leading-snug mb-1.5 line-clamp-2">{tpl.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {textCount > 0 && (
+                    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-studio-base text-ink-muted">
+                      <span className="font-mono">T×{textCount}</span>
+                    </span>
+                  )}
+                  {hasAnim && (
+                    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-signal/10 text-signal">
+                      <Sparkles size={9} /> animated
                     </span>
                   )}
                   {tpl.videoSlots.length > 1 && (
-                    <span className="text-[9px] font-bold px-1.5 py-px rounded-full bg-[rgba(245,158,11,.1)] text-[#F59E0B] border border-[rgba(245,158,11,.25)]">
-                      {tpl.videoSlots.length} clips
+                    <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-warning/10 text-warning">
+                      <Film size={9} /> {tpl.videoSlots.length} clips
                     </span>
                   )}
                 </div>
-                <p className="text-[10.5px] text-ink-secondary leading-snug mb-1.5">{tpl.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {textCount > 0 && <span className="text-[9px] px-1.5 py-px rounded bg-studio-base text-[#555B6E] dark:text-[#6B7280]">T ×{textCount}</span>}
-                  {hasAnim && <span className="text-[9px] px-1.5 py-px rounded bg-studio-base text-[#555B6E] dark:text-[#6B7280]">✦ animated</span>}
-                  {tpl.buildBlurs(100,100,10).length > 0 && <span className="text-[9px] px-1.5 py-px rounded bg-studio-base text-[#555B6E] dark:text-[#6B7280]">◎ blur</span>}
-                </div>
-              </div>
-
-              <div className="flex-shrink-0 self-center w-6 h-6 rounded-full flex items-center justify-center"
-                style={{ background: `${color}18`, border: `1.5px solid ${color}40` }}>
-                <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                  <path d="M2 4.5l2 2 3-3" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
               </div>
             </button>
           );
         })}
       </div>
 
+      {/* ── Full-screen browse overlay — large cover-image grid, CapCut/Adobe-Express style ── */}
+      {browseOpen && (
+        <div className="fixed inset-0 z-[999] bg-studio-void/97 backdrop-blur-md flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-studio-border flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <LayoutTemplate size={16} className="text-signal" />
+              <span className="text-[15px] font-bold text-ink-primary font-display">Browse templates</span>
+              <span className="text-[12px] text-ink-muted">· {allTemplates.length} available</span>
+            </div>
+            <button
+              onClick={() => setBrowseOpen(false)}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-ink-muted hover:bg-studio-hover transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="flex gap-1.5 px-6 py-3 border-b border-studio-border flex-shrink-0 overflow-x-auto scrollbar-thin">
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setActiveCategory(cat)}
+                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[11.5px] font-bold cursor-pointer border transition-all font-[inherit]
+                  ${activeCategory === cat
+                    ? "text-white border-transparent shadow-glow"
+                    : "bg-transparent text-ink-secondary border-studio-border hover:border-signal/40 hover:text-signal"}`}
+                style={activeCategory === cat
+                  ? { background: cat === "all" ? "linear-gradient(135deg,#8B5CFF,#A47CFF)" : catColors[cat] ?? "#8B5CFF" }
+                  : {}}>
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 max-w-[1200px] mx-auto">
+              {filtered.map(tpl => {
+                const color = catColors[tpl.category] ?? "#8B5CFF";
+                return (
+                  <button key={tpl.id}
+                    onClick={() => { setBrowseOpen(false); openTemplate(tpl); }}
+                    className="group relative rounded-2xl overflow-hidden text-left transition-all aspect-video border border-studio-border hover:border-signal/50 hover:-translate-y-0.5"
+                  >
+                    {tpl.coverImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={tpl.coverImage} alt={tpl.name}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-studio-raised to-studio-base flex items-center justify-center">
+                        <ImageIcon size={22} className="text-ink-faint" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+                    <span className="absolute top-2.5 left-2.5 text-[9.5px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm"
+                      style={{ background: `${color}35`, color: "white", border: `1px solid ${color}60` }}>
+                      {tpl.aspectRatio}
+                    </span>
+                    {!tpl.needsVideo && (
+                      <span className="absolute top-2.5 right-2.5 flex items-center gap-1 text-[9.5px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm bg-success/30 text-white border border-success/50">
+                        <Sparkles size={9} /> No video
+                      </span>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+                      <div className="text-[14px] font-bold text-white leading-tight drop-shadow mb-1">{tpl.name}</div>
+                      <div className="text-[11px] leading-snug text-white/70 line-clamp-2">{tpl.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Slot Picker Modal ────────────────────────────────────────── */}
       {pendingTpl && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 1000,
-          background: "rgba(0,0,0,.6)", backdropFilter: "blur(6px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
+        <div
+          className="fixed inset-0 z-[1000] bg-black/65 backdrop-blur-md flex items-center justify-center px-4 animate-fade-in"
           onClick={e => { if (e.target === e.currentTarget) setPendingTpl(null); }}
         >
-          <div style={{
-            width: 460, borderRadius: 20, overflow: "hidden",
-            background: "#fff", boxShadow: "0 32px 80px rgba(0,0,0,.4)",
-          }} className="dark:bg-[#1a1d27]">
+          <div className="w-full max-w-[460px] rounded-2xl overflow-hidden bg-studio-surface border border-studio-border shadow-pop animate-rise-in">
 
-            {/* Modal header */}
-            <div style={{
-              padding: "18px 22px 14px",
-              background: `linear-gradient(135deg, ${catColors[pendingTpl.category] ?? "#FF6A3D"}, #FF8259)`,
-            }}>
-              <div style={{ fontSize: 22, marginBottom: 2 }}>{pendingTpl.emoji}</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>{pendingTpl.name}</div>
-              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.75)", marginTop: 2 }}>{pendingTpl.description}</div>
+            {/* Modal header — cover image backdrop */}
+            <div className="relative px-5 pt-5 pb-4 overflow-hidden">
+              {pendingTpl.coverImage && (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={pendingTpl.coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-studio-surface" />
+                </>
+              )}
+              {!pendingTpl.coverImage && (
+                <div
+                  className="absolute inset-0"
+                  style={{ background: `linear-gradient(135deg, ${catColors[pendingTpl.category] ?? "#8B5CFF"}, #A47CFF)` }}
+                />
+              )}
+              <button
+                onClick={() => setPendingTpl(null)}
+                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors"
+              >
+                <X size={14} />
+              </button>
+              <div className="relative">
+                <div className="text-[16px] font-bold text-white font-display">{pendingTpl.name}</div>
+                <div className="text-[11.5px] text-white/80 mt-0.5">{pendingTpl.description}</div>
+              </div>
             </div>
 
-            <div style={{ padding: "20px 22px 22px" }}>
-
+            <div className="px-5 pb-5 pt-1">
               {/* Video slots */}
               {pendingTpl.videoSlots.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", marginBottom: 10, letterSpacing: ".5px", textTransform: "uppercase" }}>
-                    Add Videos ({pendingTpl.videoSlots.length} clip{pendingTpl.videoSlots.length !== 1 ? "s" : ""} needed)
+                <div className="mb-4">
+                  <div className="text-[11px] font-bold text-ink-muted mb-2.5 tracking-wide uppercase">
+                    Add videos ({pendingTpl.videoSlots.length} clip{pendingTpl.videoSlots.length !== 1 ? "s" : ""} needed)
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div className="flex flex-col gap-2">
                     {pendingTpl.videoSlots.map((slot, i) => (
                       <div key={i}
                         onClick={() => pickSlot(i)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 12,
-                          padding: "11px 14px", borderRadius: 12, cursor: "pointer",
-                          border: `2px solid ${slotFiles[i] ? "#10B981" : "#262B33"}`,
-                          background: slotFiles[i] ? "rgba(16,185,129,.05)" : "#FAFAFA",
-                          transition: "all .15s",
-                        }}
-                        className="dark:bg-[rgba(255,255,255,.04)] hover:border-signal"
+                        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl cursor-pointer border-2 transition-all
+                          ${slotFiles[i] ? "border-success/50 bg-success/5" : "border-studio-border bg-studio-base hover:border-signal/50"}`}
                       >
-                        <div style={{
-                          width: 36, height: 28, borderRadius: 7, flexShrink: 0,
-                          background: slotFiles[i] ? "#10B981" : "#262B33",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          {slotFiles[i]
-                            ? <span style={{ fontSize: 14 }}>✓</span>
-                            : <span style={{ fontSize: 16 }}>＋</span>
-                          }
+                        <div className={`w-9 h-7 rounded-md flex-shrink-0 flex items-center justify-center
+                          ${slotFiles[i] ? "bg-success text-studio-void" : "bg-studio-hover text-ink-muted"}`}>
+                          {slotFiles[i] ? <Check size={14} /> : <Plus size={14} />}
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 11.5, fontWeight: 700, color: "#0F1117" }}
-                            className="dark:text-white">{slot.label}</div>
-                          <div style={{ fontSize: 10, color: "#9DA3B4" }}>
-                            {slotFiles[i] ? slotFiles[i]!.name.slice(0,28) : `~${slot.durationSecs}s · tap to pick`}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11.5px] font-bold text-ink-primary">{slot.label}</div>
+                          <div className="text-[10px] text-ink-faint truncate">
+                            {slotFiles[i] ? slotFiles[i]!.name.slice(0, 28) : `~${slot.durationSecs}s · tap to pick`}
                           </div>
                         </div>
                         <input
                           ref={el => { fileInputRefs.current[i] = el; }}
-                          type="file" accept="video/*" style={{ display: "none" }}
+                          type="file" accept="video/*" className="hidden"
                           onChange={e => onSlotFile(i, e.target.files?.[0] ?? null)}
                         />
                       </div>
@@ -319,46 +450,40 @@ export default function TemplatesPanel() {
               )}
 
               {pendingTpl.videoSlots.length === 0 && (
-                <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 12, background: "rgba(16,185,129,.08)", border: "1.5px solid rgba(16,185,129,.25)" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>✦ Text-only template</div>
-                  <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>No video required — text layers will be added instantly.</div>
+                <div className="mb-4 px-3.5 py-3 rounded-xl bg-success/10 border border-success/25">
+                  <div className="flex items-center gap-1.5 text-[12px] font-bold text-success">
+                    <Sparkles size={12} /> Text-only template
+                  </div>
+                  <div className="text-[11px] text-ink-muted mt-0.5">No video required — text layers will be added instantly.</div>
                 </div>
               )}
 
               {/* Template info chips */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 18 }}>
-                <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: "#F2F4F7", color: "#555B6E" }}
-                  className="dark:bg-[rgba(255,255,255,.08)] dark:text-[rgba(255,255,255,.5)]">
+              <div className="flex gap-1.5 flex-wrap mb-4">
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-studio-base text-ink-muted">
                   {pendingTpl.aspectRatio}
                 </span>
-                <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: "#F2F4F7", color: "#555B6E" }}
-                  className="dark:bg-[rgba(255,255,255,.08)] dark:text-[rgba(255,255,255,.5)]">
-                  T ×{pendingTpl.buildTexts(100,100,10).length} text layers
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-studio-base text-ink-muted">
+                  T×{pendingTpl.buildTexts(100, 100, 10).length} text layers
                 </span>
-                {pendingTpl.buildTexts(100,100,10).some(t => t.animation !== "none") && (
-                  <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: "rgba(91,79,232,.1)", color: "#FF6A3D" }}>✦ animated</span>
+                {pendingTpl.buildTexts(100, 100, 10).some(t => t.animation !== "none") && (
+                  <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-signal/10 text-signal">
+                    <Sparkles size={9} /> animated
+                  </span>
                 )}
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="flex gap-2">
                 <button onClick={() => setPendingTpl(null)}
-                  style={{ flex: 1, padding: "11px 0", borderRadius: 11, border: "1.5px solid #262B33",
-                    background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280" }}
-                  className="dark:border-[rgba(255,255,255,.12)] dark:text-[rgba(255,255,255,.5)]">
+                  className="flex-1 py-2.5 rounded-xl border border-studio-border text-ink-secondary text-[13px] font-bold hover:bg-studio-hover transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={applyTemplate}
                   disabled={applying || (pendingTpl.videoSlots.length > 0 && slotFiles.some(f => !f))}
-                  style={{
-                    flex: 2, padding: "11px 0", borderRadius: 11, border: "none", cursor: "pointer",
-                    fontSize: 13, fontWeight: 800, color: "white",
-                    background: (applying || (pendingTpl.videoSlots.length > 0 && slotFiles.some(f => !f)))
-                      ? "#C5CAD4"
-                      : `linear-gradient(135deg, ${catColors[pendingTpl.category] ?? "#FF6A3D"}, #FF8259)`,
-                    transition: "all .15s",
-                  }}>
+                  className="flex-[2] py-2.5 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg, #8B5CFF, #A47CFF)" }}>
                   {applying ? "Applying…" : "Apply Template"}
                 </button>
               </div>

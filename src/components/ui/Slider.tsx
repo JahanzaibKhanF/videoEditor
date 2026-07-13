@@ -17,7 +17,7 @@ interface SliderProps {
 }
 
 export default function Slider({
-  value, min, max, step = 0.01, onChange, color = "#FF6A3D", disabled = false,
+  value, min, max, step = 0.01, onChange, color = "#8B5CFF", disabled = false,
 }: SliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pct = max === min ? 0 : ((value - min) / (max - min)) * 100;
@@ -59,10 +59,8 @@ export default function Slider({
       <div style={{
         position: "absolute", left: 0, right: 0,
         height: 4, borderRadius: 2,
-        background: "rgba(0,0,0,.1)",
-      }}
-        className="dark:bg-[rgba(255,255,255,.1)]"
-      />
+        background: "rgba(255,255,255,.1)",
+      }} />
       {/* Fill */}
       <div style={{
         position: "absolute", left: 0, width: `${pct}%`,

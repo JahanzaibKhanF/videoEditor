@@ -26,6 +26,33 @@ import {
  */
 
 const TRANSITION_DURATION = 0.5;
+
+// FFmpeg's `xfade` filter only accepts a fixed, specific set of transition
+// names (see https://ffmpeg.org/ffmpeg-filters.html#xfade) — none of which
+// match this app's internal camelCase transition keys (see
+// transitionOtionsConstants.ts). Passing an unmapped key straight through
+// (e.g. "wipeLeftToRight", "dipToBlack") makes FFmpeg reject the filter,
+// so every transition except one coincidentally named "fade" would fail
+// silently or break the export. This maps every internal key to the
+// closest valid xfade name.
+const FFMPEG_XFADE_MAP: Record<string, string> = {
+  crossDissolve: "fade",
+  dipToBlack: "fadeblack",
+  dipToWhite: "fadewhite",
+  filmDissolve: "dissolve",
+  wipeLeftToRight: "wiperight",
+  wipeTopToBottom: "wipedown",
+  slideIn: "slideleft",
+  push: "coverleft",
+  zoom: "zoomin",
+  morphCut: "fade",
+  fadeIn: "fade",
+  slideUp: "slideup",
+  slideRight: "slideright",
+  flipIn: "distance",
+  blurIn: "hblur",
+  scaleIn: "zoomin",
+};
 const FS_OUTPUT = "output.mp4";
 const FS_FONT = "Roboto.ttf";
 
@@ -415,7 +442,7 @@ export async function clientRender(
           const xfDur = useTransition ? Math.min(TRANSITION_DURATION, dur, cumulative) : 0.001;
           const offset = Math.max(0, cumulative - xfDur);
           const outLabel = `vx${i}`;
-          const xfadeType = useTransition && clip.transition !== "fade" ? clip.transition : "fade";
+          const xfadeType = useTransition ? (FFMPEG_XFADE_MAP[clip.transition!] ?? "fade") : "fade";
           filterParts.push(
             `[${prevLabel}][${segLabels[i]}]xfade=transition=${xfadeType}:duration=${xfDur}:offset=${offset.toFixed(3)}[${outLabel}]`
           );

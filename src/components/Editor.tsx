@@ -16,19 +16,21 @@ import RenderingLoader from "./ui/RenderingLoader";
 import Importing from "./ui/Importing";
 import CompostionSettingsModal from "./options/CompostionSettingsModal";
 import IconSidebar from "./sections/IconSidebar";
+import MediaRelinkBanner from "./sections/MediaRelinkBanner";
 import AssetsSection from "./sections/AssetsSection";
 import TextEditor from "./sections/TextEditor";
 import { Template } from "../utils/templates";
+import { Film, Type, ImageIcon, SlidersHorizontal, Clock } from "@/utils/icons";
 
 const MIN_LEFT = 220, MIN_RIGHT = 230, MIN_TL = 140, MAX_TL = 340;
 
 // ── Mobile bottom-bar tab definitions ────────────────────────────────────
 const MOBILE_TABS = [
-  { key: "media",      label: "Media",    icon: "🎬" },
-  { key: "text",       label: "Text",     icon: "T"  },
-  { key: "assets",     label: "Assets",   icon: "🖼" },
-  { key: "properties", label: "Edit",     icon: "⚙" },
-  { key: "timeline",   label: "Timeline", icon: "⏱" },
+  { key: "media",      label: "Media",    Icon: Film },
+  { key: "text",       label: "Text",     Icon: Type },
+  { key: "assets",     label: "Assets",   Icon: ImageIcon },
+  { key: "properties", label: "Edit",     Icon: SlidersHorizontal },
+  { key: "timeline",   label: "Timeline", Icon: Clock },
 ] as const;
 type MobileTab = typeof MOBILE_TABS[number]["key"];
 
@@ -107,6 +109,7 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
         <div className="w-screen flex flex-col bg-studio-base overflow-hidden select-none"
           style={{ height: "100dvh" }}>
           <Header />
+          <MediaRelinkBanner />
 
           {/*
             Preview: fills ~40% of the available height so the bottom panel
@@ -144,11 +147,11 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
                     className="flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all flex-shrink-0 touch-manipulation"
                     style={{
                       width: 64, height: 44, scrollSnapAlign: "start",
-                      background: active ? "rgba(255,106,61,.12)" : "transparent",
-                      color: active ? "#FF6A3D" : "#8A919E",
-                      border: active ? "1px solid rgba(255,106,61,.3)" : "1px solid transparent",
+                      background: active ? "rgba(139,92,255,.12)" : "transparent",
+                      color: active ? "#8B5CFF" : "#89859F",
+                      border: active ? "1px solid rgba(139,92,255,.3)" : "1px solid transparent",
                     }}>
-                    <span className="text-base leading-none">{tab.icon}</span>
+                    <tab.Icon size={16} strokeWidth={active ? 2.4 : 2} />
                     <span className="text-[9px] font-semibold leading-none">{tab.label}</span>
                   </button>
                 );
@@ -193,6 +196,7 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
     <>
       <div className="w-screen h-screen flex flex-col bg-studio-base overflow-hidden select-none">
         <Header />
+        <MediaRelinkBanner />
 
         <div className="flex flex-1 min-h-0">
           <IconSidebar activeTab={activeTab} onTabChange={setActiveTab} />

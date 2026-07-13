@@ -49,6 +49,8 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [activeClipIndex, setActiveClipIndex] = useState<number | null>(null);
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
   const [activeTemplate, setActiveTemplate] = useState<ActiveTemplate | null>(null);
+  const [missingMediaNames, setMissingMediaNames] = useState<string[]>([]);
+  const [resumedProjectId, setResumedProjectId] = useState<string | null>(null);
 
   return (
     <AppContext.Provider value={{
@@ -87,6 +89,8 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
       activeClipIndex, setActiveClipIndex,
       renderJobs, setRenderJobs,
       activeTemplate, setActiveTemplate,
+      missingMediaNames, setMissingMediaNames,
+      resumedProjectId, setResumedProjectId,
     }}>
       {children}
     </AppContext.Provider>

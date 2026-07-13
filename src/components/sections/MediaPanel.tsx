@@ -1,12 +1,8 @@
 "use client";
 
+import { X, Plus, Droplets, Type, SplitSquareHorizontal, FolderOpen, Film, ImageIcon, Upload, FolderInput } from "@/utils/icons";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { TiDelete } from "react-icons/ti";
-import { BiPlus } from "react-icons/bi";
-import { MdBlurOn } from "react-icons/md";
-import { CiText } from "react-icons/ci";
-import { AiOutlineSplitCells } from "react-icons/ai";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { addClipToTimeline } from "../../utils/addClipToTimeline";
 import { deleteVideo } from "../../utils/deleteVideo";
@@ -98,11 +94,11 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
   const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all border-l-2";
   const emptyMsg = "flex items-center justify-center h-20 text-ink-secondary text-xs italic text-center px-4";
 
-  const addGradBtn = (onClick: () => void, disabled = false, grad = "linear-gradient(135deg,#FF6A3D,#FF8259)") => (
+  const addGradBtn = (onClick: () => void, disabled = false, grad = "linear-gradient(135deg,#8B5CFF,#A47CFF)") => (
     <button onClick={onClick} disabled={disabled}
       style={{ width: 30, height: 30, borderRadius: 9, background: disabled ? undefined : grad, border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? .4 : 1, flexShrink: 0 }}
       className="bg-studio-raised disabled:bg-studio-raised">
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.6" strokeLinecap="round"/></svg>
+      <Plus size={13} color="white" strokeWidth={2.4} />
     </button>
   );
 
@@ -123,9 +119,7 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
                 showLocalFolder ? "border-signal bg-signal/10 text-signal" : "border-studio-border bg-studio-raised text-ink-secondary hover:text-ink-primary"
               }`}
             >
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M1.5 3.5a1 1 0 011-1h2.7l1 1.2h4.3a1 1 0 011 1v5.3a1 1 0 01-1 1h-8a1 1 0 01-1-1v-6.5z" stroke="currentColor" strokeWidth="1.1"/>
-              </svg>
+              <FolderInput size={13} />
             </button>
           )}
           {addGradBtn(handleImport)}
@@ -151,7 +145,7 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
             <div className="p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11.5px] font-semibold text-ink-primary truncate">
-                  📁 {localFolder.folderName}
+                  <span className="inline-flex items-center gap-1.5"><FolderOpen size={12} className="text-signal" />{localFolder.folderName}</span>
                 </span>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {localFolder.permissionState !== "granted" && (
@@ -181,7 +175,7 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
                         title={f.name}
                         className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-studio-raised border border-studio-border hover:border-signal transition-colors"
                       >
-                        <span className="text-base">{f.kind === "video" ? "🎬" : "🖼️"}</span>
+                        {f.kind === "video" ? <Film size={16} className="text-ink-muted" /> : <ImageIcon size={16} className="text-ink-muted" />}
                         <span className="text-[9.5px] text-ink-secondary truncate w-full text-center">{f.name}</span>
                       </button>
                     ))}
@@ -196,7 +190,7 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {videos.length === 0 && imagesDetails.length === 0 ? (
           <div className="m-4 border-[1.5px] border-dashed border-studio-borderLight rounded-xl p-6 text-center cursor-pointer hover:border-signal hover:bg-signal/5 transition-all" onClick={handleImport}>
-            <div className="text-2xl mb-2">📂</div>
+            <Upload size={22} className="mx-auto mb-2 text-ink-faint" />
             <div className="text-[13px] font-semibold text-ink-secondary">Import your media</div>
             <div className="text-[11px] text-ink-secondary mt-1">Click to browse files</div>
           </div>
@@ -205,20 +199,20 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
             <div className={sectionLabel}>Videos ({videos.length})</div>
             {videos.map((v, i) => (
               <div key={i} className={`${rowBase} border-transparent hover:bg-studio-hover`}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[#111]">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 2.5l6 3.5-6 3.5V2.5z" fill="rgba(255,255,255,.6)"/></svg>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-studio-hover to-studio-void border border-studio-border">
+                  <Film size={13} className="text-ink-secondary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary truncate">{v.video.name.slice(0, 26)}{v.video.name.length > 26 ? "…" : ""}</div>
                   <div className="text-[10.5px] text-ink-secondary">{formatVideoSize(v.video.size)}</div>
                 </div>
                 <button title="Add to timeline" onClick={() => addClipToTimeline({ video: v, setTotalTime, clipsDetails, setClipsDetails, setPrimaryVideoDimensions, setAudioDetails })}
-                  className="w-6 h-6 rounded-md flex items-center justify-center cursor-pointer bg-[rgba(91,79,232,.1)] dark:bg-[rgba(91,79,232,.2)] text-signal border-none hover:bg-[rgba(91,79,232,.2)] dark:hover:bg-[rgba(91,79,232,.3)] transition-all">
-                  <BiPlus size={13} />
+                  className="w-6 h-6 rounded-md flex items-center justify-center cursor-pointer bg-[rgba(139,92,255,.1)] dark:bg-[rgba(139,92,255,.2)] text-signal border-none hover:bg-[rgba(139,92,255,.2)] dark:hover:bg-[rgba(139,92,255,.3)] transition-all">
+                  <Plus size={13} />
                 </button>
                 <button title="Remove" disabled={v.name === "video1"} onClick={() => deleteVideo({ video: v, setVideos, setClipsDetails, setTotalTime })}
                   className="w-6 h-6 rounded-md flex items-center justify-center text-danger border-none bg-transparent disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer hover:bg-[rgba(239,68,68,.1)] transition-all">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                  <X size={11} />
                 </button>
               </div>
             ))}
@@ -231,7 +225,7 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
                   className={`relative rounded-lg overflow-hidden cursor-pointer aspect-video bg-black border-[1.5px] transition-all ${selectedImageID === img.id ? "border-signal" : "border-studio-border"}`}
                   onClick={() => { setSelectedImageID(img.id); }}>
                   <img src={img.src} className="w-full h-full object-cover" />
-                  <TiDelete className="absolute top-1 right-1 text-danger bg-studio-void/80 rounded-full text-base cursor-pointer"
+                  <X className="absolute top-1 right-1 text-danger bg-studio-void/80 rounded-full text-base cursor-pointer"
                     onClick={e => { e.stopPropagation(); setImagesDetails(prev => prev.filter(p => p.id !== img.id)); }} />
                 </div>
               ))}
@@ -257,14 +251,14 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
               <div key={t.id}
                 className={`${rowBase} ${active ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => { setSelectedTextId(t.id); }}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#DBEAFE,#EDE9FE)] dark:bg-[linear-gradient(135deg,#1e3a5f,#2d1b5e)]">
-                  <CiText size={14} className="text-[#3730A3] dark:text-[#93C5FD]" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-signal/10 border border-signal/20">
+                  <Type size={14} className="text-signal" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary truncate">{t.text.slice(0, 24)}{t.text.length > 24 ? "…" : ""}</div>
                   <div className="text-[10.5px] text-ink-secondary">{t.fontFamily} · {Math.trunc(t.fontSize)}px</div>
                 </div>
-                <TiDelete className="text-danger cursor-pointer text-base flex-shrink-0"
+                <X className="text-danger cursor-pointer text-base flex-shrink-0"
                   onClick={e => { e.stopPropagation(); setTextsDetails(prev => prev.filter(d => d.id !== t.id)); }} />
               </div>
             );
@@ -288,14 +282,14 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
               <div key={b.id}
                 className={`${rowBase} ${active ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => setSelectedBlurId(b.id)}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#D1FAE5,#A7F3D0)] dark:bg-[linear-gradient(135deg,#052e1c,#064e3b)]">
-                  <MdBlurOn size={14} className="text-[#065F46] dark:text-[#6EE7B7]" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-success/10 border border-success/20">
+                  <Droplets size={14} className="text-success" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary">Blur Region {i + 1}</div>
                   <div className="text-[10.5px] text-ink-secondary">Intensity {b.blurAmount}</div>
                 </div>
-                <TiDelete className="text-danger cursor-pointer text-base flex-shrink-0"
+                <X className="text-danger cursor-pointer text-base flex-shrink-0"
                   onClick={e => { e.stopPropagation(); setBlursDetails(prev => prev.filter(d => d.id !== b.id)); }} />
               </div>
             );
@@ -313,10 +307,10 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
       </div>
       <div className="px-3 py-2 border-b border-studio-border flex flex-wrap gap-1.5 flex-shrink-0">
         {[
-          { label: "Import", icon: <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v8M2 9l4.5 3.5L11 9M1 12h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>, onClick: handleImport, disabled: false },
-          { label: "Text",   icon: <CiText size={13}/>, onClick: addText, disabled: videos.length === 0 },
-          { label: "Blur",   icon: <MdBlurOn size={13}/>, onClick: addBlur, disabled: videos.length === 0 },
-          { label: "Split",  icon: <AiOutlineSplitCells size={13}/>, onClick: () => spliteLayer(null, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
+          { label: "Import", icon: <Upload size={13} />, onClick: handleImport, disabled: false },
+          { label: "Text",   icon: <Type size={13}/>, onClick: addText, disabled: videos.length === 0 },
+          { label: "Blur",   icon: <Droplets size={13}/>, onClick: addBlur, disabled: videos.length === 0 },
+          { label: "Split",  icon: <SplitSquareHorizontal size={13}/>, onClick: () => spliteLayer(null, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
         ].map(btn => (
           <button key={btn.label} onClick={btn.onClick} disabled={btn.disabled}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary text-[11px] font-semibold cursor-pointer hover:bg-signal/10 hover:border-signal/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-[inherit]">
@@ -331,8 +325,8 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
             {clipsDetails.length > 0 && <div className={sectionLabel}>Video Clips</div>}
             {clipsDetails.map(c => (
               <div key={c.id} className={`${rowBase} border-transparent`}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#1e3a5f,#2d1b5e)]">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 2l5 3-5 3V2z" fill="rgba(255,255,255,.7)"/></svg>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-signal/25 to-scrub/15 border border-studio-border">
+                  <Film size={13} className="text-ink-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary truncate">{c.name}</div>
@@ -344,28 +338,28 @@ export default function MediaPanel({ activeTab }: { activeTab: string }) {
             {textsDetails.map(t => (
               <div key={t.id} className={`${rowBase} ${selectedTextId === t.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => setSelectedTextId(t.id)}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#FCE7F3,#FEF3C7)] dark:bg-[linear-gradient(135deg,#4a1030,#3d2a00)]">
-                  <CiText size={13} className="text-[#BE185D] dark:text-[#F9A8D4]" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-signal/10 border border-signal/20">
+                  <Type size={13} className="text-signal" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary truncate">{t.text.slice(0, 20)}</div>
                   <div className="text-[10.5px] text-ink-secondary">{t.fontFamily}</div>
                 </div>
-                <TiDelete className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setTextsDetails(prev => prev.filter(d => d.id !== t.id)); }} />
+                <X className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setTextsDetails(prev => prev.filter(d => d.id !== t.id)); }} />
               </div>
             ))}
             {blursDetails.length > 0 && <div className={sectionLabel}>Blur Regions</div>}
             {blursDetails.map((b, i) => (
               <div key={b.id} className={`${rowBase} ${selectedBlurId === b.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => setSelectedBlurId(b.id)}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[linear-gradient(135deg,#D1FAE5,#A7F3D0)] dark:bg-[linear-gradient(135deg,#052e1c,#064e3b)]">
-                  <MdBlurOn size={13} className="text-[#065F46] dark:text-[#6EE7B7]" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-success/10 border border-success/20">
+                  <Droplets size={13} className="text-success" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-semibold text-ink-primary">Blur {i + 1}</div>
                   <div className="text-[10.5px] text-ink-secondary">Intensity {b.blurAmount}</div>
                 </div>
-                <TiDelete className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setBlursDetails(prev => prev.filter(d => d.id !== b.id)); }} />
+                <X className="text-danger cursor-pointer text-[15px]" onClick={e => { e.stopPropagation(); setBlursDetails(prev => prev.filter(d => d.id !== b.id)); }} />
               </div>
             ))}
           </>}

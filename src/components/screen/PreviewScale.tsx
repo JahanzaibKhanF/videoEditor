@@ -1,6 +1,6 @@
 "use client";
 
-import { FaMinus, FaPlus } from "react-icons/fa";
+import { FaMinus, FaPlus } from "@/utils/icons";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import Slider from "../ui/Slider";
 

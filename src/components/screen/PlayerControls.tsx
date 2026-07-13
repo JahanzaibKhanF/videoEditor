@@ -1,7 +1,6 @@
 "use client";
 
-import { BiSkipNext } from "react-icons/bi";
-import { FaPause, FaPlay } from "react-icons/fa";
+import { BiSkipNext, FaPause, FaPlay } from "@/utils/icons";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { useEngineControls } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";

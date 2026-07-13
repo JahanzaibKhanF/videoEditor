@@ -100,7 +100,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
         </div>
         <div className="flex-1 flex items-center px-3 gap-2">
           {clipsDetails.length > 0 && (
-            <span className="inline-flex items-center gap-1 bg-[rgba(91,79,232,.08)] dark:bg-[rgba(91,79,232,.2)] border border-[rgba(91,79,232,.2)] text-signal dark:text-[#A5B4FC] rounded-full px-2 py-px text-[10.5px] font-semibold">
+            <span className="inline-flex items-center gap-1 bg-[rgba(139,92,255,.08)] dark:bg-[rgba(139,92,255,.2)] border border-[rgba(139,92,255,.2)] text-signal dark:text-[#A5B4FC] rounded-full px-2 py-px text-[10.5px] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
               {clipsDetails.length} clip{clipsDetails.length !== 1 ? "s" : ""}
             </span>
@@ -128,12 +128,12 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
               display: "flex", flexShrink: 0,
               background: "var(--ruler-bg, #F2F4F7)",
             }}
-              className="dark:[--ruler-bg:#0B0D10]"
+              className="dark:[--ruler-bg:#07070C]"
             >
               {/* Corner cell */}
               <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0, height: RULER_H,
-                borderRight: "1px solid", borderBottom: "1px solid", borderColor: "rgba(0,0,0,.07)" }}
-                className="bg-studio-base dark:border-[rgba(255,255,255,.07)]"
+                borderRight: "1px solid", borderBottom: "1px solid", borderColor: "rgba(255,255,255,.07)" }}
+                className="bg-studio-base"
               />
               {/* Ruler */}
               <div style={{ flex: 1, position: "relative", cursor: "pointer" }} onClick={onTrackClick}>
@@ -148,7 +148,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
                     position: "absolute", top: 0,
                     left: "50%", transform: "translateX(-50%)",
                     width: 12, height: 16,
-                    background: "linear-gradient(180deg,#FF6A3D,#FF8259)",
+                    background: "linear-gradient(180deg,#8B5CFF,#A47CFF)",
                     borderRadius: "0 0 4px 4px",
                     cursor: "ew-resize", pointerEvents: "all",
                     touchAction: "none",
@@ -156,7 +156,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
                   <div style={{
                     position: "absolute", top: 0, bottom: 0,
                     left: "50%", transform: "translateX(-50%)",
-                    width: 1.5, background: "#FF6A3D", opacity: 0.85,
+                    width: 1.5, background: "#8B5CFF", opacity: 0.85,
                   }} />
                 </div>
               </div>
@@ -181,7 +181,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
                 <div style={{
                   position: "absolute", top: 0, bottom: 0, zIndex: 5,
                   left: `${needlePct}%`,
-                  width: 1.5, background: "#FF6A3D", opacity: 0.7,
+                  width: 1.5, background: "#8B5CFF", opacity: 0.7,
                   pointerEvents: "none",
                 }} />
                 <Layers />
@@ -227,7 +227,7 @@ function Ruler({ totalTime }: { totalTime: number }) {
           position: "absolute", top: 3,
           left: `${(t / totalTime) * 100}%`,
           transform: "translateX(-50%)",
-          fontSize: 9.5, fontWeight: 600, color: "#8A919E", whiteSpace: "nowrap",
+          fontSize: 9.5, fontWeight: 600, color: "#89859F", whiteSpace: "nowrap",
         }}>
           {formatVideoDuration(t)}
         </div>
@@ -246,7 +246,7 @@ function LabelColumn() {
   const DEFAULT: LayerType[] = ["video","audio","image","text","blur"];
   const CFG = {
     blur:  { label: "Blur",  color: "#10B981" },
-    text:  { label: "Text",  color: "#FF6A3D" },
+    text:  { label: "Text",  color: "#8B5CFF" },
     image: { label: "Image", color: "#F59E0B" },
     audio: { label: "Audio", color: "#8B5CF6" },
     video: { label: "Video", color: "#4F7EF7" },

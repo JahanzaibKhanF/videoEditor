@@ -124,6 +124,10 @@ export interface TemplateSlot {
 
 export interface ActiveTemplate {
   templateId: string;
+  templateName: string;
+  accentColor: string;
+  coverImage: string | null;
+  aspectRatio: string;
   slots: TemplateSlot[];
 }
 
@@ -210,6 +214,16 @@ export interface AppContextType {
   setRenderJobs: React.Dispatch<React.SetStateAction<RenderJob[]>>;
   activeTemplate: ActiveTemplate | null;
   setActiveTemplate: React.Dispatch<React.SetStateAction<ActiveTemplate | null>>;
+  // Set once when a saved project is reopened whose video/image files
+  // aren't found in the currently-linked local media folder — drives
+  // MediaRelinkBanner.tsx. Cleared as files are matched by name.
+  missingMediaNames: string[];
+  setMissingMediaNames: React.Dispatch<React.SetStateAction<string[]>>;
+  // Non-null only when the current session started from "Resume project"
+  // rather than a new blank/template project — lets useProjectAutosave
+  // save back to the same row instead of creating a new one.
+  resumedProjectId: string | null;
+  setResumedProjectId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 // Engine control functions injected into context from Screen

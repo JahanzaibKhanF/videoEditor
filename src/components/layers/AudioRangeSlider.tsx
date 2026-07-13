@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import { ROW_H, ROW_GAP } from "./Layers";
+import { VolumeX, Volume2 } from "@/utils/icons";
 
 const MIN_W_PCT = 0.5;
 
@@ -99,7 +100,7 @@ export default function AudioRangeSlider() {
                 position: "absolute", top: 0, left, width, height: "100%",
                 background: track.muted
                   ? "rgba(107,114,128,.35)"
-                  : isSel ? "#FF8259" : "#6D28D9",
+                  : isSel ? "#A47CFF" : "#6D28D9",
                 outline: isSel ? "2px solid #5B21B6" : "none",
                 borderRadius: 6, cursor: "move",
                 display: "flex", alignItems: "center",
@@ -135,8 +136,9 @@ export default function AudioRangeSlider() {
                     borderRadius: 4, padding: "1px 5px",
                     cursor: "pointer", color: "white",
                     fontSize: 9, fontWeight: 700, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                  {track.muted ? "🔇" : "🔊"}
+                  {track.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}
                 </button>
               </div>
 

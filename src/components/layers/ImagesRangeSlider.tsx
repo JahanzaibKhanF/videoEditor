@@ -1,7 +1,7 @@
 "use client";
 
+import { MdOutlineAnimation } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
-import { MdOutlineAnimation } from "react-icons/md";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 

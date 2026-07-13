@@ -1,10 +1,6 @@
 "use client";
+import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate } from "@/utils/icons";
 
-import { IoTextOutline } from "react-icons/io5";
-import { GoFileMedia, GoSun } from "react-icons/go";
-import { TbTransitionRight } from "react-icons/tb";
-import { FiLayers } from "react-icons/fi";
-import { CgTemplate } from "react-icons/cg";
 
 const tabs = [
   { id: "media",       label: "Media",       icon: <GoFileMedia size={20} /> },

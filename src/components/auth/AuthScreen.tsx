@@ -52,15 +52,15 @@ export default function AuthScreen() {
           onClick={closeAuthModal}
           className="absolute -top-10 right-0 text-ink-faint hover:text-ink-primary text-[13px] font-semibold transition-colors"
         >
-          Continue as guest ✕
+          Continue as guest
         </button>
 
         <div className="bg-studio-surface border border-studio-border rounded-2xl shadow-panel p-7">
           <div className="flex items-center gap-2 mb-5">
             <div className="w-8 h-8 rounded-[9px] bg-signal flex items-center justify-center shadow-glow flex-shrink-0">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#0B0D10" strokeWidth="1.4" />
-                <path d="M5.5 5l4 2-4 2V5z" fill="#0B0D10" />
+                <rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#07070C" strokeWidth="1.4" />
+                <path d="M5.5 5l4 2-4 2V5z" fill="#07070C" />
               </svg>
             </div>
             <span className="font-display text-base font-bold text-ink-primary tracking-tight">ClipFlow</span>

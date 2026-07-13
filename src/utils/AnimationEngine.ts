@@ -1,13 +1,10 @@
 /**
  * AnimationEngine — pure canvas animation calculator.
- * Replaces the Remotion player entirely.
  *
  * Given a currentTime (seconds), fps, and element details,
  * returns { tx, ty, scale, rotation, opacity, blur, scaleX, scaleY }
- * that the canvas compositor uses to draw the element.
- *
- * Mirrors every animation from RemotionTextAnimation.tsx but uses
- * plain math instead of React/Remotion hooks.
+ * that the canvas compositor uses to draw the element — plain math,
+ * no player library or React hooks involved.
  */
 
 export interface AnimState {
@@ -22,7 +19,7 @@ export interface AnimState {
   visible: boolean;
 }
 
-// Spring simulation — same physics as Remotion's spring()
+// Spring simulation (critically-damped spring physics)
 function spring(frame: number, fps: number, from: number, to: number,
   stiffness = 100, damping = 15, mass = 1, durationFrames = 30): number {
   const dt = 1 / fps;
@@ -41,7 +38,7 @@ function clamp(v: number, min: number, max: number) {
 }
 
 function interpolate(v: number, inRange: number[], outRange: number[]): number {
-  // Multi-point interpolation (like Remotion's interpolate)
+  // Multi-point interpolation
   for (let i = 0; i < inRange.length - 1; i++) {
     const i0 = inRange[i], i1 = inRange[i + 1];
     const o0 = outRange[i], o1 = outRange[i + 1];
@@ -413,9 +410,14 @@ export function computeTransition(
   clipEndTime: number,
   _fps?: number
 ): TransitionState | null {
-  const duration = 0.6; // seconds, same as Remotion version
-  const start = clipEndTime - duration / 2;
-  const end = clipEndTime + duration / 2;
+  const duration = 0.6; // seconds
+  // The window must end exactly AT clipEndTime, not straddle it — the
+  // compositor stops drawing this clip once currentTime passes its
+  // endPosition, so any part of the window past that point would never
+  // run and the transition would visibly hard-cut partway through
+  // instead of completing (progress would cap at 0.5 instead of reaching 1).
+  const start = clipEndTime - duration;
+  const end = clipEndTime;
   if (currentTime < start || currentTime > end) return null;
   const progress = clamp((currentTime - start) / duration, 0, 1);
   return { progress, type: transitionType };

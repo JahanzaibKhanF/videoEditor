@@ -1,7 +1,7 @@
 "use client";
 
+import { MdOutlineAnimation } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
-import { MdOutlineAnimation } from "react-icons/md";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 
@@ -79,8 +79,8 @@ export default function TextRangeSlider() {
               className="video-text"
               style={{
                 position: "absolute", top: 0, height: "100%", left, width,
-                background: isSelected ? "#DB2777" : "#FF6A3D",
-                outline: isSelected ? "2px solid #BE185D" : "none",
+                background: isSelected ? "#A47CFF" : "#8B5CFF",
+                outline: isSelected ? "2px solid #FFB648" : "none",
                 borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: "move", gap: 4, overflow: "hidden",
                 border: text.animation !== "none" ? "1.5px solid rgba(255,255,255,.4)" : "none",

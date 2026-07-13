@@ -1,9 +1,8 @@
 "use client";
 
+import { PiExportBold, FaDownload } from "@/utils/icons";
 import { useEffect, useState } from "react";
-import { PiExportBold } from "react-icons/pi";
 import { toast } from "react-toastify";
-import { FaDownload } from "react-icons/fa";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import DraggableWrapper from "../../utils/DraggableWrapper";
 import Error from "../ui/Error";
@@ -46,30 +45,30 @@ export default function VideoOutputModal({ setIsShowProcessedVideo }: Readonly<{
 
       <div id="video-output-modal" style={{ width: "100%", transition: "all .3s ease", transform: "translateX(-100%)", display: "flex", flexDirection: "column" }}>
         {/* Header */}
-        <div style={{ height: 44, background: "#FFFFFF", borderBottom: "1px solid #262B33", display: "flex", alignItems: "center", padding: "0 16px", position: "relative" }}>
-          <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: 13, fontWeight: 700, color: "#0F1117" }}>Processed Video</span>
+        <div style={{ height: 44, background: "#111120", borderBottom: "1px solid #211F33", display: "flex", alignItems: "center", padding: "0 16px", position: "relative" }}>
+          <span style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", fontSize: 13, fontWeight: 700, color: "#F3F1FA" }}>Processed Video</span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
             <button onClick={() => exportvideo("download")} disabled={isLoading || !!FileError || !processedVideoLink}
-              style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #262B33", background: "#F7F8FA", display: "flex", alignItems: "center", justifyContent: "center", cursor: (isLoading || !!FileError || !processedVideoLink) ? "not-allowed" : "pointer", color: "#555B6E", opacity: (isLoading || !!FileError || !processedVideoLink) ? 0.4 : 1, transition: "all .12s" }}
-              onMouseEnter={e => { if (!isLoading && !FileError && processedVideoLink) (e.currentTarget as HTMLElement).style.background = "#F2F4F7"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#F7F8FA"; }}>
+              style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #211F33", background: "#171728", display: "flex", alignItems: "center", justifyContent: "center", cursor: (isLoading || !!FileError || !processedVideoLink) ? "not-allowed" : "pointer", color: "#B8B4D1", opacity: (isLoading || !!FileError || !processedVideoLink) ? 0.4 : 1, transition: "all .12s" }}
+              onMouseEnter={e => { if (!isLoading && !FileError && processedVideoLink) (e.currentTarget as HTMLElement).style.background = "#1F1F35"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#171728"; }}>
               <FaDownload size={13} />
             </button>
             <button onClick={() => exportvideo("circle")} disabled={isLoading || !!FileError || !processedVideoLink}
-              style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #262B33", background: "#F7F8FA", display: "flex", alignItems: "center", justifyContent: "center", cursor: (isLoading || !!FileError || !processedVideoLink) ? "not-allowed" : "pointer", color: "#555B6E", opacity: (isLoading || !!FileError || !processedVideoLink) ? 0.4 : 1, transition: "all .12s" }}
-              onMouseEnter={e => { if (!isLoading && !FileError && processedVideoLink) (e.currentTarget as HTMLElement).style.background = "#F2F4F7"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#F7F8FA"; }}>
+              style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #211F33", background: "#171728", display: "flex", alignItems: "center", justifyContent: "center", cursor: (isLoading || !!FileError || !processedVideoLink) ? "not-allowed" : "pointer", color: "#B8B4D1", opacity: (isLoading || !!FileError || !processedVideoLink) ? 0.4 : 1, transition: "all .12s" }}
+              onMouseEnter={e => { if (!isLoading && !FileError && processedVideoLink) (e.currentTarget as HTMLElement).style.background = "#1F1F35"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#171728"; }}>
               <PiExportBold size={15} />
             </button>
           </div>
         </div>
 
         {/* Video area */}
-        <div style={{ flex: 1, borderTop: "1px solid #262B33", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: "#111218", minHeight: 300 }}>
+        <div style={{ flex: 1, borderTop: "1px solid #211F33", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", background: "#07070C", minHeight: 300 }}>
           {isLoading && (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 10, background: "rgba(0,0,0,.5)" }}>
               <span style={{ color: "white", fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Loading video…</span>
-              <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,.15)", borderTop: "3px solid #FF6A3D", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+              <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,.15)", borderTop: "3px solid #8B5CFF", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
             </div>
           )}
           <div style={{ position: "relative", width: "100%", maxHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center" }}>

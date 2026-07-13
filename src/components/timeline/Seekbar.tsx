@@ -57,9 +57,9 @@ export default function Seekbar({
         >
           {/* Head */}
           <div className="absolute w-full top-0 h-3 right-[50%] rounded-br rounded-bl mx-auto z-10"
-            style={{ background: "linear-gradient(180deg,#FF6A3D,#FF8259)" }} />
+            style={{ background: "linear-gradient(180deg,#8B5CFF,#A47CFF)" }} />
           {/* Line */}
-          <div className="absolute h-full mx-auto top-0 bg-[#FF6A3D]"
+          <div className="absolute h-full mx-auto top-0 bg-[#8B5CFF]"
             style={{ width: 1.5, transform: "translateX(-50%)" }} />
         </div>
       )}
