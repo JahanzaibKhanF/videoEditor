@@ -92,3 +92,22 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_templates_active ON templates (is_active, sort_order);
+
+-- ── Motion presets: curated animations + transitions, admin-editable JSON ──
+-- One table for both kinds (distinguished by `kind`) rather than two nearly
+-- identical tables. Mirrors the `templates` pattern above: built-in presets
+-- ship in code (src/utils/motionPresets.ts) as the always-available
+-- fallback; anything in this table is additive/overriding, editable from
+-- /settings the same way templates are.
+CREATE TABLE IF NOT EXISTS motion_presets (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind        TEXT NOT NULL CHECK (kind IN ('animation','transition')),
+  name        TEXT NOT NULL,
+  preset_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_motion_presets_active ON motion_presets (kind, is_active, sort_order);

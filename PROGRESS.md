@@ -1,6 +1,131 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — real FFmpeg export bug fixed (from actual console log) + panel redesign
+The user shared an actual browser console log from a real export attempt for the
+first time this project — genuinely valuable, traced to a specific line rather than
+guessed at.
+
+**Real export bug, root-caused from the log, not speculation:**
+`clientRender.ts`'s zoom/grow/expand/bounceIn/blingIn and shrink/collapse text
+animation cases built `xExpr`/`yExpr` with **literal single-quote characters baked
+into the string itself** (`` `'(${x0}-...)*0.3)'` ``), but the drawtext arg-assembly
+step a few dozen lines later *also* unconditionally wraps every x/y expression in
+quotes (`` `x='${xExpr}'` ``) — producing `x=''(...)''`: an empty quoted string
+immediately followed by a raw, unquoted expression. FFmpeg's filtergraph parser has
+no way to recover from that and reports a garbage "No such filter" fragment — exactly
+what the user's log showed (`No such filter: '0.6)/0.6)-100)*0.3):y'`). Fixed both
+cases to match every other animation case's convention (build the plain expression,
+let the assembly step quote it once). Confirmed via grep that this was the only place
+in the file with that double-quoting pattern. (The *other* error line in the user's
+log, "At least one output file must be specified," is not a bug — it's an
+intentional, documented internal probe for audio-track detection that's designed to
+always exit non-zero; only its stderr log lines matter, the "failure" is expected.)
+
+**On "still have Fabric.js / mediabunny, why are you copying me":** worth recording
+plainly since it came up again — `mediabunny` is a small, legitimate library used in
+exactly one file (`getFps.ts`) to read a video's frame rate from its container
+metadata client-side; it's not a rendering engine and isn't comparable to
+Remotion. Fabric.js remains the interactive canvas library for bounding
+boxes/drag/resize, per the earlier engine-architecture discussion. Neither was
+touched this session — the concrete, fixable thing was the export bug above.
+
+**Structural redesign of the three panels flagged as "not yet redesigned, only
+recolored" across several earlier sessions:**
+- `PropertiesPanel.tsx`: every property group (clip/blur/image/text) now has a
+  proper card header (icon tile + label) instead of a bare uppercase text label;
+  tab bar changed from underline-style to pill-style; every leftover
+  `text-[#6B7280] dark:text-[rgba(255,255,255,.45)]`-style arbitrary-value pair
+  replaced with the actual `ink-muted`/`ink-faint` tokens.
+- `AssetsSection.tsx`: the video list was a literal spreadsheet-style
+  `grid-cols-5` text table (File/Size/Type/Actions columns) — replaced with the
+  same card-row language used everywhere else in the app (icon tile, name,
+  metadata, action buttons). Every section (Videos/Images/Text/Blurs) now has a
+  consistent icon+label+count header. Image delete button's stray
+  `bg-[#1e1e1e]` (a leftover flagged two sessions ago but not yet fixed here)
+  is gone.
+- `MediaPanel.tsx`: fixed 5 instances of delete "X" icons rendered as bare
+  clickable `<X>` elements with no button wrapper, no real hit target, and
+  font-size-based icon sizing (`text-base`/`text-[15px]`, which doesn't
+  reliably size an SVG) instead of the `size=` prop — all converted to proper
+  `<button>` elements with real hover states and hit areas. Unified two
+  remaining verbose light/dark rgba-pair class strings to the actual
+  `signal`/`danger` tokens.
+
+Build verified clean (`npm run build`, all 15 routes, + `tsc --noEmit`).
+
+**Still open:**
+- Zero browser-rendered QA remains true for every visual change across every
+  session — including this one.
+- No live Neon DB.
+- The export bug fix is reasoned precisely against the actual log the user
+  provided, which is much stronger evidence than prior sessions' fixes, but a
+  second real export attempt is what actually confirms it.
+
+## Session — playback race condition fix + curated JSON-driven Motion Presets
+Direct response to: "video playback stuck in timeline", continued transition
+concerns, and a request to make animations/transitions "your own thing" (not
+Remotion, already true — see below) with a curated set editable via JSON like
+templates.
+
+**Real bug found and fixed — the actual "stuck in timeline" cause:**
+`CanvasEngine.ts`'s `seekTo()` used a single shared `_isSeeking` boolean to detect
+whether a seek was still current. Scrubbing the timeline quickly (calling `seekTo`
+again before the previous call's video-seek promises resolved) created a genuine
+race: an OLDER seek's completion callback could fire after a NEWER seek had already
+started, see `_isSeeking === true` (set by the newer one), wrongly conclude it was
+still the current operation, and clear the flag itself. That, in turn, made the
+actual newest seek's own completion callback see `_isSeeking === false` and think
+*it* had been superseded — so it silently returned without ever drawing the final
+frame or resuming playback. Net effect: playback could permanently fail to resume
+after scrubbing. Replaced the shared boolean with a monotonically increasing token
+per `seekTo()` call — only the call whose token still matches when its promises
+resolve is allowed to finalize anything, which makes "is this seek stale" unambiguous
+regardless of how many overlap.
+
+**On "change the entire core engine, don't use Remotion":** worth being direct about
+this — `AnimationEngine.ts` (canvas math) and `CanvasEngine.ts` (playback) already
+are a from-scratch custom system with zero Remotion involvement; that swap happened
+in an earlier session (see the very first "Aperture v2" entry in this file and the
+in-chat discussion about why FFmpeg.wasm/Fabric.js were kept but Remotion wasn't).
+A ground-up rewrite of the whole rendering pipeline was judged too high-risk for the
+actual ask, which turned out to really be about (a) real bugs — now found and fixed
+above and in the previous transition session — and (b) wanting a curated, own-brand
+preset system instead of the old 50-option/16-option raw lists, which is what this
+session actually builds:
+
+**New: curated, JSON-editable Motion Presets (animations + transitions).**
+- New DB table `motion_presets` (`kind` = 'animation'|'transition', `preset_json`,
+  `is_active`, `sort_order`) — same shape/pattern as `templates`.
+- `src/utils/motionPresets.ts`: 6 curated animations (Fade In, Slide Up, Pop In, Zoom
+  In, Bounce In, Typewriter) and 5 curated transitions (Cross Dissolve, Dip to Black,
+  Wipe, Slide, Zoom) as built-in defaults, always available offline.
+- New API routes: `/api/admin/motion-presets` (+ `/[id]`) for CRUD, `/api/motion-presets`
+  public read (fails soft to built-ins if DB isn't configured).
+- **What's actually JSON-configurable vs. not, stated plainly** (documented at the top
+  of `motionPresets.ts` too): the real interpolation math per animation
+  (`AnimationEngine.ts`'s switch) and the FFmpeg xfade name mapping per transition
+  stay in code — reinventing either from arbitrary admin JSON would need a much
+  bigger, riskier generic-keyframe engine. What the JSON controls is which curated
+  presets appear in the editor's pickers, their name/icon/order, same relationship
+  a template's JSON has to the actual FFmpeg render pipeline.
+- `AnimationSelection.tsx` and `ClipTransitionSelector.tsx` rebuilt: curated grid
+  (built-in + DB-published, merged) is now the default view; the old full
+  50-animation/16-transition grid with search is still there, collapsed behind a
+  "Browse all…" toggle, so nothing was actually removed — just de-emphasized.
+- New `/settings` section: "Motion Presets" alongside "Template Studio" (top-level
+  toggle), with its own grid + add/edit/delete UI, same visual language.
+
+Build verified clean (`npm run build`, all 15 routes incl. 5 new ones, + `tsc --noEmit`).
+
+**Still open:**
+- No structural layout redesign on MediaPanel / AssetsSection / PropertiesPanel.
+- Zero browser-rendered QA — true of everything in this session too, including the
+  seek race-condition fix. The reasoning traces the actual failure mode precisely,
+  but hasn't been watched happen.
+- No live Neon DB — this also means `motion_presets` can't be seeded/tested yet;
+  the curated built-ins are what's actually exercised until DB is connected.
+
 ## Session — two real transition bugs (found, not guessed) + startup screen merged
 Direct response to feedback: "transitions are not working perfectly" + startup screen
 should show templates and blank-project together on one screen, no separate tab for
