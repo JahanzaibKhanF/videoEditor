@@ -1,0 +1,260 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-studio-border;
+  }
+  html,
+  body {
+    @apply h-full bg-studio-void text-ink-primary antialiased;
+    font-family: var(--font-body);
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    @apply bg-signal/30 text-ink-primary;
+  }
+}
+
+/* ── Legacy component classes, ported & restyled to studio palette ──
+   These class names are referenced directly throughout ported editor
+   components (Screen, TimeLine, PlayerControls, StartupScreen, etc).
+   Keeping the names stable avoided a full rewrite of every component,
+   while the values below are 100% new to match the ClipFlow studio look. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.12);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+.resizer-h {
+  width: 4px; flex-shrink: 0; cursor: col-resize;
+  transition: background .12s; z-index: 10;
+  background: rgba(255,255,255,.05);
+  touch-action: none;
+}
+.resizer-h:hover, .resizer-h:active { background: #8B5CFF; }
+
+.resizer-v {
+  height: 4px; flex-shrink: 0; cursor: row-resize;
+  transition: background .12s; z-index: 10;
+  background: rgba(255,255,255,.05);
+  touch-action: none;
+}
+.resizer-v:hover, .resizer-v:active { background: #8B5CFF; }
+
+.player-bar {
+  background: #111120;
+  border-top: 1px solid #211F33;
+}
+
+.player-tbtn {
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .12s; flex-shrink: 0;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #211F33;
+  color: rgba(237,239,242,.85);
+  border-radius: 8px;
+}
+.player-tbtn:hover { background: rgba(255,255,255,.1); border-color: #35334F; }
+
+.player-tbtn-large {
+  background: linear-gradient(135deg, #8B5CFF 0%, #A47CFF 100%) !important;
+  border: 1px solid transparent !important;
+  color: #07070C !important;
+  box-shadow: 0 2px 16px rgba(139,92,255,.45);
+}
+.player-tbtn-large:hover { opacity: .92; }
+
+.player-time-display {
+  padding: 3px 9px; border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: .5px; white-space: nowrap;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #211F33;
+  color: #B8B4D1;
+}
+
+.ctrl-btn {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background .1s;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #211F33;
+  color: #B8B4D1;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,.1); color: #F3F1FA; }
+
+.ctrl-label {
+  font-size: 11px; font-weight: 600;
+  color: #89859F;
+}
+
+.ctrl-range { accent-color: #8B5CFF; cursor: pointer; }
+
+.ctrl-select {
+  font-size: 11.5px; padding: 3px 22px 3px 8px; border-radius: 7px;
+  font-family: inherit; appearance: none; font-weight: 600; cursor: pointer;
+  background: rgba(255,255,255,.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(237,239,242,.6)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 6px center;
+  border: 1px solid #211F33;
+  color: #F3F1FA;
+  transition: border-color .12s;
+}
+.ctrl-select:focus { outline: none; border-color: #8B5CFF; }
+.ctrl-select option { background: #171728; color: #F3F1FA; }
+
+.grid-background {
+  background-color: #0A0A13;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.03) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #07070C;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity .25s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+}
+.startup-overlay.closing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Animated aurora background — drifting, color-shifting blobs behind the
+   glass card, plus a slow dust/snow particle layer. Pure CSS, no images. ── */
+.aurora-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  mix-blend-mode: screen;
+  opacity: .55;
+  will-change: transform;
+}
+.aurora-blob.b1 {
+  width: 52vmax; height: 52vmax; left: -12vmax; top: -18vmax;
+  background: radial-gradient(circle, #8B5CFF 0%, transparent 70%);
+  animation: aurora-drift-1 26s ease-in-out infinite;
+}
+.aurora-blob.b2 {
+  width: 44vmax; height: 44vmax; right: -14vmax; top: -10vmax;
+  background: radial-gradient(circle, #FF4F70 0%, transparent 70%);
+  animation: aurora-drift-2 32s ease-in-out infinite;
+}
+.aurora-blob.b3 {
+  width: 48vmax; height: 48vmax; left: -8vmax; bottom: -20vmax;
+  background: radial-gradient(circle, #33D8A0 0%, transparent 70%);
+  animation: aurora-drift-3 30s ease-in-out infinite;
+}
+.aurora-blob.b4 {
+  width: 40vmax; height: 40vmax; right: -6vmax; bottom: -16vmax;
+  background: radial-gradient(circle, #4C8CFF 0%, transparent 70%);
+  animation: aurora-drift-1 24s ease-in-out infinite reverse;
+}
+@keyframes aurora-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(6vmax, 4vmax) scale(1.12); }
+  66%      { transform: translate(-3vmax, 7vmax) scale(0.94); }
+}
+@keyframes aurora-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-7vmax, 6vmax) scale(1.08); }
+}
+@keyframes aurora-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%      { transform: translate(5vmax, -5vmax) scale(1.1); }
+  70%      { transform: translate(-4vmax, -2vmax) scale(0.96); }
+}
+
+/* Fine drifting dust/snow, like fog rolling across a window */
+.aurora-dust {
+  position: absolute;
+  inset: -10%;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,.35) 50%, transparent 51%),
+    radial-gradient(1px 1px at 65% 15%, rgba(255,255,255,.25) 50%, transparent 51%),
+    radial-gradient(2px 2px at 80% 60%, rgba(255,255,255,.2) 50%, transparent 51%),
+    radial-gradient(1px 1px at 35% 75%, rgba(255,255,255,.3) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 90% 85%, rgba(255,255,255,.22) 50%, transparent 51%),
+    radial-gradient(1px 1px at 10% 90%, rgba(255,255,255,.28) 50%, transparent 51%);
+  background-repeat: repeat;
+  background-size: 480px 480px;
+  animation: dust-drift 90s linear infinite;
+  opacity: .5;
+}
+@keyframes dust-drift {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(-240px, -160px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob, .aurora-dust { animation: none; }
+}
+
+@layer utilities {
+  /* Slim studio scrollbars */
+  .studio-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .studio-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .studio-scroll::-webkit-scrollbar-thumb {
+    @apply bg-studio-borderLight rounded-full;
+  }
+  .studio-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-faint;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .glass-panel {
+    @apply bg-studio-surface/95 backdrop-blur-xl border border-studio-border;
+  }
+}
