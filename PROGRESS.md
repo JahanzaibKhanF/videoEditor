@@ -1,6 +1,270 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — critical WebCodecs bug fix from a real runtime error, plus 5 more real bugs
+Direct response to an actual `Unhandled Runtime Error` the user hit while exporting,
+plus several other concrete bug reports from real usage.
+
+**The critical bug — "Video encode failed: resolution exceeds max coded area":**
+Root cause confirmed from the actual error text: `VideoEncoder` was hardcoded to
+`avc1.42001f` (H.264 Baseline, level 3.1) everywhere, including in the "is WebCodecs
+supported" probe — which only ever tested a fixed 1280×720 sample. Level 3.1 caps at
+a 921,600-pixel coded area (~1280×720); the user's 1080×1080 project (1,166,400
+pixels) is comfortably within normal hardware encoder capability but that hardcoded
+level string rejected it outright. **Fixed properly, not patched**: new
+`utils/videoCodecSelect.ts` is now the single source of truth — it actually calls
+`VideoEncoder.isConfigSupported()` against the PROJECT'S REAL width/height/framerate,
+trying AVC levels 3.0 through 5.2 in order and falling back to VP9 if no AVC level
+works, returning the exact verified config. This same picked config is used for both
+the "should we attempt WebCodecs at all" decision (`renderVideo.ts`) and the actual
+`VideoEncoder.configure()` call inside the worker — they can no longer disagree with
+each other, which is what caused the bug in the first place. This is also directly
+what "do a real check, not a hardcoded guess" meant — implemented literally.
+
+**Other real bugs fixed this session:**
+1. **Timeline layers hiding each other** — root-caused: `Layers.tsx` allocated a
+   single fixed 36px row height for text/image/blur layer types regardless of how
+   many items of that type existed. But `TextRangeSlider`/`ImagesRangeSlider`/
+   `BlurRangeSlider` each stack one 28px sub-row per item internally — with 2+ items
+   of the same type, the extra sub-rows overflowed the fixed-height wrapper and
+   visually overlapped the next row below. Fixed the height formula to account for
+   actual item count per type, matching the pattern already correctly used for
+   video/audio rows.
+2. **Template mode allowed adding new clips/text/images** — when a template is
+   active, editing should be restricted to the template's existing elements (per
+   the original template-mode design). Audited every "add" entry point in
+   `MediaPanel.tsx` and `AssetsSection.tsx` (import button, drop zone, add-text,
+   add-blur, Layers-tab toolbar, per-video "add to timeline") — none of them
+   checked `activeTemplate` before. All 7 now do.
+3. **Text box still not fully covering typed text** — found the actual root cause
+   this time: the *default* text creation size was badly mismatched (220px-wide box
+   at 100px font size — even a single short word wouldn't fit on one line at that
+   ratio), and the box was never measured against its own default text at creation
+   time. Fixed the defaults (48px font, width scaled to the composition, minimum
+   220px) and now measure the real required height immediately via
+   `measureWrappedTextHeight` when a text layer is created, on top of last
+   session's fix that keeps height in sync as you type/change font settings.
+4. **Video going blank/black during loading/seeking** — added a real loading
+   indicator. `CanvasEngine.ts` now attaches `waiting`/`stalled`/`canplay`/
+   `playing`/`loadeddata` listeners to every video element (event-driven, not a
+   guessed timer or polling loop) and exposes `onBufferingChange`; `Screen.tsx`
+   shows a proper spinner overlay ("Loading…") instead of leaving the canvas on
+   its black fallback fill while any active clip is buffering or mid-seek — the
+   same idea as After Effects' render/cache wait indicator.
+
+Build verified clean: `tsc --noEmit`, full `npm run build`, all 15 routes.
+
+**Still open, and still the single most important thing:** the WebCodecs pipeline
+has now had one real bug found and fixed from an actual runtime error — which is
+good evidence the approach is sound, but also confirms this code needs real testing,
+not just clean compiles, to find what's still wrong. Please export again and report
+back whatever happens next, good or bad.
+
+## Session — WebCodecs export engine, resize/text-box bug fixes, animated startup background
+Largest single session yet. Direct response to several concrete pieces of feedback.
+
+**Q: is account creation / template / animation / transition creation still available?**
+Yes — all of it is real, working code (signup/login routes, `/api/admin/templates`,
+`/api/admin/motion-presets`). What's still true, stated plainly every session because
+it hasn't changed: none of it can actually persist anything until a live Neon
+database is connected (`DATABASE_URL`/`JWT_SECRET`/`ADMIN_PANEL_PASSWORD` in
+`.env.local` + Netlify env vars, then `db/schema.sql` run against that database).
+Until then, signup/login/template-CRUD/motion-preset-CRUD all fail soft — the code
+path is there and correct, there's just nothing behind it yet.
+
+**Real bugs found and fixed:**
+1. **Inverted vertical panel resize** — `Editor.tsx`'s shared drag-resize helper had
+   `delta = dir === "left" ? startCoord - coord : coord - startCoord`, so dragging
+   the timeline-height resizer used the same math as the *right*-edge horizontal
+   resizer instead of matching the *left*-edge one. Dragging up shrank the panel,
+   dragging down grew it — backwards. Fixed the condition to `dir === "left" || dir
+   === "up"`.
+2. **Templates grid ignored panel width** — the sidebar template grid was hardcoded
+   to `grid-cols-1` regardless of how wide the resizable panel was dragged. Tailwind's
+   viewport-based breakpoints (`sm:`, `lg:`) can't solve this since the panel isn't
+   the viewport. Added a `ResizeObserver` on the grid's own element and compute
+   1/2/3 columns directly from its measured width.
+3. **Text bounding box not covering wrapped text** — root cause: `TextDetails.height`
+   was set once (by whatever created the text layer) and never recalculated as
+   content, font size, or line height changed, while the actual number of wrapped
+   lines was computed fresh on every canvas draw in `CompositorCanvas`. The two could
+   drift, so the box could be shorter than the text it was supposed to contain — this
+   is likely the same underlying gap that made the interaction box look wrong.
+   Fixed properly, not patched: extracted the exact word-wrapping algorithm into
+   `utils/measureText.ts` (`wrapTextLines` + `measureWrappedTextHeight`), refactored
+   `CompositorCanvas`'s `drawWrappedText` to use it (so drawing and measuring can
+   never disagree again), and wired height recalculation into both places text
+   dimensions change: `InteractionOverlay.tsx`'s on-canvas textarea (recomputes live
+   on every keystroke) and `TextEditor.tsx`'s font-size/line-height sidebar controls.
+4. **Self-caught regression from the previous session's Fabric.js replacement**:
+   clips had silently lost click-to-select, which would have made per-clip
+   transitions impossible to apply (`ClipTransitionSelector.tsx` requires
+   `selectedClipId`). Fixed — clips are selectable again with real (uniform-scale)
+   resize handles.
+
+**Animated startup background:** replaced the flat `#07070C` background with 4
+independently-drifting blurred color blobs (violet/red/green/blue, `mix-blend-mode:
+screen`, 24–32s organic keyframe loops) plus a slow CSS dust/snow particle layer —
+same visual language modern SaaS sites (Linear, Vercel-style "aurora" gradients) use.
+Respects `prefers-reduced-motion`.
+
+**FFmpeg.wasm → WebCodecs, with automatic fallback (the big one):**
+- `utils/compositeFrame.ts` — extracted CompositorCanvas's entire per-frame drawing
+  logic (video/text/image/blur/transitions/animations) into one pure, reusable
+  function. This is what made the rest of this tractable: the export pipeline calls
+  the *exact same*, already-debugged compositing code frame-by-frame instead of
+  reimplementing it, so there's no second copy of transition/text/animation math
+  that could drift from the preview.
+- `utils/webCodecsRender.ts` — the new export pipeline. Feature-detects support via
+  `VideoEncoder.isConfigSupported`; if available, seeks every active clip's
+  `<video>` element to the correct local time for each output frame (must happen on
+  the main thread — a Worker has no access to real HTMLVideoElements), draws via
+  `compositeFrame`, and hands each frame off to a Worker as a transferable
+  `VideoFrame` (zero-copy). Audio is mixed separately via `OfflineAudioContext`
+  (decodes each clip's audio once, schedules per-track volume/mute/timing, renders
+  to one buffer) and sent to the worker in bulk.
+- `workers/encodeWorker.ts` — owns `VideoEncoder`/`AudioEncoder`/`mp4-muxer`'s
+  `Muxer`, does the actual CPU-heavy H.264 + AAC encoding **off the main thread**,
+  so seeking/drawing the next frame doesn't have to wait for the previous frame's
+  encode. Confirmed via the production build output that webpack correctly splits
+  this into its own chunk (`new Worker(new URL(...))` is natively supported by
+  Next.js 14's webpack config, no extra setup needed).
+- `utils/renderVideo.ts` — new top-level orchestrator. Tries WebCodecs first; on
+  any failure (unsupported browser, encode error, anything) automatically falls
+  back to the existing FFmpeg pipeline with a fresh job, so export never just stops
+  working. `RenderButton.tsx` now calls this instead of `clientRender` directly.
+- `utils/renderJobRegistry.ts` — small shared cancellation registry so the same
+  Cancel button works regardless of which engine ended up running.
+- **The one fact that matters most for this decision, stated plainly**: WebCodecs is
+  currently Chromium-only (Chrome/Edge) — Firefox and Safari don't implement it. This
+  is exactly why the FFmpeg fallback stays rather than being deleted; removing it
+  would mean zero export capability for a meaningful share of users. This is real
+  progressive enhancement, the same pattern professional video-editing web apps use,
+  not a half-measure.
+
+Build verified clean end to end: `tsc --noEmit`, full `npm run build` (worker chunk
+confirmed present and correctly split), all 15 routes.
+
+**Still open — and this session raises the stakes on this point rather than lowering
+it:** the WebCodecs pipeline (frame timing, audio mixing/sync, muxing correctness,
+worker message passing) is entirely new, untested code implementing a genuinely
+complex spec. It is the single highest-risk piece of work in this entire project.
+Reasoned through carefully, typechecks and builds clean, but "produces a valid,
+correctly-synced, playable MP4" can only be confirmed by actually exporting a real
+project in Chrome and playing the result back. Please test this before anything
+else.
+
+## Session — self-review of the Fabric.js replacement caught a real regression
+Before calling the previous session's `InteractionOverlay.tsx` (the Fabric.js
+replacement) done, went back through it critically rather than shipping the first
+version. Found and fixed a real gap:
+
+**Clips had silently lost click-to-select entirely.** The first version of
+`InteractionOverlay.tsx` rendered clip hit-regions with `selected` hardcoded to
+`false` and no resize handles — meaning clicking a clip on the canvas would never
+call `setSelectedClipId`. Checked who actually depends on that: both
+`PropertiesPanel.tsx` (shows the clip property card) AND, more importantly,
+`ClipTransitionSelector.tsx` — which requires `selectedClipId` to apply a
+transition to a specific clip and shows "Please select a clip to apply transition"
+otherwise. Without a fix, applying a transition to any individual clip via the UI
+would have been **entirely impossible** — a severe regression from the old
+Fabric-based version, which did support this. Fixed: clips are now selectable
+(click sets `selectedClipId`, clears other selections same as every other kind),
+and get real resize handles using a new `lockAspect` drag mode — since
+`ClipDetails.scale` is a single number rather than independent width/height, corner
+resize now computes a uniform scale ratio (driven by whichever axis moved further)
+instead of the free-form independent-axis resize used for images/text/blur.
+
+Re-verified after the fix: `tsc --noEmit` clean, full `npm run build` clean (all 15
+routes), and a final repo-wide grep confirms zero remaining references to either
+`fabric` or `remotion` anywhere in `package.json`/`src`/`app` (the only two hits are
+explanatory code comments in `InteractionOverlay.tsx` describing what it replaced,
+not actual imports).
+
+**This is the point past which further blind iteration has negative value.** Every
+remaining open item — does dragging feel right, does resize math hold up at extreme
+zoom, does the transparent-textarea cursor trick actually look right, does the
+export bug fix actually produce a working file — requires a real browser and a real
+Neon DB, neither of which exist in this sandbox. Continuing to guess at more changes
+without that feedback risks the same failure mode as the early sessions (polishing
+things that were never broken while missing what actually is).
+
+**Full status for a fresh session picking this up:**
+- Aperture v2 visual identity: done (icons, palette, dead-code removal).
+- Templates: done (JSON interpreter, admin studio, drag-drop, startup screen).
+- Motion Presets: done (curated animations/transitions, JSON-editable in /settings).
+- Autosave + Resume + media relink: done (save and load both wired).
+- Real bugs fixed from actual evidence (not guessed): the seek race condition
+  ("stuck in timeline"), the transition window math, the FFmpeg xfade name mapping,
+  the double-quoting export bug, the z-index stacking bug, several CSS
+  cascade/dark-mode bugs.
+- Fabric.js: fully removed, replaced with a real custom interaction layer.
+- Remotion: fully removed (was already-dead stub files).
+- NOT done: MediaPanel/AssetsSection/PropertiesPanel got icon/structural passes but
+  not a from-scratch redesign; nothing has been visually confirmed in a real browser;
+  no live Neon DB has ever been connected to this project during development.
+
+## Session — Fabric.js fully removed, replaced with a real custom interaction layer
+Direct response to a repeated, explicit request across several sessions. This one
+actually does it, rather than explaining again why it was kept.
+
+**What changed:** `FabricOverlay.tsx` (464 lines, built on the `fabric` npm package)
+is deleted. New `InteractionOverlay.tsx` replaces it — plain React + native Pointer
+Events, zero canvas-interaction library. This is the same architecture professional
+web editors (Figma, Canva) actually use: a canvas/WebGL layer draws pixels, and a
+separate layer of real DOM elements handles selection, drag, resize, and text
+editing. `fabric` is removed from `package.json` entirely; confirmed zero remaining
+references anywhere in the repo before removing it.
+
+**What it replicates from the old Fabric-based version:**
+- Select/deselect (click empty space to deselect, click an object to select it,
+  clears the other selection state fields the same way the old "selected" handlers did)
+- Drag-to-move and corner-handle resize for images, text, and blur regions
+- Clips get a draggable/scalable (uniform-scale-only) invisible hit region, matching
+  the old near-invisible pass-through behavor
+- Center-snap guides (amber lines when within 8px of horizontal/vertical center),
+  same threshold and color as before
+- Delete/Backspace removes the selected element, same guard against firing while
+  typing in an input/textarea
+- Inline text editing on double-click — this one's actually a cleaner implementation
+  than Fabric's version, not just a port: Fabric faked a text cursor entirely in
+  canvas while keeping glyphs transparent; this uses a real `<textarea>` positioned
+  exactly over the text box with `color: transparent` + `caretColor: white` — same
+  visual trick (you see a blinking cursor, not doubled text, because
+  CompositorCanvas draws the real glyphs underneath), but it's a real, accessible,
+  standard HTML input instead of a canvas library's internal text-editing engine.
+
+**Deliberate simplifications, stated plainly rather than silently dropped:**
+- Only 4 corner resize handles (no edge/side handles). Fabric's default config
+  technically exposed 8. Corner-only resize is what most editors ship since it's the
+  overwhelmingly common interaction; can be extended if it's actually missed.
+- Non-uniform resize (stretching width/height independently) works for
+  images/text/blur the same as before; clips remain uniform-scale-only, matching the
+  data model (`ClipDetails.scale` is a single number, not separate scaleX/scaleY).
+- Rotation isn't implemented (the old Fabric config had `lockRotation: true` on
+  clips and blurs and didn't expose it as a real used feature on images/text either
+  going by the "modified" handler only reading x/y/scale — so this isn't a
+  regression, just confirming rotation was never actually wired end-to-end before).
+
+**Also fixed while touching this code:** the doc comments in `Screen.tsx` and
+`CompositorCanvas.tsx` that described the old Fabric-based architecture, and a
+spacebar-handling check in `Screen.tsx` that special-cased Fabric's fake
+contentEditable trick — no longer needed since real `<textarea>` already gets caught
+by the existing `tagName === "TEXTAREA"` check.
+
+Build verified clean (`npm run build`, all 15 routes, + `tsc --noEmit`). Bundle size
+for the main editor route dropped with Fabric.js gone (it's a sizeable canvas
+library).
+
+**Still open:**
+- Zero browser-rendered QA — this is the single highest-risk item in the whole
+  project now, specifically for this session: a from-scratch interaction system is
+  exactly the kind of thing that can compile perfectly and still feel wrong (drag
+  lag, resize math slightly off, the scale-factor calculation in `onMove` behaving
+  unexpectedly at extreme zoom levels) in ways no type-checker catches. This needs
+  real hands-on testing before anything else in the app does.
+- No live Neon DB.
+
 ## Session — real FFmpeg export bug fixed (from actual console log) + panel redesign
 The user shared an actual browser console log from a real export attempt for the
 first time this project — genuinely valuable, traced to a specific line rather than
