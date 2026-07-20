@@ -101,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_templates_active ON templates (is_active, sort_or
 -- /settings the same way templates are.
 CREATE TABLE IF NOT EXISTS motion_presets (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  kind        TEXT NOT NULL CHECK (kind IN ('animation','transition')),
+  kind        TEXT NOT NULL CHECK (kind IN ('animation','transition','filter')),
   name        TEXT NOT NULL,
   preset_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active   BOOLEAN NOT NULL DEFAULT true,

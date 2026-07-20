@@ -8,23 +8,26 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Studio surfaces — near-black ink violet, deliberately cooler & darker
-        // than the previous graphite palette (new "Aperture" identity, v2)
+        // Studio surfaces & ink now resolve through CSS variables (defined
+        // in globals.css for :root/.light) so the light/dark toggle can
+        // flip every component using these tokens app-wide, without
+        // touching each component individually. The `rgb(var(...) /
+        // <alpha-value>)` form is required for opacity modifiers like
+        // `bg-studio-raised/50` to keep working with CSS-variable colors.
         studio: {
-          void: "#07070C",       // app canvas / outer background
-          base: "#0A0A13",       // main workspace background
-          surface: "#111120",    // panels
-          raised: "#171728",     // elevated cards, dropdowns, modals
-          hover: "#1F1F35",      // hover states on raised surfaces
-          border: "#211F33",     // hairline borders
-          borderLight: "#35334F",
+          void: "rgb(var(--studio-void) / <alpha-value>)",
+          base: "rgb(var(--studio-base) / <alpha-value>)",
+          surface: "rgb(var(--studio-surface) / <alpha-value>)",
+          raised: "rgb(var(--studio-raised) / <alpha-value>)",
+          hover: "rgb(var(--studio-hover) / <alpha-value>)",
+          border: "rgb(var(--studio-border) / <alpha-value>)",
+          borderLight: "rgb(var(--studio-border-light) / <alpha-value>)",
         },
-        // Text
         ink: {
-          primary: "#F3F1FA",
-          secondary: "#B8B4D1",
-          muted: "#89859F",
-          faint: "#524E68",
+          primary: "rgb(var(--ink-primary) / <alpha-value>)",
+          secondary: "rgb(var(--ink-secondary) / <alpha-value>)",
+          muted: "rgb(var(--ink-muted) / <alpha-value>)",
+          faint: "rgb(var(--ink-faint) / <alpha-value>)",
         },
         // Signal accent — electric violet, the new primary action color
         signal: {

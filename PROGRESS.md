@@ -1,6 +1,156 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — color filters & manual grading, expanded fonts, Sparkle animation
+Big feature addition, all wired through to both render engines (not preview-only).
+
+**Color grading — filters + manual sliders, applied everywhere:**
+- New shared `ColorAdjustments` type (`brightness`/`contrast`/`saturation`/
+  `temperature`) added to both `ClipDetails` and `ImageDetails`.
+- `utils/colorAdjustments.ts` is the single source of truth for turning those
+  numbers into an actual filter: `buildCanvasFilterString()` for the canvas path
+  (live preview + WebCodecs export, since both already share `compositeFrame.ts`),
+  and `ffmpegColorFilterString()` for the FFmpeg fallback path (`eq` +
+  `colortemperature` filters, added into the per-clip and per-image filter_complex
+  chains in `clientRender.ts`). Same adjustment values produce matching-intent
+  output regardless of which engine actually renders the export.
+- 8 curated filter presets (None/Vivid/Warm/Cool/Cinematic/Vintage/Noir/Fade) in
+  `utils/filterPresets.ts` — reuses the *exact same* `motion_presets` DB table,
+  admin CRUD routes, and "built-in + DB merge" pattern as animations/transitions
+  (extended the table's `kind` CHECK constraint to add `'filter'` — note this only
+  affects a fresh `db/schema.sql` run, doesn't retroactively alter an
+  already-existing table if one existed).
+- New `components/color/ColorAdjustPanel.tsx` — filter preset swatches + 4 sliders
+  (brightness/contrast/saturation/temperature), shared between the selected-clip
+  and selected-image cards in `PropertiesPanel.tsx`, so both get identical grading
+  controls.
+- `/settings` → Motion Presets now has a third "Filter" tab alongside Animations/
+  Transitions, with its own admin editor (sliders instead of an engine-key
+  dropdown, since a filter genuinely is just parameter values, not a reference to
+  code).
+
+**Sparkle animation** — real engine math (twinkling opacity/scale pulse, continuous
+for the whole visible duration), same pattern as Shake/Wiggle from last session.
+Added to `AnimationEngine.ts`, the full animation library, and curated presets.
+
+**Expanded fonts — real display/cinematic/TikTok-style fonts, not just named:**
+added Anton, Bebas Neue, Oswald, Permanent Marker, Caveat, Archivo Black,
+Righteous, and Bangers via Google Fonts (loaded in `app/layout.tsx` alongside the
+existing UI chrome fonts), on top of the 10 web-safe fonts already available. The
+font dropdown in `TextEditor.tsx` now also previews each option in its own actual
+font face instead of showing plain text for all of them.
+
+Build verified clean: `tsc --noEmit`, full `npm run build`, all routes.
+
+**Still open:**
+- Temperature is a CSS/FFmpeg approximation (hue-rotate + a touch of sepia for
+  warm), not true white-balance correction — stated plainly in the code comments,
+  not hidden. Good enough for a stylistic push, not color-accurate grading.
+- Same as always: nothing in this session has been seen rendering in a real
+  browser. Color filters are exactly the kind of thing that can look subtly wrong
+  (temperature direction backwards, a filter reading too strong/weak) in ways only
+  an actual screen reveals.
+- No live Neon DB — filter presets, like the animation/transition presets before
+  them, are exercised via the built-in defaults only until that's connected.
+
+## Session — text/template bugs fixed, template-overwrite safety, shake/wiggle animations, light/dark theme
+**Bugs fixed:**
+1. **Text chip too long on timeline** — new text defaulted to `endTime: totalTime`
+   (spanning the entire project), not a short clip-like duration. Now defaults to
+   5 seconds (or the project length if shorter).
+2. **Template video didn't auto-add to timeline** — traced to a real gap: picking a
+   video-needing template from the *startup screen* went through a completely
+   different, much cruder path than picking one from the in-editor Templates panel.
+   That path opened a plain native `<input type="file">` accepting only ONE file,
+   and on selection just added it to the media library — never placed it on the
+   timeline, never handled templates with more than one video slot, and never even
+   set `activeTemplate`. Fixed by routing that path through the exact same,
+   already-correct `TemplatesPanel` slot-picker/apply flow instead of duplicating
+   (badly) a simpler version of it — `TemplatesPanel` now accepts an
+   `initialTemplate` prop and auto-opens its slot picker once when it arrives via
+   the startup screen.
+
+**New: template-overwrite confirmation.** Clicking a template while in normal
+editing mode (not already in template mode) with existing clips/text/images now
+shows a confirmation — "Replace with template" (clears current work, applies the
+template) or "Keep my work" (cancels, changes nothing) — instead of silently wiping
+manual work. Already being in template mode, or starting from an empty project,
+skips the prompt since there's nothing to lose.
+
+**New animations — Shake and Wiggle**, real engine math (continuous sine/cosine
+oscillation for the whole visible duration, not just an intro effect), added to
+`AnimationEngine.ts`, the full animation library, and the curated Motion Presets.
+Two new templates use them: "Wiggle Caption" (9:16, TikTok-energy) and
+"Slow-Motion Montage" (16:9, a real 4-clip multi-slot template — "sometimes need 4
+clips for slow motion" — using varied fonts across templates: Georgia, Garamond,
+Trebuchet MS, Brush Script MT, on top of the existing 10 web-safe font family
+options already available in the text editor).
+
+**New: light/dark theme toggle.** Converted the neutral `studio`/`ink` color tokens
+in `tailwind.config.cjs` to resolve through CSS variables (`rgb(var(--x) /
+<alpha-value>)`, required for opacity modifiers like `bg-studio-raised/50` to keep
+working), defined both palettes in `globals.css` (`:root` = dark default, `.light`
+override), and added a toggle button in the header (`hooks/useTheme.ts`, persists
+to localStorage, includes an inline anti-flash script in `layout.tsx` so the saved
+theme applies before first paint). Also migrated the player-controls-bar CSS block,
+which used hardcoded hex instead of Tailwind classes, to the same variables.
+**Scope, stated plainly**: this flips every component using `bg-studio-*`/
+`text-ink-*` Tailwind classes — the large majority of the app — for free, with zero
+per-component edits. Accent colors (violet/amber/danger/success/warning)
+deliberately stay identical across both themes. A few surfaces that were always
+intentionally fixed-dark regardless of theme (the startup screen's aurora
+background, the export/render modals, admin `/settings`) still are — that's a
+deliberate, common pattern (many pro creative tools keep certain chrome fixed), not
+an oversight, and would be the next thing to extend if it turns out to matter.
+
+Build verified clean: `tsc --noEmit`, full `npm run build`, all 15 routes.
+
+**Still open:** same as always — nothing above has been seen rendered in a real
+browser yet, and there's no live Neon DB. The light/dark toggle in particular is
+the kind of change that's easy to get subtly wrong in ways only a real screen shows
+(contrast issues, a component that still looks dark-only, etc.) — worth a dedicated
+look once it's actually visible.
+
+## Session — three more real bugs from real testing
+1. **Second image import corrupted the first image** — root-caused: `imageRefs`
+   was keyed by the local `forEach` loop's `index`, which starts at 0 for every
+   SEPARATE import action (not just within one multi-select). Importing an image,
+   then importing another one later, meant the second image's ref silently
+   overwrote the first image's ref at the same key, while `imagesDetails` kept
+   growing correctly — so the first image's data entry ended up pointing at the
+   second image's pixels. Fixed by keying `imageRefs` (and the matching lookup in
+   `compositeFrame.ts`) by each image's own stable `id` instead of array position —
+   this class of collision is now structurally impossible. Also fixed the same
+   root issue for initial on-screen placement (`imageX`/`imageY` used the same
+   per-batch-resetting index).
+2. **Seekbar kept advancing during a buffering freeze** — `CanvasEngine.ts`'s
+   playback clock advanced on wall-clock time regardless of whether a video could
+   actually supply a frame, so during a stall the seekbar kept sliding forward
+   while the picture stayed frozen, instead of pausing like Premiere/After Effects
+   do while waiting. Now gated on the same real buffering-event tracking added
+   last session — the clock (and therefore the seekbar) freezes exactly while
+   `onBufferingChange` reports true, and resumes cleanly once data is available
+   again (no time-jump on resume, since the wall-clock reference point is still
+   kept fresh even while paused).
+3. **Transition frames ignored the incoming clip's own scale/position** — the
+   actual bug behind "the slide/wipe transition frame shrinks": `applyTransition`'s
+   `drawNext()` always drew the incoming clip stretched to fill the entire canvas
+   (`0,0,w,h`), regardless of that clip's own configured x/y/width/height/scale.
+   If clips in a project use different scales (very common with multi-clip/trimmed
+   timelines), the incoming clip would render at the wrong size throughout the
+   whole transition and visibly snap to its real size the instant the cut
+   completed. Now the next clip's real geometry is threaded through and used for
+   the actual content draw, while the wipe/slide sweep boundary itself correctly
+   stays canvas-wide (that part was never wrong). This fix applies to both the
+   live preview and WebCodecs export since both go through the same
+   `compositeFrame.ts`.
+
+Build verified clean: `tsc --noEmit`, full `npm run build`, all 15 routes.
+
+**Still open:** everything from the last several sessions' "still open" notes remains
+true — no live Neon DB, and every fix above needs to actually be watched happening
+in a browser to be considered confirmed rather than well-reasoned.
+
 ## Session — critical WebCodecs bug fix from a real runtime error, plus 5 more real bugs
 Direct response to an actual `Unhandled Runtime Error` the user hit while exporting,
 plus several other concrete bug reports from real usage.
