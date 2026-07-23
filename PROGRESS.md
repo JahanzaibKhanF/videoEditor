@@ -1,6 +1,111 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — clip effects system, animation/image preview redesign, transition bridges, template-mode timeline lockout, background removal, real WebCodecs crash fix, speed-ramp live-preview regression fix
+
+**Real regression found and fixed:** last session's speed-ramp preview code was added to
+`src/components/screen/Video.tsx` — which is **completely dead code, not imported
+anywhere** (confirmed via grep). The actual live-preview renderer is
+`CompositorCanvas.tsx` + `CanvasEngine.ts`, which had zero knowledge of `clip.speed`.
+This is what was causing "templates look stuck": a ramped clip (fast/slowToFast
+presets consume LESS source material for a given on-timeline window) would have
+naive 1:1 seeking march `vid.currentTime` past the clip's actual available source
+range, and browsers just clamp + hold the last frame — a silent freeze for the rest
+of that clip's on-screen duration. Fixed properly in `CanvasEngine.ts` this time
+(`seekTo`, `_syncAllVideoPositions`, and the RAF loop) using `mapOutputElapsedToSourceTime`;
+ramped clips are now paused and driven by precise per-tick seeking instead of native
+`play()`, since native playback can't track a non-constant consumption rate.
+
+**Real WebCodecs "Encode worker crashed" bug found and fixed (second one — this one
+was self-inflicted):** the backpressure fix from last session introduced a genuine
+deadlock: if the worker crashed WHILE the main thread's frame loop was mid-`await
+waitForFrameAck()`, that ack would never arrive (worker is dead), so the loop hung
+forever — and meanwhile the `finished` promise's rejection sat completely unobserved
+(nothing was awaiting it yet), which is exactly what an "Uncaught (in promise)"
+console error is. Fixed by tracking worker failures and making any pending ack wait
+reject immediately instead of hanging, attaching a defensive no-op `.catch()` to
+`finished` right when it's created, and — separately — discovered the `finally`
+block that terminates the worker and cleans up video elements only wrapped the
+`await finished` line, NOT the frame loop itself, meaning a crash mid-loop leaked
+the worker and dangling video elements every time. Now the whole loop is inside the
+`try/finally`.
+
+**Clip-level special effects — new system** (`src/types/types.ts`'s
+`ClipEffectDetails`, `src/utils/compositeFrame.ts`, `src/components/sections/ClipEffectsPanel.tsx`):
+shake, wiggle, colorBurst, particles, gradientOverlay. Rendered by
+`compositeFrame.ts`, shared by BOTH the live preview (`CompositorCanvas.tsx`) and
+the WebCodecs export (`webCodecsRender.ts`) — one implementation, both paths
+correct automatically. Wired into autosave/project-resume, template apply/exit
+cleanup, and clip-deletion cleanup. The FFmpeg fallback path (`clientRender.ts`)
+does NOT support these (documented in a comment there) since it builds its own
+separate ffmpeg filter graph rather than using the canvas compositor — a
+deliberate, honest scope boundary, not an oversight.
+
+Templates now actually USE these effects (previously "Slow-Motion Montage" had a
+slot literally named "Slow-motion peak" with no real effect behind it — cosmetic
+naming only). Added `TemplateSlotEffect` to `TemplateVideoSlot`, wired through
+`applyTemplate`. Both speed-ramp templates now carry real shake/particles/colorBurst/
+gradientOverlay/wiggle.
+
+**Animation & image selection redesigned** (`src/components/animations/AnimationPreviewTile.tsx`):
+no more icons — each tile shows the actual "Aa" (text) or a placeholder photo glyph
+(image) animating on hover, using the EXACT same `computeAnimState` math the real
+compositor uses (reused, not reimplemented, so it can't drift out of sync). Idle
+state shows a small motion-direction glyph badge (arrow/rotate/waves/etc, inferred
+from the animation key) on a colorful gradient card. Wired into `AnimationSelection.tsx`.
+
+**Transition bridge badges** (`src/components/layers/VideoClipsRangeSlider.tsx`):
+a small connecting badge now appears at the exact time boundary between two clips
+when the first one has a transition — correctly positioned even though clips render
+in their own rows (ordered by zIndex, not time), by looking up the chronologically-
+next clip and its row index separately from render order.
+
+**Template mode now fully locks the main timeline** (`Layers.tsx`, `TimeLine.tsx`):
+previously clips/audio/text were still visible AND draggable in the main
+timeline/Layers panel even while a template was active — TemplateBar existed
+alongside a fully-editable timeline underneath it, contradicting the "don't even
+show them there" spec. Both `Layers()` and `LabelColumn()` now return `null` when
+`activeTemplate` is set; a small "locked" placeholder message explains why.
+
+**Background removal** (`src/utils/backgroundRemoval.ts`,
+`src/components/sections/BackgroundRemovalModal.tsx`): new dependency
+`@imgly/background-removal` (client-side, WASM, no server). Processes a clip frame-
+by-frame (there's no dedicated video-segmentation mode — it's fundamentally an
+image model, so a video is "many images" here, which is also why it's slow and
+genuinely needs the progress UI). Real-time preview via a canvas that's both shown
+live AND captured by `MediaRecorder` into a transparent WebM (true alpha, not a
+green-screen swap — relies on Chrome/Chromium canvas-capture alpha support, which
+is consistent with the rest of this app already being Chrome-only for WebCodecs).
+"Fast" (quantized model) vs "Perfect" (full-precision) quality toggle, real
+`AbortController`-based cancel, wired to a "Remove Background" button in the
+selected-clip section of `PropertiesPanel.tsx`.
+
+**Build fix required for the above:** `@imgly/background-removal` pulls in
+`onnxruntime-web`, which ships large pre-bundled `.mjs` worker files built for
+direct browser use, not for a bundler to re-parse — webpack's build failed outright
+with `'import.meta' cannot be used outside of module code'` / `'import', 'export'
+cannot be used outside of module code`. Fixed in `next.config.mjs`: force
+`javascript/auto` parsing for `.mjs` under `node_modules` (the standard, documented
+fix for this exact class of webpack + prebuilt-`.mjs` error) and alias out
+onnxruntime-web's unused Node.js backend. Build passes clean now (remaining
+"Critical dependency: require function..." warnings from onnxruntime-web's UMD
+bundles are harmless and expected, not build-breaking).
+
+**Removed platform-name mention from the welcome screen's user-visible tagline**
+(was "apply CapCut-style templates..." → now "apply ready-made templates...").
+Other CapCut/TikTok mentions left as-is where they're either code comments (not
+user-visible) or the "TikTok/Reels" aspect-ratio preset label (a normal, expected
+naming convention for export-target presets, not a platform endorsement in the
+same sense as the welcome copy).
+
+**Not done this session:** exhaustive review of whether the FFmpeg fallback path
+should also disqualify/attempt-something for clips with effects it can't render
+(currently: it just renders the clip without them, silently — documented, not
+crash-prone, but not actively flagged to the user either). No live-browser testing
+was possible in this environment; the background removal feature in particular
+(real ONNX inference, MediaRecorder alpha capture) has only been verified to
+compile, not to actually run correctly end-to-end.
+
 ## Session — welcome screen, timeline import order, split-clip frame glitch, CapCut slot constraints + range picker, speed ramps, env template, header/modal mobile fixes, WebCodecs backpressure crash fix
 
 **1. Welcome screen:** aurora blob keyframes rewritten with bigger translate amplitude,
