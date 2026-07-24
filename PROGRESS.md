@@ -1,6 +1,83 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — background-removal "url.replace is not a function" fix, real playback-leak bug found (inactive clips' videos never paused)
+
+**Background removal crash fixed:** `@imgly/background-removal` tries to
+auto-detect its own asset base path and whether it can spawn an internal worker by
+inspecting the current script's URL — logic written for direct `<script>` tag
+usage that doesn't hold up under a bundler (Next.js/webpack rewrites module URLs),
+which is exactly the shape of a `url.replace is not a function` crash. Also, the
+library's own README states **only Next.js 15 is officially supported** — this
+project is on Next.js 14, so some of this auto-detection breaking here isn't
+surprising. Fixed by explicitly setting `publicPath` to IMG.LY's CDN (bypasses the
+auto-detection path resolution entirely) and `proxyToWorker: false` (bypasses the
+auto-detection worker-URL resolution entirely) in `backgroundRemoval.ts`. Also
+switched default `device` from `"gpu"` (WebGPU) to `"cpu"` for broader browser
+compatibility, since reliability matters more than raw speed for a feature that
+already has a slow, progress-tracked UX. **Not verified in a live browser** — if
+this specific error persists, the Next.js 14 vs "only 15 supported" note above is
+the next thing to investigate; it may require upgrading Next.js or using an older
+version of the background-removal package that doesn't carry that restriction.
+
+**Real, serious playback bug found and fixed (`CanvasEngine.ts`):** the RAF
+playback loop only ever synced/played videos for clips that were currently
+ACTIVE — nothing ever paused a clip's `<video>` once it became inactive (its
+on-timeline window ended). So every clip that had ever played kept silently
+decoding and advancing in the background for the rest of playback. For a
+single-clip edit this barely matters; for a multi-clip TEMPLATE (4-5 clips), by
+the time you reached the last clip, every earlier clip's video was STILL playing
+in the background, all competing for CPU/GPU/decode bandwidth simultaneously —
+this is very likely the real explanation for "stuck"/stuttery playback getting
+progressively worse through a template specifically (matches the report that
+render/export was fine — export explicitly manages one clip's seek at a time —
+but live preview degraded). Fixed: every RAF tick now explicitly pauses any
+pooled video whose clip isn't in the current active set.
+
+## Session — real "frozen HD video" bug found+fixed, Effects promoted to its own tab, bigger effect cards, TikTok-style templates with zoom transitions, welcome-screen title spacing
+
+**Real "video looks frozen" bug found (CanvasEngine.ts):** `markReady()` — the
+handler for `canplay`/`loadeddata`/`playing` on each pooled `<video>` — only ever
+cleared the buffering flag; it never actually redrew the canvas. `load(clips)`
+calls `_drawFrame()` immediately when a clip is added, but a freshly-created
+`<video>` has `readyState === 0` at that point (no frame data yet), so
+`drawImage()` silently no-ops. Once the video actually finished loading moments
+later, NOTHING triggered a second draw while paused — the canvas just sat on
+whatever it drew (or didn't draw) the first time, indefinitely, until the user
+manually scrubbed/played. Larger (HD) files simply take longer to reach
+`readyState`, widening the window where this was visible — hence it reading as an
+"HD-specific" freeze when it was really a race affecting any clip, just more
+likely to be caught mid-race for bigger files. Fixed: `markReady()` now also calls
+`_drawFrame()` when paused (the RAF loop already handles this correctly while
+playing); also added a `seeked` listener for the same reason.
+
+**Effects promoted to a dedicated top-level tab** (`PropertiesPanel.tsx`): was
+buried at the bottom of the Edit tab, easy to miss entirely. Now "Effects" sits
+alongside Edit/Animation/Transitions, always reachable once a clip is selected,
+with Background Removal as a big gradient card up top and the effect-add grid
+below using large 2-per-row gradient cards (`ClipEffectsPanel.tsx`) instead of the
+previous cramped 5-per-row icon strip.
+
+**Templates made more genuinely TikTok-like:** added `transition` to
+`TemplateVideoSlot` (previously templates could set effects/speed per slot but
+NOT the punchy zoom-cut transitions real TikTok/CapCut trends are built on — clip
+`transition` was hardcoded to `"none"` in `applyTemplate`). Added zoom transitions
+between every clip in "Speed Ramp Reel", and added a brand new "Beat Sync 4-Clip"
+template: four short (~1.2s) clips with zoom-cut transitions and shake into each
+cut, a "1 2 3" zoom-in counter overlay (the actual real-world "1 2 3 4" TikTok
+trend format — searched for current trend patterns before building this), and a
+punch-in colorBurst+particles finish on clip 4.
+
+**Welcome screen title spacing fixed:** the floating "ClipFlow" title above the
+glass card only had 8-12px of margin below it, reading as visually stuck/attached
+to the card rather than floating freely on the moving background. Increased to
+28-44px.
+
+**Not done this session:** no live-browser verification was possible in this
+environment (same standing limitation as every prior session) — the frozen-video
+fix in particular is a race-condition fix that's straightforward to reason about
+but was not observed being reproduced or fixed in an actual browser.
+
 ## Session — clip effects system, animation/image preview redesign, transition bridges, template-mode timeline lockout, background removal, real WebCodecs crash fix, speed-ramp live-preview regression fix
 
 **Real regression found and fixed:** last session's speed-ramp preview code was added to
