@@ -1,7 +1,153 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
-## Session — background-removal "url.replace is not a function" fix, real playback-leak bug found (inactive clips' videos never paused)
+## Session — real "filter presets always 400" bug found+fixed, Import Defaults for motion presets, startup screen auto-picks Recent, local media relink improved (real errors + file-level fallback for blocked folders)
+
+**Real bug found:** `POST /api/admin/motion-presets` only accepted
+`kind === "animation" || "transition"`, rejecting `"filter"` — even though the DB
+schema, the settings UI's kind selector, the list rendering, and the edit modal
+all already fully supported filter presets. Creating a filter preset via the
+admin UI was silently broken the whole time (always 400'd). Fixed.
+
+**Import Defaults**, motion presets (`app/settings/page.tsx` +
+`src/utils/motionPresets.ts`): each kind tab (animation/transition/filter) now
+has an "Import defaults (N)" button next to Add, which POSTs whichever built-in
+presets aren't already present (matched by name) — was previously only possible
+by manually recreating each one by hand. Added `DEFAULT_FILTER_RECORDS` (6 curated
+color-grade presets: Warm, Cool, Vivid, High Contrast, Vintage, Black & White) —
+filters had zero defaults before this, unlike animations/transitions.
+
+**Startup screen now defaults to the Recent tab** when the signed-in user has
+existing projects, instead of always opening on Create. Fetches recent projects
+eagerly on load (previously lazy, only on tab click) so this can happen without a
+visible flash; tracks manual tab clicks so it never yanks someone back to Recent
+after they've deliberately picked Create.
+
+**Local media relink flow improved** (`useLocalMediaFolder.ts`,
+`MediaRelinkBanner.tsx`, `MediaPanel.tsx`): a real report of Chrome's directory
+picker refusing to link Downloads/Desktop/Documents/home directly ("this is a
+system folder") led to two fixes:
+  1. The actual browser error message is now surfaced (previously swallowed into
+     a generic "Couldn't link that folder"), plus proactive copy explaining the
+     restriction and that a SUBFOLDER works fine.
+  2. New `linkIndividualFiles()` — this is a real, different browser API
+     (`showOpenFilePicker`, picks individual FILES) that does NOT have the
+     blocked-well-known-folder restriction at all (that restriction is specific
+     to directory selection). Added as a "pick files directly" fallback
+     button next to folder linking in both places it's offered — sidesteps the
+     restriction entirely instead of trying to work around it, since there's no
+     way to bypass a native OS/browser-level directory-picker restriction from
+     web content.
+
+**Not verified in a live browser** (standing limitation every session) — the
+`linkIndividualFiles` flow in particular should be checked against an actual
+resumed project with genuinely missing media to confirm the filename-matching in
+`MediaRelinkBanner`'s effect picks up individually-selected files correctly, not
+just folder-linked ones.
+
+## Session — auto-migration added (no more manual SQL Editor paste)
+
+Real-world log from `npm run dev` showed `NeonDbError: relation "templates" does
+not exist` — not a bug, just that `db/schema.sql` had never been run against the
+Neon database. Rather than leaving that as a manual "paste this into Neon's SQL
+Editor" step, added actual auto-migration to `src/lib/db.ts`: on first real query
+per server process (dev server run, or serverless cold start), checks whether
+`public.users` exists via `to_regclass`, and if not, reads `db/schema.sql` and
+runs every statement automatically. Every table in schema.sql already uses
+`CREATE TABLE IF NOT EXISTS`, so this is also safe to effectively no-op against a
+database that already has some or all tables. Transparent to every existing call
+site — `sql\`...\`` usage everywhere else in the codebase is unchanged.
+
+One real bug caught and fixed while writing this: the schema-check query
+originally aliased its result column `AS exists` — `EXISTS` is a reserved SQL
+keyword, which would have thrown its own syntax error the moment this ran.
+Renamed the alias before it ever shipped.
+
+**Not verified against a real Neon database** — reasoned through carefully
+(schema.sql has no embedded semicolons in strings/functions that would break the
+naive statement-splitting, `CREATE EXTENSION pgcrypto` is Neon's default
+pre-authorized extension, etc.) but this is exactly the kind of thing that should
+be watched closely on first real run: check for the `[db] Auto-migration
+complete — ran N schema statements.` console log, and confirm N matches the
+actual number of CREATE statements in schema.sql (currently 7 tables + their
+indexes + the extension statement).
+
+## Session — real admin-auth security bug found+fixed, Cloudinary switched to signed server-side uploads, env var rename, Effects/BG-removal consolidated into the existing (mislabeled) sidebar Effects tab
+
+**Real security bug found (`lib/adminAuth.ts`):** the admin password had a HARDCODED
+fallback (`"open5333"`) used whenever `ADMIN_PANEL_PASSWORD` wasn't set. On any
+deployment where that env var was missing or named differently than expected
+(e.g. Netlify configured with a different name), `/settings` login silently
+accepted the hardcoded default instead of failing — meaning the admin panel was
+protected by a password baked into the source code (and by now, into chat history)
+rather than an actual secret. Fixed: `checkAdminPassword` now fails CLOSED (rejects
+every attempt) when the env var isn't set, logs a clear server-side error
+explaining why, and the var itself is renamed `ADMIN_PASSWORD` (matching what the
+person actually wants to deploy with — if they'd already set that name on
+Netlify expecting it to work, this fix alone resolves it with no Netlify-side
+change needed).
+
+**Login/signup 500s — likely (not confirmed) cause:** `lib/db.ts` already throws a
+clear "DATABASE_URL is not set" error when missing, so a 500 here is most likely
+either that, or `db/schema.sql` not having been run against the Neon project yet
+(tables don't exist). Added `lib/apiError.ts`: in development, 500 responses now
+include the real underlying error message instead of a generic one, so this is
+actually diagnosable next time it happens. Applied to `/api/auth/login`,
+`/api/auth/signup`, `/api/admin/login`.
+
+**Cloudinary reworked from unsigned client-side uploads to signed server-side
+uploads**, per requested env naming: `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY`
+/ `CLOUDINARY_API_SECRET` (no `NEXT_PUBLIC_` — nothing Cloudinary-related is
+exposed to the browser anymore at all). New route
+`app/api/admin/upload-image/route.ts`: checks admin session, computes Cloudinary's
+SHA-1 signed-upload signature server-side, uploads via server-to-server fetch,
+returns the resulting URL. Settings page's upload handler now POSTs the file to
+this route instead of directly to Cloudinary. Added `NEXT_PUBLIC_APP_URL` to
+`.env.example` too (reserved for future use — nothing reads it yet, documented as
+such rather than silently unused).
+
+**Effects/Background-Removal consolidated into the LEFT sidebar's existing
+"Effects" tab** (`MediaPanel.tsx`), which is what the person was actually pointing
+at — it already existed but was headed "Blur Regions" and only ever managed blur,
+never renamed/expanded when blur was originally the only thing there. That's a
+better home than the right-side Properties panel tab added last session (only
+reachable after selecting a clip) — removed that tab from `PropertiesPanel.tsx`
+entirely to avoid two different "Effects" concepts living in two different panels.
+The sidebar tab now has three sections: AI Background Removal (gradient card with
+an "AI" badge), Special Effects (reuses `ClipEffectsPanel`), and Blur Regions
+(unchanged, just no longer pretending to be the whole tab) — all keyed off
+whichever clip is currently selected on the timeline.
+
+**Not done this session:** none of the auth fixes could be tested against a real
+Neon database or real Netlify env vars — the admin-password fix in particular is
+reasoned through carefully but "fails closed" behavior specifically should be
+re-verified once `ADMIN_PASSWORD` is actually set correctly, to confirm login
+still succeeds (not just that wrong/missing passwords now correctly fail).
+
+## Session — actual root cause of the background-removal "url.replace" crash found via stack trace
+
+Previous session's fix (publicPath/proxyToWorker config) didn't address the real
+cause — the stack trace you provided pinned it exactly: `new RelativeURL` inside
+webpack's own runtime, called from `ort.webgpu.bundle_min_mjs.js`'s module
+factory. That's onnxruntime-web's WebGPU bundle, which spawns its own Worker via
+a `new URL(..., import.meta.url)` pattern — webpack has to bundle (and evaluate)
+that module regardless of the runtime `device` setting, because
+`@imgly/background-removal` dynamically imports either `onnxruntime-web` or
+`onnxruntime-web/webgpu` based on a runtime value, and webpack can't know at
+build time which branch wins, so both get bundled. `device: "cpu"` never
+mattered — the crashing file gets touched either way.
+
+Fixed properly this time in `next.config.mjs`: aliased BOTH
+`onnxruntime-web` and `onnxruntime-web/webgpu` to onnxruntime-web's plain
+single-file CPU/WASM build (`dist/ort.wasm.min.js` — boring CommonJS, no ESM, no
+WebGPU, no internal Worker spawning), removing the crashing file from the bundle
+entirely instead of hoping config would stop it from being touched. Verified via
+build output: no chunk references `ort.webgpu` anymore; the CPU wasm build is
+present instead. **Still not verified in a live browser** — this fix targets the
+exact file/pattern from your stack trace, but please confirm it actually resolves
+the error when you test.
+
+## Session — background-removal "url.replace is not a function" fix (incomplete — see above), real playback-leak bug found (inactive clips' videos never paused)
 
 **Background removal crash fixed:** `@imgly/background-removal` tries to
 auto-detect its own asset base path and whether it can spawn an internal worker by
