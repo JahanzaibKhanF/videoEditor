@@ -1,6 +1,267 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — background removal: eliminated 3 unnecessary PNG encode/decode round-trips per frame; honest assessment of the "30fps" ask
+
+Checked the existing pipeline against the "raw pixel buffers, no blob/URL steps"
+optimization request and found it was genuinely doing unnecessary work — not
+just theoretically, three real encode/decode round-trips per frame: (1)
+`srcCanvas.toBlob(..., "image/png")` — full PNG encode of every source frame
+just to hand it to the model; (2) the model internally decoding that PNG back
+into pixels to run inference; (3) `createImageBitmap(cutout)` — decoding the
+model's PNG output back into pixels again just to draw it. Fixed using two
+`ImageSource`/output options `@imgly/background-removal` already supports but
+weren't being used: pass `ImageData` (from `getImageData()`) straight in
+instead of a Blob (skips encode #1 and decode #2), and request
+`output: { format: "image/x-rgba8" }` instead of PNG (raw bytes out, skips
+encode #3), then build the result via `new ImageData(rawBytes, w, h)` +
+`putImageData()` instead of `createImageBitmap()` (skips decode #3). Net: every
+per-frame step that wasn't the actual ML inference is gone.
+
+**Honest assessment on the "30+ FPS" part of the ask — not changed, and
+explained why:** the underlying model here (`isnet`/`isnet_quint8` via
+onnxruntime-web) is a general-purpose, high-quality segmentation network built
+for one-shot image cutouts, not a real-time-video-designed model — real 30fps
+webcam background removal (Zoom/Meet-style) uses purpose-built tiny models
+(e.g. MediaPipe Selfie Segmentation) specifically because general segmentation
+networks like this one are too slow for that regardless of how optimized the
+surrounding pixel pipeline is. No amount of removing encode/decode overhead
+changes that the inference itself is the bottleneck, typically hundreds of ms
+per frame on CPU. Also left `device: "cpu"` and `proxyToWorker: false` alone
+rather than risk re-triggering the exact webpack/WebGPU-bundle crash fixed two
+sessions ago — that fix specifically targeted the WebGPU code path, and
+flipping `proxyToWorker` back on now carries real, unverified risk of hitting a
+similar worker-URL auto-detection issue with no live browser here to check
+against. If genuine real-time speed is ever the actual goal (as opposed to "as
+fast as reasonably possible for a background-task cutout tool," which is what
+this now is), that would mean swapping to a purpose-built real-time
+segmentation model entirely — a separate, bigger undertaking, not implemented.
+
+## Session — full mobile focus: THE reason Effects/Templates/Transitions/Layers/Recent were unreachable on mobile (not a styling issue), touch-sized resize handles, reliable tap-to-edit-text on touchscreens
+
+Dedicated this whole session to mobile/low-end devices per explicit request, and
+found the actual root cause of "can't add effects on mobile" rather than treating
+it as a responsive-styling problem.
+
+**The real bug:** `Editor.tsx`'s mobile bottom tab bar (`MOBILE_TABS`) only ever
+had 5 entries — Media, Text, Assets, Edit, Timeline. `MediaPanel`'s internal
+routing (`activeTab === "effects"`, `"transitions"`, `"layers"`, `"templates"`,
+`"recent"`) was already fully built and working — but the ONLY thing that ever
+calls `setActiveTab` to reach any of those is `IconSidebar`, which **only renders
+in the desktop layout branch, never on mobile at all**. So on a phone,
+`activeTab` was permanently stuck at its initial `"media"` value — Effects
+(particles/shake/colorBurst/gradientOverlay/background-removal), Transitions,
+Layers, Templates, and the Recent Projects panel were 100% unreachable, not
+cramped or unstyled, just completely absent from anything a mobile user could
+tap. Fixed by expanding `MOBILE_TABS` to include all of them, each wired to also
+call `setActiveTab` on tap, routing through the same `MediaPanel` component
+desktop already uses — no new panel components needed, the content layer was
+already there and already correct, it just had no door into it on mobile.
+
+**Resize handles were 10×10px** (`InteractionOverlay.tsx`) — fine for a mouse
+cursor, close to impossible to hit accurately with a finger. Fixed with the
+standard "expand the tap target without changing the visual size" pattern: each
+handle is now a small 12px visible dot centered inside an invisible 40×40 hit
+area (`pointer-events: none` on the dot, the outer box owns hit-testing). Also
+added `touchAction: "none"` to every drag target (move boxes AND resize handles)
+— without it, dragging on a touchscreen can fight with the browser's own
+scroll/pinch-zoom gesture recognition.
+
+**Text editing was only reachable via double-click/double-tap** — unreliable on
+touchscreens specifically because many mobile browsers intercept a double-tap as
+their own "zoom" gesture before it ever reaches the app's `onDoubleClick`
+handler, and it isn't a discoverable mobile interaction pattern regardless. Added
+a second path: tapping an ALREADY-selected text box again (a second distinct tap,
+not a double-tap) now also enters edit mode — the same "tap to select, tap again
+to edit" pattern most native mobile apps use. `onDoubleClick` is still there
+too, unchanged, for desktop users used to it.
+
+**Verified, not changed:** did a full sweep for any remaining fixed-width
+elements without a mobile-safe `max-w` fallback (modals, panels) — none found;
+everything from earlier mobile-fix sessions holds up. Also confirmed
+`InteractionOverlay.tsx`'s drag/resize logic already used Pointer Events (not
+separate mouse/touch handlers), so touch was already structurally supported
+there — the actual problems were target SIZE and the double-tap edit trigger,
+not the underlying event model.
+
+**Not done this session:** low-end-device PERFORMANCE specifically (as opposed
+to touch/layout correctness) wasn't profiled — things like reducing effect
+draw cost, canvas resolution scaling, or RAF throttling on weaker hardware are a
+different, not-yet-investigated class of "low-end device" concern from what got
+fixed here (which was entirely about reachability and touch interaction
+correctness). Worth a dedicated look if performance specifically (not
+correctness) is still a problem after this pass.
+
+## Session — in-editor Recent Projects panel (closes the "no way back to home" gap from last session's URL persistence), welcome screen de-boxed + sign-in added
+
+**Real gap from last session's URL persistence work:** once a project auto-resumes
+from `?project=<id>` in the URL on refresh, there was no path back to a "pick a
+different project" screen from inside the editor at all — no home button, no way
+to switch or delete a project without first losing the current one. Closed with
+a new sidebar tab instead of a "go home" button (the person confirmed they don't
+need literal navigation back to start, just a way to switch/delete without
+leaving): `IconSidebar.tsx` gets a "Recent" entry with its own icon, routing to
+new `RecentProjectsPanel.tsx` — lists saved projects, click to switch (a full
+page navigation to `/?project=<id>`, deliberate: the editor's state is built
+around hydrating once per mount, so swapping projects mid-session isn't
+something the current architecture supports, and forcing a fresh load is the
+simplest correct way to do it safely), delete with confirm (redirects home if
+you delete the one you're currently in), and a proper sign-in prompt for guests
+instead of a raw "Not signed in" API error.
+
+**Welcome screen**: de-boxed per reference screenshots (CapCut's marketing page
+layout, explicitly for STRUCTURE/placement only — colors and the aurora
+background were explicitly kept as-is, not swapped for CapCut's white theme).
+Removed the frosted-glass box container that wrapped the tab switcher +
+create/recent grids — content now sits directly on the aurora background instead
+of inside a bordered card. Bumped the "ClipFlow" headline further
+(44px→64px→76px across breakpoints, was 36→52→60) to read at a scale closer to
+the reference. Added a fixed top-right sign-in/account control — there was
+previously no way to sign in anywhere on the startup screen at all, only after
+already entering the editor.
+
+**Not done this session:**
+- Didn't touch the individual template/recent-project CARD styling (thumbnails,
+  borders, hover states) — only the outer container box. Regression risk on a
+  full grid-card visual overhaul wasn't worth it in the same pass as the
+  in-editor Recent panel work; flagged as available for a future pass.
+- Another mobile responsiveness pass was requested "if there's time" — there
+  wasn't, this session's effort went to the in-editor Recent panel (a real
+  architecture gap) and the welcome screen changes. Still open.
+
+## Session — THE critical relink bug found and fixed (root cause of every "relink doesn't work" report across every prior session), URL-based project persistence, sidebar contrast
+
+**This is the real one.** Every session's worth of relink complaints — "clicking
+does nothing," "system folder" workarounds, per-project folder memory — were all
+built on top of a single, much deeper bug that made relinking impossible from the
+very first import, for every project, no matter which folder-linking approach was
+used. `clip.video` (and images' matching key) stored an INTERNAL SYNTHETIC
+identifier (`"video{timestamp}_{index}"`, or `"slot0"` for templates) — this is
+what got saved to the project JSON and used as the relink-matching key in
+`restoreProjectMedia.ts`. But a re-picked file's real name (`"vacation.mp4"`) can
+never equal a synthetic id like `"video1721938291234_0"` — so matching failed
+100% of the time, for every project, regardless of whether the folder linked
+correctly, whether the browser blocked a "system folder," or anything else. All
+of last session's fixes (per-project folder memory, better error messages, the
+file-picker fallback) were real and correct, but built on infrastructure that
+could never actually succeed at matching a file once picked.
+
+Fixed properly: added `sourceFileName` (the REAL filename) as a field separate
+from the internal synthetic id, on both `ClipDetails` and `ImageDetails`. Wired
+into every clip-creation path (`addClipToTimeline.ts`, `TemplatesPanel.tsx`'s
+slot application, `MediaPanel.tsx`'s image import — split clips already
+inherited it for free via object-spread). `restoreProjectMedia.ts` now matches
+against `sourceFileName` instead of the synthetic id (falling back to the old
+field only for backward compat with already-saved projects, which — being
+honest — still won't auto-relink since their saved data never recorded a real
+filename at all; those need one manual re-pick per file going forward, but every
+NEW project from this point on will relink correctly).
+
+Also, now that matching is genuinely name-based: (1) the relink banner shows the
+actual missing filenames, not just a count — full absolute paths (`D:/files/...`)
+aren't something a browser will ever expose to web content for picked files, only
+the filename, so that's the honest ceiling here; (2) "don't accept the wrong
+file" is now inherent to how matching works — a mismatched filename simply won't
+match anything, no risk of silently attaching the wrong source; (3) relinking
+one of several missing files correctly narrows the list and keeps the banner open
+until everything's resolved, no extra code needed since this already followed
+from the existing re-match-on-file-list-change effect once the root matching was
+fixed.
+
+**URL-based project persistence** (`ClipFlowApp.tsx`, `useProjectAutosave.ts`,
+`app/page.tsx`): the open project's id is now reflected in the URL
+(`/?project=<id>`), both when resuming an existing one and the moment a brand-new
+one gets its first real id from autosave. On load, that param is read back to
+auto-resume — so refreshing the page, bookmarking, or sharing the link reopens
+the SAME project instead of bouncing back to the startup screen. Required
+wrapping the page in `<Suspense>` since `useSearchParams()` needs that boundary;
+verified no missing-Suspense build warnings.
+
+**Sidebar contrast:** `IconSidebar.tsx`'s inactive tab icons/labels used
+`ink-faint` — the dimmest tier in the color system (deliberately subtle,
+appropriate for tertiary text, RGB ~82/78/104 in dark mode, ~163/163/184 in
+light — genuinely low-contrast either way). That's too weak for primary,
+constantly-used navigation. Bumped to `ink-secondary` (much stronger, still
+correctly theme-aware since it's the same CSS-variable system, just a bolder
+tier of it) with `ink-primary` on hover.
+
+**Not done this session (deliberately, given how much the root-cause bug fix
+above already covers) — recommendations instead of implementation:**
+- **Full absolute file paths in the relink UI**: not possible. Browsers never
+  expose a picked file's real disk path to web content (`D:/files/video.mp4`) —
+  only its name — for the same security reasons the "system folder" restriction
+  exists. This is a hard platform ceiling, not a missed feature.
+- **Cloud storage strategy** (source media vs. rendered output vs. project
+  metadata): recommend keeping source media local-only (File System Access API,
+  as already architected) rather than auto-uploading it anywhere — that's a
+  deliberate, privacy-friendly, no-cost design already in place, and uploading
+  potentially many-GB source files automatically would work against it. A
+  "Recent Renders" feature storing EXPORTED outputs in Cloudinary (or similar) is
+  a much better fit for cloud storage — those are the app's own generated
+  deliverables, reasonably sized, and exactly the kind of thing worth persisting
+  without needing any relink at all. Not built yet.
+- **Welcome screen redesign** inspired by the Adobe Express screenshots shared —
+  bigger/bolder headline typography, template cards without a boxed frame, kept
+  aurora background. Not implemented this session; next session's work.
+
+## Session — "Create New" stale-project bug, delete/cap for Recent projects, real "clicking a local file does nothing" bug fixed, per-project folder memory
+
+**"Create New" showing the old project — real bug found:** `resumeData` state in
+`ClipFlowApp.tsx` was only ever SET (when resuming a project), never CLEARED.
+Starting a genuinely new project via `onStart` left whatever `resumeData` was
+last set to still in place, and `EditorWithSetup`'s hydration effect only checks
+`if (!resumeData) return` — so a "new" project could still hydrate with an old
+one's content. Fixed: `onStart` now explicitly clears `resumeData`/`resumeError`
+first, since "create new" and "resume" are strictly mutually exclusive actions.
+
+**Recent projects: delete + cap.** The `DELETE /api/projects/[id]` endpoint
+already existed with zero UI calling it — added a delete button (with confirm)
+to each card in `StartupScreen.tsx`. Also added a soft free-tier cap
+(`FREE_PROJECT_LIMIT = 3` in `app/api/projects/route.ts`) with a clear "delete
+one to make room, higher limits coming for Pro" message — and made sure that
+message actually reaches the person: `useProjectAutosave`'s error handling
+previously discarded the real API error and threw a generic "Could not create
+project" instead. Now surfaces the real message, exposed from the hook, shown in
+the header's save-status tooltip (which is now also forced visible even on small
+screens specifically when there's an error — too important to hide).
+
+**Real bug found: "clicking a local file does nothing."** `ingestFiles` in
+`MediaPanel.tsx` classified files by `file.type.startsWith("video/")` /
+`"image/"` — but `File.type` can come back as an EMPTY STRING for files opened
+via the File System Access API rather than a normal `<input type="file">` (a
+known real-world gap, more common on Linux, for less-common video extensions).
+Such a file matched neither branch and was silently dropped: no error, no toast,
+the click just appeared to do nothing. Fixed with an extension-based fallback
+classifier, and added an actual error message for genuinely unsupported files
+(there wasn't one before, for ANY reason a file got skipped).
+
+**Per-project local media folder memory — closes the real gap behind "why do I
+have to relink every time."** `useLocalMediaFolder.ts` previously stored exactly
+ONE folder handle in IndexedDB, globally, regardless of which project was open —
+so linking a folder for project A and later opening project B would show A's
+folder as if it were B's, and reopening A later might show whatever was LAST
+linked instead of what A actually used. Reworked storage to be keyed per-project
+(`mediaFolder:{projectId}`), so each saved project now remembers its own linked
+folder and reconnects to it automatically via `queryPermission` (needs no user
+click at all if Chrome still considers the grant active) when reopened. Handled
+the chicken-and-egg gap for brand-new projects (no database id exists until the
+first autosave) with a temporary shared "untitled" slot plus a migration step
+(`migrateLocalMediaHandleToProject`, called from `useProjectAutosave.ts` right
+when a new project gets its real id) that moves the handle over once a real id
+exists — otherwise a folder linked while working on a new project would become
+unreachable the moment it got saved and was later reopened by its real id.
+
+**Not done this session:** true "offline-first, remembers everything without
+asking" behavior (what was described as wanting something like Adobe/Premiere's
+local project files) is now meaningfully closer but still bounded by what the
+File System Access API actually allows from web content — permission grants CAN
+still be revoked by the browser/OS after extended inactivity, at which point a
+manual reconnect click is unavoidable; that's a platform limitation, not
+something fixable from application code. **Not verified in a live browser** —
+same standing limitation every session, but especially relevant here since the
+whole point of this session's changes is multi-session persistence behavior that
+can only really be confirmed by closing and reopening the browser between tests.
+
 ## Session — real "filter presets always 400" bug found+fixed, Import Defaults for motion presets, startup screen auto-picks Recent, local media relink improved (real errors + file-level fallback for blocked folders)
 
 **Real bug found:** `POST /api/admin/motion-presets` only accepted
