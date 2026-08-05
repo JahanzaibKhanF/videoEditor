@@ -1,0 +1,60 @@
+"use client";
+import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Clock, Scissors } from "@/utils/icons";
+
+
+const tabs = [
+  { id: "media",       label: "Media",       icon: <GoFileMedia size={20} /> },
+  { id: "text",        label: "Text",        icon: <IoTextOutline size={20} /> },
+  { id: "effects",     label: "Effects",     icon: <GoSun size={20} /> },
+  { id: "bgremove",    label: "BG Remove",   icon: <Scissors size={20} />, badge: "AI" },
+  { id: "transitions", label: "Transitions", icon: <TbTransitionRight size={20} /> },
+  { id: "layers",      label: "Layers",      icon: <FiLayers size={20} /> },
+  { id: "templates",   label: "Templates",   icon: <CgTemplate size={20} /> },
+  { id: "recent",      label: "Recent",      icon: <Clock size={20} /> },
+];
+
+interface Props { activeTab: string; onTabChange: (t: string) => void; }
+
+export default function IconSidebar({ activeTab, onTabChange }: Props) {
+  return (
+    <div
+      style={{ width: 72 }}
+      className="flex-shrink-0 flex flex-col items-center py-3 gap-0.5 overflow-y-auto bg-studio-surface border-r border-studio-border"
+    >
+      {tabs.map(t => {
+        const active = activeTab === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onTabChange(t.id)}
+            title={t.label}
+            className={`
+              flex flex-col items-center justify-center gap-1
+              w-[58px] h-[54px] rounded-xl border-none cursor-pointer
+              transition-colors duration-150 flex-shrink-0 relative
+              ${active
+                ? "bg-signal/10 text-signal"
+                : "bg-transparent text-ink-secondary hover:bg-studio-hover hover:text-ink-primary"
+              }
+            `}
+          >
+            {active && (
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-[3px] bg-signal" />
+            )}
+            <span className="relative">
+              {t.icon}
+              {"badge" in t && t.badge && (
+                <span className="absolute -top-1.5 -right-2.5 text-[6.5px] font-black bg-signal text-white rounded-full px-1 py-px leading-tight">
+                  {t.badge}
+                </span>
+              )}
+            </span>
+            <span className="text-[9.5px] font-bold tracking-wide leading-none">
+              {t.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
