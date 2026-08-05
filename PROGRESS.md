@@ -1,6 +1,97 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — background-removed clips: fixed BOTH the black-background bug and the "stuck after a few frames" bug (two separate real causes); Background Removal split into its own sidebar icon; transition picker redesigned with real two-clip preview tiles; npm audit assessed
+
+**Black background — real bug found:** the main preview canvas
+(`CompositorCanvas.tsx`) and the WebCodecs export canvas (`webCodecsRender.ts`)
+were both created with `alpha: false`. That's not a background-removal bug at
+all — it means those canvases were INCAPABLE of representing transparency,
+period, regardless of what the source video actually contained. Any genuinely
+transparent pixel just got flattened to opaque black at the canvas level, before
+compositing even had a chance. Fixed by switching both to `alpha: true`.
+
+**"Stuck after a few frames" — different, also real bug:** this is a
+well-documented, still-unfixed Chromium quirk — `MediaRecorder`'s WebM output
+has no real Duration/Cues in its container header (it's written incrementally,
+live-stream style, with no way to know the total length up front), so every
+`<video>` that loads one reports `duration: Infinity` and can't seek reliably.
+`CanvasEngine` drives playback by setting `video.currentTime` directly, so a
+clip with broken seek metadata looks exactly like "plays a couple frames, then
+stuck." Fixed with `ts-ebml` (new dependency): patches the WebM's header once,
+right after recording, adding proper Duration + Cues — every future `<video>`
+that loads this blob (including the ones `CanvasEngine` creates when it becomes
+a clip's src) then seeks correctly, no special-casing needed anywhere else.
+Required a `Buffer` polyfill for the browser (`ts-ebml` references it as a
+Node-style global) — tried `webpack.ProvidePlugin` first via a separately
+`npm install`ed `webpack` package in `next.config.mjs`, which broke the build
+outright (`parser.getLocation is not a function` — importing a standalone
+webpack into Next's own internal webpack config causes a version mismatch).
+Reverted that; used a plain runtime `window.Buffer = Buffer` assignment in
+`backgroundRemoval.ts` instead, which sidesteps the whole problem.
+
+**Background Removal split into its own sidebar icon** (with an "AI" badge),
+separate from the general Effects tab — both desktop `IconSidebar.tsx` and the
+mobile tab bar in `Editor.tsx` now have a dedicated entry, per explicit
+"must must" request. The Effects tab keeps Special Effects + Blur Regions only.
+
+**Transition picker redesigned** to match the animation picker's pattern from a
+previous session: `TransitionPreviewTile.tsx` shows two small labeled "clips"
+(A/B, distinct colors) that ACTUALLY transition into each other on hover, using
+`applyTransition` — the exact same function the real compositor calls during
+playback/export (newly exported from `compositeFrame.ts` for this purpose) —
+instead of a static icon. No more icons anywhere in the transition selector,
+curated grid or full library.
+
+**npm audit — assessed, deliberately NOT force-fixed:** the 2 high-severity
+findings are both in `next`/`postcss`, and `npm audit fix --force` would jump
+from Next 14 to Next 16 — two major versions, a breaking change. Given the
+amount of custom webpack config, WebCodecs/canvas work, and everything else
+built specifically against Next 14 in this project, blindly forcing that
+upgrade without a live environment to test against is too risky to do as a
+side-effect of an unrelated session. Recommendation: treat a Next.js major
+version upgrade as its own deliberate, dedicated migration effort with real
+testing, not something to force through here.
+
+**Not done this session:** the requested drag-to-reorder-layers feature
+(dragging a clip's layer/zIndex up or down, with its linked audio/effects
+required to move WITH it rather than getting mismatched) was NOT implemented —
+given how much ground the black-bg/playback/sidebar/transition work already
+covered, this substantial new feature is left for a dedicated future session
+rather than rushed in the same pass.
+
+## Session — background removal crash from last session's own "optimization" fixed; React border style warning fixed
+
+**Real regression from last session, found via console log:** the "pass ImageData
+directly, skip the PNG encode" input-side optimization broke background removal
+outright — `TypeError: undefined is not iterable`. Read the actual compiled
+source of `@imgly/background-removal` to find out why: its TypeScript types list
+`ImageData` as a valid `ImageSource`, but the real runtime function
+(`imageSourceToImageData`) only has genuine handling for
+`string`/`URL`/`ArrayBuffer`/`Blob` — anything else, ImageData included, falls
+through completely unhandled and gets treated downstream as if it were already
+in the model's expected tensor shape, which it isn't. A real
+type-declaration/implementation mismatch in the library itself. Fixed by
+reverting the INPUT side back to a Blob (the one path that's actually
+implemented). Verified the OUTPUT-side half of that optimization (raw RGBA8
+instead of PNG) IS a genuine, fully-implemented case by reading the compiled
+source directly rather than assuming — that half stays, so one real
+encode/decode round-trip is still eliminated versus before, just not both.
+
+**React "mixing shorthand and non-shorthand" warning fixed**
+(`InteractionOverlay.tsx`): `boxStyle()` set both the `border` shorthand and a
+separate `borderStyle` longhand for the dashed-selection-box feature — exactly
+the pattern React warns about, since applying both to the same inline style
+object doesn't reliably resolve override order across re-renders. Fixed by
+folding the dashed/solid choice directly into the `border` shorthand string
+instead of using a separate property. Swept the rest of the codebase for the
+same pattern — this was the only occurrence.
+
+**Lesson applied:** when a library's TypeScript types list a convenient-looking
+input option, that's not proof the runtime actually implements it — worth
+checking the compiled source directly when something that "should" work
+according to the types throws a confusing runtime error instead.
+
 ## Session — background removal: eliminated 3 unnecessary PNG encode/decode round-trips per frame; honest assessment of the "30fps" ask
 
 Checked the existing pipeline against the "raw pixel buffers, no blob/URL steps"

@@ -4,7 +4,7 @@ import path from "node:path";
 const nextConfig = {
   reactStrictMode: true,
   webpack: (config) => {
-    config.resolve.fallback = { ...config.resolve.fallback, fs: false };
+    config.resolve.fallback = { ...config.resolve.fallback, fs: false, buffer: "buffer" };
 
     // @imgly/background-removal pulls in onnxruntime-web, which ships large
     // pre-bundled .mjs files (its WASM/WebGPU worker bundles) built for
