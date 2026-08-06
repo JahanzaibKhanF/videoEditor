@@ -2,7 +2,7 @@ name: Netlify Deploy
 
 on:
   push:
-    branches: [ main ] # Change this to master if your default branch is called master
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -10,32 +10,42 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Get code from your repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Step 2: Use Node 24 natively to stop all GitHub deprecation errors
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
+      # Step 3: Install all required project packages
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Next.js application
-        run: npm run build
+      # Step 4: Install official Netlify compiler system
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+
+      # Step 5: Tell Netlify to build the Next.js app safely
+      - name: Build Next.js Application
+        run: netlify build
         env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      # Step 6: Deploy everything using the official Netlify engine
       - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3
-        with:
-          publish-dir: './.out'
-          production-deploy: ${{ github.ref == 'refs/heads/main' }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions (Commit: ${{ github.sha }})"
-          enable-commit-comment: true
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            netlify deploy --prod
+          else
+            netlify deploy
+          fi
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
