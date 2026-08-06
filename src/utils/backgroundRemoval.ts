@@ -1,21 +1,6 @@
 import { removeBackground } from "@imgly/background-removal";
-import { Decoder, Reader, tools } from "ts-ebml";
-import { Buffer } from "buffer";
+import { Muxer, ArrayBufferTarget } from "webm-muxer";
 import { ClipDetails } from "../types/types";
-
-// ts-ebml's code references `Buffer` as a Node-style global (not an import),
-// since it was written for Node's EBML parsing use case originally. Webpack 5
-// no longer auto-polyfills Node core globals like earlier versions did, so
-// without this, Buffer is simply undefined in the browser and ts-ebml throws
-// immediately. A runtime assignment here is simpler and safer than a webpack
-// ProvidePlugin — importing a separate top-level `webpack` package into
-// next.config.mjs to register one caused a version mismatch with Next's own
-// internal webpack (`parser.getLocation is not a function`), since Next
-// bundles its own webpack rather than using whatever version is in
-// node_modules.
-if (typeof window !== "undefined" && !(window as unknown as { Buffer?: unknown }).Buffer) {
-  (window as unknown as { Buffer: unknown }).Buffer = Buffer;
-}
 
 // Must match the installed @imgly/background-removal version (package.json) —
 // used to build an explicit CDN publicPath instead of relying on the
@@ -47,25 +32,70 @@ export interface BgRemovalOptions {
 }
 
 /**
+ * Picks a video codec string that this browser's WebCodecs VideoEncoder can
+ * actually encode WITH an alpha channel. Tries VP9 first (smaller files),
+ * falls back to VP8 (more broadly supported historically). Throws if
+ * neither is available — this whole feature requires a Chromium-class
+ * browser with WebCodecs alpha support, consistent with the rest of the app.
+ */
+async function pickAlphaEncoderConfig(width: number, height: number, fps: number) {
+  const candidates: { codec: string; muxerCodec: string }[] = [
+    { codec: "vp09.00.10.08", muxerCodec: "V_VP9" },
+    { codec: "vp8", muxerCodec: "V_VP8" },
+  ];
+  for (const c of candidates) {
+    try {
+      const support = await VideoEncoder.isConfigSupported({
+        codec: c.codec, width, height, framerate: fps, alpha: "keep",
+      });
+      if (support.supported) return c;
+    } catch { /* try the next candidate */ }
+  }
+  throw new Error("This browser can't encode a transparent video (no alpha-capable VideoEncoder found).");
+}
+
+/**
  * Runs background removal across a clip's trimmed range, one frame at a
  * time (there's no dedicated "video" mode in the underlying model — it's
  * fundamentally an image segmentation model — so a video is just "many
  * images" here, which is also why this can take a while and needs a real
  * progress/cancel UI rather than being instant).
  *
+ * ENCODING STRATEGY — why WebCodecs + explicit timestamps, not
+ * MediaRecorder + canvas.captureStream():
+ * An earlier version of this recorded the output canvas with
+ * `canvas.captureStream(fps)` + `MediaRecorder`. That records in REAL
+ * (wall-clock) time — but per-frame ML inference is much slower than
+ * real time (the "quality" model in particular can take a second or more
+ * per frame on CPU). MediaRecorder has no idea the canvas only changes
+ * once every ~1s of processing; it just samples on its own timer and
+ * stamps each sample with the real time it captured it. The result: a
+ * WebM whose *encoded frame durations* reflect how long each frame took
+ * to PROCESS, not the source clip's actual timing — every processed
+ * frame visibly held on screen for however long its inference took (the
+ * "one frame for 11 seconds, then jump to the next" symptom) and a
+ * total output duration that ~matched processing time instead of the
+ * clip's real duration.
+ * Encoding directly with a WebCodecs `VideoEncoder` and manually
+ * assigning each frame's `timestamp`/`duration` as `i / processFps`
+ * (below) fixes this at the root: playback timing is now driven purely
+ * by frame INDEX, completely decoupled from how long any frame took to
+ * compute. Frame 5 always lands at 5/processFps seconds into the output,
+ * whether producing it took 10 ms or 10 s.
+ *
  * The output keeps genuine alpha transparency (not a green-screen swap):
- * we composite each processed frame onto a canvas and record that canvas's
- * stream with MediaRecorder into a WebM. Chrome/Chromium preserve alpha in
- * canvas-captured WebM recordings, and since the rest of this app already
- * assumes a Chromium-class browser (WebCodecs, requestVideoFrameCallback),
- * relying on that here is consistent with everything else, not a new
- * limitation — the result plays back with a transparent background and
- * composites correctly over whatever's beneath it in the timeline.
+ * each cut-out frame is encoded with `alpha: "keep"` and muxed into a
+ * WebM via `webm-muxer`, which also means the file gets correct
+ * Duration/Cues from the start — no post-hoc duration-patching needed.
  */
 export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRemovalResult> {
   const { clip, quality, processFps = 12, onProgress, onFramePreview, signal } = opts;
 
   if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+
+  if (typeof VideoEncoder === "undefined") {
+    throw new Error("This browser doesn't support WebCodecs, which background removal needs to produce a transparent video.");
+  }
 
   const sourceVideo = document.createElement("video");
   sourceVideo.src = clip.src;
@@ -83,6 +113,9 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
 
   const w = sourceVideo.videoWidth || clip.width || 1280;
   const h = sourceVideo.videoHeight || clip.height || 720;
+  // Both VP8 and VP9 require even dimensions.
+  const encodeW = w % 2 === 0 ? w : w - 1;
+  const encodeH = h % 2 === 0 ? h : h - 1;
 
   // Off-DOM canvas we grab each source frame into (input to the model)
   const srcCanvas = document.createElement("canvas");
@@ -90,20 +123,36 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   const srcCtx = srcCanvas.getContext("2d")!;
 
   // Visible-to-the-caller canvas the CUT-OUT result gets painted onto —
-  // this is what onFramePreview shows live, and also what MediaRecorder
-  // captures into the final output.
+  // this is what onFramePreview shows live, and also what each frame gets
+  // captured from for encoding.
   const outCanvas = document.createElement("canvas");
   outCanvas.width = w; outCanvas.height = h;
   const outCtx = outCanvas.getContext("2d", { alpha: true })!;
 
-  const stream = outCanvas.captureStream(processFps);
-  const chunks: Blob[] = [];
-  const preferredMime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
-    .find(m => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ?? "video/webm";
-  const recorder = new MediaRecorder(stream, { mimeType: preferredMime, videoBitsPerSecond: 8_000_000 });
-  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-  const recordingDone = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
-  recorder.start();
+  const { codec, muxerCodec } = await pickAlphaEncoderConfig(encodeW, encodeH, processFps);
+
+  const muxerTarget = new ArrayBufferTarget();
+  const muxer = new Muxer({
+    target: muxerTarget,
+    video: { codec: muxerCodec, width: encodeW, height: encodeH, frameRate: processFps, alpha: true },
+    firstTimestampBehavior: "offset",
+  });
+
+  let encoderError: Error | null = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (e) => { encoderError = e instanceof Error ? e : new Error(String(e)); },
+  });
+  encoder.configure({
+    codec,
+    width: encodeW,
+    height: encodeH,
+    alpha: "keep",
+    bitrate: 8_000_000,
+    framerate: processFps,
+  });
+
+  const frameDurationUs = Math.round(1_000_000 / processFps);
 
   const modelConfig = {
     model: (quality === "quality" ? "isnet" : "isnet_quint8") as "isnet" | "isnet_quint8",
@@ -128,6 +177,7 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   try {
     for (let i = 0; i < totalFrames; i++) {
       if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+      if (encoderError) throw encoderError;
 
       const localTime = startTime + (i / totalFrames) * clipDuration;
       await seekVideo(sourceVideo, localTime);
@@ -161,59 +211,40 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
       outCtx.putImageData(new ImageData(cutoutBytes, w, h), 0, 0);
 
       onFramePreview?.(outCanvas);
+
+      // The whole point: timestamp/duration come from the frame INDEX, not
+      // from wall-clock time — see the big comment above for why.
+      const videoFrame = new VideoFrame(outCanvas, {
+        timestamp: i * frameDurationUs,
+        duration: frameDurationUs,
+      });
+      // Force a keyframe periodically (default encoder heuristics can
+      // otherwise go a very long time between keyframes on low-motion
+      // content like a segmented subject on a flat background, which
+      // makes scrubbing/seeking within the clip sluggish later).
+      encoder.encode(videoFrame, { keyFrame: i % Math.max(1, Math.round(processFps)) === 0 });
+      videoFrame.close();
+
       onProgress?.({
         fraction: (i + 1) / totalFrames,
         frameIndex: i + 1, totalFrames,
         label: `Removing background — frame ${i + 1} of ${totalFrames}`,
       });
     }
+
+    await encoder.flush();
+    if (encoderError) throw encoderError;
   } finally {
-    recorder.stop();
-    await recordingDone;
+    try { encoder.close(); } catch { /* already closed/errored */ }
     sourceVideo.src = "";
   }
 
   if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
 
-  const rawBlob = new Blob(chunks, { type: "video/webm" });
-  // MediaRecorder's output is a well-documented, still-not-fixed Chromium
-  // quirk: the WebM container it writes has no real Duration/Cues in its
-  // header (it's a live stream format, written incrementally, with no way
-  // to know the total length up front) — every <video> that later loads
-  // this blob reports `duration: Infinity` and can't seek reliably, which
-  // is exactly "plays a few frames and gets stuck": CanvasEngine drives
-  // playback by setting `video.currentTime` directly, and seeking on a
-  // video with broken duration metadata doesn't work. Patch the container
-  // header once here (adds proper Duration + Cues) so every future <video>
-  // that loads this blob — including the ones CanvasEngine creates when
-  // this becomes a clip's src — seeks correctly with no special-casing
-  // needed anywhere else in the app.
-  const blob = await fixWebmDuration(rawBlob);
+  muxer.finalize();
+  const blob = new Blob([muxerTarget.buffer], { type: "video/webm" });
   const blobUrl = URL.createObjectURL(blob);
   return { blobUrl, blob };
-}
-
-async function fixWebmDuration(blob: Blob): Promise<Blob> {
-  try {
-    const buf = await blob.arrayBuffer();
-    const decoder = new Decoder();
-    const reader = new Reader();
-    reader.logging = false;
-    reader.drop_default_duration = false;
-    const elements = decoder.decode(buf);
-    for (const elm of elements) reader.read(elm);
-    reader.stop();
-    if (!reader.duration || reader.cues.length === 0) return blob; // nothing to fix, or reader couldn't parse it — fall back to the original rather than risk corrupting it
-    const refinedMetadata = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
-    const body = buf.slice(reader.metadataSize);
-    return new Blob([refinedMetadata, body], { type: blob.type });
-  } catch {
-    // Best-effort — if this fails for any reason, the clip still works for
-    // straight-through playback, just without reliable seeking. Better to
-    // hand back a working-if-imperfect blob than throw away the whole
-    // background-removal result over a metadata patch failing.
-    return blob;
-  }
 }
 
 function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
