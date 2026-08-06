@@ -42,6 +42,25 @@ const nextConfig = {
     config.resolve.alias["onnxruntime-web/webgpu"] = cpuOnlyBuild;
     config.resolve.alias["onnxruntime-web$"] = cpuOnlyBuild;
 
+    // The "ebml" package (a transitive dep of ts-ebml, used to patch WebM
+    // duration metadata after background removal — see backgroundRemoval.ts)
+    // ships a "browser" field in its package.json pointing at
+    // lib/ebml.iife.js. That file is a self-executing IIFE bundle meant to
+    // be dropped in with a <script> tag (it assigns to a `var EBML`, not
+    // `module.exports`) — it was never meant to be `require()`d by a
+    // bundler. Webpack's default browser-field resolution picks it anyway,
+    // so `require("ebml")` resolves to a module whose exports object is
+    // empty. ts-ebml's tools.js does
+    // `const { tools: _tools } = require("ebml"); exports.readVint =
+    // _tools.readVint;` at import time, so `_tools` is undefined and this
+    // throws `Cannot read properties of undefined (reading 'readVint')`
+    // immediately when the chunk containing backgroundRemoval.ts loads —
+    // not when background removal actually runs — which is why it shows up
+    // as an immediate client-side crash. Forcing resolution to the real
+    // CommonJS build (lib/ebml.js, which correctly sets `exports.tools`)
+    // fixes it.
+    config.resolve.alias["ebml$"] = path.resolve(process.cwd(), "node_modules/ebml/lib/ebml.js");
+
     return config;
   },
   async headers() {
