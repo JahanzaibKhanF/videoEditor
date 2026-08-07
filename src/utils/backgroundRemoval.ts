@@ -51,20 +51,31 @@ export interface BgRemovalOptions {
  * (still expected on Firefox/Safari, consistent with the rest of the app).
  */
 async function pickAlphaEncoderConfig(width: number, height: number, fps: number) {
-  const candidates: { codec: string; muxerCodec: string }[] = [
+  const codecs: { codec: string; muxerCodec: string }[] = [
     { codec: "vp09.00.10.08", muxerCodec: "V_VP9" },
     { codec: "vp8", muxerCodec: "V_VP8" },
   ];
-  for (const c of candidates) {
-    try {
-      const support = await VideoEncoder.isConfigSupported({
-        codec: c.codec, width, height, framerate: fps, alpha: "keep",
-        hardwareAcceleration: "prefer-software",
-      });
-      if (support.supported) return c;
-    } catch { /* try the next candidate */ }
+  // "prefer-software" is the real fix on most machines (see comment above),
+  // but on some browser/driver combos even THAT reports unsupported for
+  // alpha even though a working encoder exists — so instead of giving up
+  // immediately, also try "no-preference" (let the browser pick) and
+  // finally no hint at all, in that order, before actually failing.
+  const hwModes: (HardwareAcceleration | undefined)[] = ["prefer-software", "no-preference", undefined];
+  for (const hw of hwModes) {
+    for (const c of codecs) {
+      try {
+        const support = await VideoEncoder.isConfigSupported({
+          codec: c.codec, width, height, framerate: fps, alpha: "keep",
+          ...(hw ? { hardwareAcceleration: hw } : {}),
+        });
+        if (support.supported) return c;
+      } catch { /* try the next candidate */ }
+    }
   }
-  throw new Error("This browser can't encode a transparent video (no alpha-capable VideoEncoder found).");
+  throw new Error(
+    "This browser/device can't encode a transparent video. This is a browser limitation, not a bug in the app — " +
+    "try the latest Chrome or Edge on desktop. It's not supported on Firefox or Safari, or in most mobile browsers."
+  );
 }
 
 /**
