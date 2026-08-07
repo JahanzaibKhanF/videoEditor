@@ -11,6 +11,7 @@ import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import { ROW_H, ROW_GAP } from "./Layers";
 import { transitionOptions } from "../../utils/transitionOtionsConstants";
 import { Shuffle } from "@/utils/icons";
+import { AudioTrackRow } from "./AudioRangeSlider";
 
 const MIN_W_PCT = 1;
 
@@ -122,6 +123,18 @@ export default function VideoClipsRangeSlider() {
 
   const sorted = [...clipsDetails].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 
+  // Each clip now occupies its own row PLUS one row per paired audio track
+  // directly beneath it (see the render loop below) — rows are no longer
+  // 1:1 with `sorted`'s index, so bridge positioning and any other
+  // row-index math needs each clip's actual cumulative row offset, not
+  // just its position in `sorted`.
+  const audioCountFor = (clipId: string) => audioDetails.filter(a => a.clipId === clipId).length;
+  const rowOffsets: number[] = [];
+  {
+    let acc = 0;
+    for (const clip of sorted) { rowOffsets.push(acc); acc += 1 + audioCountFor(clip.id); }
+  }
+
   // A clip's `transition` describes the transition OUT of it, into
   // whichever clip starts right where it ends. Rows here are ordered by
   // zIndex (for overlay stacking), not by time, so the clip immediately
@@ -140,7 +153,7 @@ export default function VideoClipsRangeSlider() {
       const meta = transitionOptions.find(t => t.key === clip.transition);
       return {
         id: `${clip.id}->${nextClip.id}`,
-        fromRow: rowIdx, toRow: nextRowIdx,
+        fromRow: rowOffsets[rowIdx], toRow: rowOffsets[nextRowIdx],
         leftPct: ((clip.endPosition ?? 0) / totalTime) * 100,
         label: meta?.name ?? clip.transition,
       };
@@ -176,41 +189,51 @@ export default function VideoClipsRangeSlider() {
         const width = `${(((clip.endPosition ?? 0) - (clip.startPosition ?? 0)) / totalTime) * 100}%`;
         const dur = (clip.endPosition ?? 0) - (clip.startPosition ?? 0);
         const isSel = selId === clip.id;
+        const pairedAudio = audioDetails.filter(a => a.clipId === clip.id);
 
         return (
-          <div key={clip.id} style={{ position: "relative", height: ROW_H, width: "100%", flexShrink: 0 }}>
-            <div className="vc-chip"
-              onMouseDown={e => drag(e, clip.id, "move")}
-              onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
-              style={{
-                position: "absolute", top: 0, left, width, height: "100%",
-                background: isSel ? "#FFC670" : "#E09A2F",
-                outline: isSel ? "2px solid #1D4ED8" : "none",
-                borderRadius: 6, cursor: "move",
-                display: "flex", alignItems: "center",
-                overflow: "hidden", userSelect: "none",
-              }}>
-              {/* Left trim */}
-              <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
-                style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
-              {/* Content */}
-              <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: .9 }}>
-                  <rect x=".5" y="1.5" width="9" height="7" rx="1" stroke="white" strokeWidth="1" />
-                  <path d="M3.5 3.5l3 2-3 2V3.5z" fill="white" />
-                </svg>
-                <span style={{ color: "white", fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-                  {clip.name}
-                </span>
-                <span style={{ color: "rgba(255,255,255,.85)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
-                  {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
-                </span>
+          <React.Fragment key={clip.id}>
+            <div style={{ position: "relative", height: ROW_H, width: "100%", flexShrink: 0 }}>
+              <div className="vc-chip"
+                onMouseDown={e => drag(e, clip.id, "move")}
+                onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
+                style={{
+                  position: "absolute", top: 0, left, width, height: "100%",
+                  background: isSel ? "#FFC670" : "#E09A2F",
+                  outline: isSel ? "2px solid #1D4ED8" : "none",
+                  borderRadius: 6, cursor: "move",
+                  display: "flex", alignItems: "center",
+                  overflow: "hidden", userSelect: "none",
+                }}>
+                {/* Left trim */}
+                <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
+                  style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
+                {/* Content */}
+                <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: .9 }}>
+                    <rect x=".5" y="1.5" width="9" height="7" rx="1" stroke="white" strokeWidth="1" />
+                    <path d="M3.5 3.5l3 2-3 2V3.5z" fill="white" />
+                  </svg>
+                  <span style={{ color: "white", fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                    {clip.sourceFileName ?? clip.name}
+                  </span>
+                  <span style={{ color: "rgba(255,255,255,.85)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
+                    {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
+                  </span>
+                </div>
+                {/* Right trim */}
+                <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
+                  style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
               </div>
-              {/* Right trim */}
-              <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
-                style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
             </div>
-          </div>
+            {/* This clip's own audio row(s), directly beneath it — dragging
+                THIS clip up/down (see LabelColumn's per-pair arrows) always
+                keeps its audio immediately following it, because both are
+                emitted from this same `sorted` loop iteration. */}
+            {pairedAudio.map(track => (
+              <AudioTrackRow key={track.id} track={track} containerRef={ref} />
+            ))}
+          </React.Fragment>
         );
       })}
     </div>
