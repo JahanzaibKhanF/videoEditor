@@ -9,22 +9,33 @@
  * Instead of re-implementing compositing (transitions/text/images/blur/
  * animations) a second time for export, this drives the exact same
  * `compositeFrame()` function the live preview uses (see
- * utils/compositeFrame.ts) once per output frame, against <video> elements
- * seeked to the correct local time for that frame. That's the one part that
- * MUST happen on the main thread — video seeking requires a real
- * HTMLVideoElement, which doesn't exist inside a Worker. Once a frame is
- * drawn to an OffscreenCanvas, it's wrapped as a transferable `VideoFrame`
- * and handed off to encodeWorker.ts, which owns the actual VideoEncoder/
- * AudioEncoder/Muxer and does the CPU-heavy encoding off the main thread —
- * this is the "use a worker to make it faster" part: the main thread can
- * start seeking/drawing the next frame while the previous one is still
- * being encoded, instead of the two happening strictly serially.
+ * utils/compositeFrame.ts) once per output frame, against decoded canvases
+ * for the correct local time of that frame. Once a frame is drawn to an
+ * OffscreenCanvas, it's wrapped as a transferable `VideoFrame` and handed
+ * off to encodeWorker.ts, which owns the actual VideoEncoder/AudioEncoder/
+ * Muxer and does the CPU-heavy encoding off the main thread — the main
+ * thread can start decoding/drawing the next frame while the previous one
+ * is still being encoded, instead of the two happening strictly serially.
+ *
+ * SOURCE-FRAME DECODING (2026-08-07 change): this used to seek a hidden
+ * <video> element per frame, per active clip (`vid.currentTime = t`, wait
+ * for `seeked`/`requestVideoFrameCallback`). A real seek on an
+ * HTMLVideoElement is a slow round trip through the browser's whole media
+ * pipeline, done hundreds/thousands of times per export — that was the
+ * actual export-speed bottleneck, not the encoder. Replaced with
+ * Mediabunny's `CanvasSink`, which demuxes + decodes straight through
+ * WebCodecs' `VideoDecoder` (the same underlying browser API the encoder
+ * side already uses) and services a whole batch of requested timestamps
+ * per source without redoing shared decode work — no <video> element, no
+ * seek-and-wait, in decode order. Compositing, encoding, muxing, and the
+ * FFmpeg fallback below are unrelated to this and are unchanged.
  */
 import {
   ClipDetails, TextDetails, ImageDetails, BlurDetails, AudioDetails, LayerOrder, ClipEffectDetails,
 } from "../types/types";
 import { pickVideoEncoderConfig, isAudioEncodingSupported, PickedVideoConfig } from "./videoCodecSelect";
 import { mapOutputElapsedToSourceTime, totalSourceConsumed } from "./speedRamp";
+import { Input, ALL_FORMATS, BlobSource, CanvasSink } from "mediabunny";
 
 export interface WebCodecsRenderParams {
   clips: ClipDetails[];
@@ -57,23 +68,26 @@ export async function pickSupportedWebCodecsConfig(width: number, height: number
 export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promise<Blob> {
   const { clips, texts, images, blurs, clipEffects = [], audioTracks, layerOrder, imageEls, width, height, fps, totalDuration, videoConfig, onProgress } = params;
 
-  onProgress?.(0, "Preparing video sources…");
+  onProgress?.(0, "Opening video sources…");
 
-  // ── 1. Prepare a hidden <video> per unique clip source, preloaded ──────
+  // ── 1. Open each unique clip source via Mediabunny, one CanvasSink per
+  // source. `alpha: true` unconditionally: there's no per-clip flag telling
+  // us which sources are background-removed (transparent) videos, so every
+  // sink is opened alpha-capable to match the alpha:true export canvas
+  // below — a no-op cost for ordinary opaque sources.
   const uniqueSrcs = Array.from(new Set(clips.map(c => c.src)));
-  const videoEls = new Map<string, HTMLVideoElement>();
-  await Promise.all(uniqueSrcs.map(src => new Promise<void>((resolve) => {
-    const v = document.createElement("video");
-    v.src = src;
-    v.muted = true;
-    v.preload = "auto";
-    v.playsInline = true;
-    const done = () => resolve();
-    v.addEventListener("loadeddata", done, { once: true });
-    v.addEventListener("error", done, { once: true });
-    setTimeout(done, 4000); // don't hang forever on a slow/broken source
-    videoEls.set(src, v);
-  })));
+  const sinks = new Map<string, CanvasSink>();
+  await Promise.all(uniqueSrcs.map(async (src) => {
+    try {
+      const blob = await (await fetch(src)).blob();
+      const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
+      const track = await input.getPrimaryVideoTrack();
+      if (!track) return; // audio-only / broken source — compositeFrame already tolerates a missing drawable
+      sinks.set(src, new CanvasSink(track, { alpha: true }));
+    } catch (err) {
+      console.error("[webCodecsRender] failed to open source via Mediabunny:", src, err);
+    }
+  }));
 
   // ── 2. Mix audio up front (independent of the video frame loop) ────────
   onProgress?.(0.05, "Mixing audio…");
@@ -153,62 +167,52 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
     worker.postMessage({ type: "audio", channelData, length: mixedAudio.length }, channelData.map(c => c.buffer));
   }
 
-  // ── 4. Frame loop — seek + draw on main thread, transfer to worker ─────
+  // ── 4. Frame loop — decode + draw on main thread, transfer to worker ───
   const offscreen = new OffscreenCanvas(width, height);
   const ctx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D;
 
-  const getVideoDrawable = (src: string) => videoEls.get(src) ?? null;
+  // Pre-plan, in exact frame order, which local source timestamp each
+  // active clip needs at every output frame. This is cheap arithmetic (no
+  // decoding happens here) and lets each source's CanvasSink service its
+  // whole export's worth of requests as one batched, forward `canvasesAtTimestamps`
+  // call instead of a cold lookup every frame — Mediabunny can then decode
+  // in order and never re-decode shared work between nearby requests.
+  const perFrameSrcTimes: Map<string, number>[] = new Array(totalFrames);
+  const requestedTimestamps = new Map<string, number[]>();
+  for (let i = 0; i < totalFrames; i++) {
+    const t = i / fps;
+    const active = clips.filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity));
+    const perSrc = new Map<string, number>();
+    for (const c of active) {
+      if (!sinks.has(c.src)) continue; // source failed to open — compositeFrame tolerates a missing drawable
+      const localTime = mapOutputElapsedToSourceTime(c, t - (c.startPosition ?? 0));
+      perSrc.set(c.src, localTime);
+      if (!requestedTimestamps.has(c.src)) requestedTimestamps.set(c.src, []);
+      requestedTimestamps.get(c.src)!.push(localTime);
+    }
+    perFrameSrcTimes[i] = perSrc;
+  }
 
-  // Tracks each <video>'s most recently *requested* local time, separate
-  // from vid.currentTime. A split clip's two halves — and any clip separated
-  // from its neighbor by a timeline gap — share the same underlying <video>
-  // element (keyed by src). During a gap, nothing seeks that element, so
-  // vid.currentTime just sits wherever the previous active segment left it.
-  // The instant the next segment becomes active, that's a real (often large)
-  // seek, and needs the same careful wait as any other seek — tracking the
-  // last *requested* time (rather than reading currentTime, which the
-  // browser may round/adjust) is what lets the "already close enough, skip
-  // re-seeking" fast path stay correct without also skipping genuine seeks.
-  const lastRequestedTime = new Map<string, number>();
+  type CanvasIter = AsyncIterator<{ canvas: HTMLCanvasElement | OffscreenCanvas; timestamp: number } | null>;
+  const sinkIterators = new Map<string, CanvasIter>();
+  for (const [src, sink] of sinks) {
+    const timestamps = requestedTimestamps.get(src) ?? [];
+    sinkIterators.set(src, sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]() as CanvasIter);
+  }
 
-  const waitForSeek = (vid: HTMLVideoElement, localTime: number): Promise<void> =>
-    new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => { if (!settled) { settled = true; resolve(); } };
-
-      // requestVideoFrameCallback resolves once the decoder has actually
-      // handed over the frame for the NEW position — the real fix for
-      // "extra cached / duplicate frame" glitches. The older `seeked` event
-      // alone can fire slightly before that handoff completes, especially
-      // right after a big jump (exactly what happens the moment a clip
-      // resumes after a timeline gap), letting drawImage() grab a stale
-      // frame from just before the seek.
-      if (typeof (vid as any).requestVideoFrameCallback === "function") {
-        (vid as any).requestVideoFrameCallback(() => finish());
-      } else {
-        const onSeeked = () => { vid.removeEventListener("seeked", onSeeked); finish(); };
-        vid.addEventListener("seeked", onSeeked);
-      }
-      vid.currentTime = localTime;
-      setTimeout(finish, 300); // fallback so one stuck seek can't hang the whole export
-    });
+  const currentCanvasBySrc = new Map<string, HTMLCanvasElement | OffscreenCanvas | null>();
+  const getVideoDrawable = (src: string) => currentCanvasBySrc.get(src) ?? null;
 
   try {
     for (let i = 0; i < totalFrames; i++) {
       const t = i / fps;
 
-      // Seek every clip that's active at this frame to its correct local time
-      const active = clips.filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity));
-      await Promise.all(active.map(c => {
-        const vid = videoEls.get(c.src);
-        if (!vid) return Promise.resolve();
-        const localTime = mapOutputElapsedToSourceTime(c, t - (c.startPosition ?? 0));
-        const lastRequested = lastRequestedTime.get(c.src);
-        if (lastRequested !== undefined && Math.abs(lastRequested - localTime) < 1 / fps / 2) {
-          return Promise.resolve();
-        }
-        lastRequestedTime.set(c.src, localTime);
-        return waitForSeek(vid, localTime);
+      const perSrc = perFrameSrcTimes[i];
+      await Promise.all(Array.from(perSrc.keys()).map(async (src) => {
+        const it = sinkIterators.get(src);
+        if (!it) return;
+        const { value } = await it.next();
+        currentCanvasBySrc.set(src, value ? value.canvas : null);
       }));
 
       compositeFrameSafe(ctx, width, height, t, fps, clips, texts, images, blurs, clipEffects, imageEls, layerOrder, getVideoDrawable);
@@ -226,7 +230,9 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
     return blob;
   } finally {
     worker.terminate();
-    videoEls.forEach(v => { v.src = ""; v.load(); });
+    // Release each iterator's internal decoder resources (per Mediabunny's
+    // "always call return() on a manually-driven iterator" guidance).
+    await Promise.all(Array.from(sinkIterators.values()).map(it => it.return?.(undefined)?.catch(() => {})));
   }
 }
 
