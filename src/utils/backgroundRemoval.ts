@@ -34,9 +34,21 @@ export interface BgRemovalOptions {
 /**
  * Picks a video codec string that this browser's WebCodecs VideoEncoder can
  * actually encode WITH an alpha channel. Tries VP9 first (smaller files),
- * falls back to VP8 (more broadly supported historically). Throws if
- * neither is available — this whole feature requires a Chromium-class
- * browser with WebCodecs alpha support, consistent with the rest of the app.
+ * falls back to VP8 (more broadly supported historically).
+ *
+ * IMPORTANT: alpha-channel encoding is a SOFTWARE-ONLY feature in Chromium's
+ * VP8/VP9 encoders — the hardware (GPU) encoder path doesn't support it at
+ * all. Chromium treats `hardwareAcceleration` as close to a hard requirement
+ * rather than a hint, so leaving it unset lets Chromium pick a
+ * hardware-accelerated encoder on GPU-capable machines, which then correctly
+ * reports "unsupported" for alpha even though software encode (libvpx) would
+ * work fine. Explicitly requesting "prefer-software" here is what makes
+ * alpha encode actually available on those machines — this was the real
+ * cause of "no alpha-capable VideoEncoder found" errors on hardware that
+ * genuinely does support it, just not through the GPU path.
+ * Throws only if truly neither codec/software combo is available — that's a
+ * genuine "this browser doesn't support WebCodecs alpha encode at all" case
+ * (still expected on Firefox/Safari, consistent with the rest of the app).
  */
 async function pickAlphaEncoderConfig(width: number, height: number, fps: number) {
   const candidates: { codec: string; muxerCodec: string }[] = [
@@ -47,6 +59,7 @@ async function pickAlphaEncoderConfig(width: number, height: number, fps: number
     try {
       const support = await VideoEncoder.isConfigSupported({
         codec: c.codec, width, height, framerate: fps, alpha: "keep",
+        hardwareAcceleration: "prefer-software",
       });
       if (support.supported) return c;
     } catch { /* try the next candidate */ }
@@ -150,6 +163,7 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
     alpha: "keep",
     bitrate: 8_000_000,
     framerate: processFps,
+    hardwareAcceleration: "prefer-software",
   });
 
   const frameDurationUs = Math.round(1_000_000 / processFps);
