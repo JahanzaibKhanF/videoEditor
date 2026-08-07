@@ -11,10 +11,9 @@ import BlurRangeSlider from "./BlurRangeSlider";
 import ImagesRangeSlider from "./ImagesRangeSlider";
 import TextRangeSlider from "./TextRangeSlider";
 import VideoClipsRangeSlider from "./VideoClipsRangeSlider";
-import AudioRangeSlider from "./AudioRangeSlider";
 import { LayerType } from "../../types/types";
 
-const DEFAULT_ORDER: LayerType[] = ["video","audio","image","text","blur"];
+const DEFAULT_ORDER: LayerType[] = ["video","image","text","blur"];
 export const ROW_H = 36;
 export const ROW_GAP = 3;
 
@@ -38,15 +37,20 @@ export default function Layers() {
   // (no direct timeline manipulation while a template is active).
   if (activeTemplate) return null;
 
-  // Sort descending so highest zIndex (text/blur) appears at TOP of timeline
+  // Sort descending so highest zIndex (text/blur) appears at TOP of timeline.
+  // "audio" is filtered out here even if an older saved project's
+  // layerOrder still has it — audio no longer has its own top-level block
+  // (see VideoClipsRangeSlider), it renders paired directly under its own
+  // clip's video row instead, so it can't be independently reordered
+  // relative to "video" as a whole anymore.
   const order = (layerOrder.length > 0
-    ? [...layerOrder].sort((a, b) => b.zIndex - a.zIndex).map(l => l.type)
+    ? [...layerOrder].sort((a, b) => b.zIndex - a.zIndex).map(l => l.type).filter(t => t !== "audio")
     : [...DEFAULT_ORDER].reverse()) as LayerType[];
   const has: Record<LayerType, boolean> = {
     blur:  blursDetails.length > 0,
     text:  textsDetails.length > 0,
     image: imagesDetails.length > 0,
-    audio: audioDetails.length > 0,
+    audio: false, // never its own block — see above
     video: clipsDetails.length > 0,
   };
 
@@ -57,18 +61,20 @@ export default function Layers() {
       {active.map(type => {
         // Every layer type stacks one sub-row per item internally (see
         // TextRangeSlider/ImagesRangeSlider/BlurRangeSlider/
-        // VideoClipsRangeSlider/AudioRangeSlider), but this row wrapper
-        // used to always allocate a single fixed ROW_H for text/image/blur
-        // regardless of how many items existed — with 2+ items of the same
-        // type, the extra sub-rows overflowed the fixed-height wrapper and
-        // visually overlapped whichever row came next. Text/image/blur
-        // items are 28px each with a 3px gap (not ROW_H, which is what
-        // video/audio actually use) — match that exactly here.
+        // VideoClipsRangeSlider), but this row wrapper used to always
+        // allocate a single fixed ROW_H for text/image/blur regardless of
+        // how many items existed — with 2+ items of the same type, the
+        // extra sub-rows overflowed the fixed-height wrapper and visually
+        // overlapped whichever row came next. Text/image/blur items are
+        // 28px each with a 3px gap (not ROW_H, which is what video/audio
+        // actually use) — match that exactly here.
         const ITEM_H = 28, ITEM_GAP = 3;
+        // "video" block height must include each clip's own row PLUS one
+        // row per paired audio track rendered directly beneath it (see
+        // VideoClipsRangeSlider) — no longer just clipsDetails.length rows.
+        const videoBlockRows = clipsDetails.length + audioDetails.length;
         const h = type === "video"
-          ? Math.max(ROW_H, clipsDetails.length * (ROW_H + ROW_GAP) - ROW_GAP)
-          : type === "audio"
-          ? Math.max(ROW_H, audioDetails.length * (ROW_H + ROW_GAP) - ROW_GAP)
+          ? Math.max(ROW_H, videoBlockRows * (ROW_H + ROW_GAP) - ROW_GAP)
           : type === "text"
           ? Math.max(ROW_H, textsDetails.length * (ITEM_H + ITEM_GAP) - ITEM_GAP)
           : type === "image"
@@ -80,7 +86,6 @@ export default function Layers() {
             {type === "blur"  && <BlurRangeSlider />}
             {type === "text"  && <TextRangeSlider />}
             {type === "image" && <ImagesRangeSlider />}
-            {type === "audio" && <AudioRangeSlider />}
             {type === "video" && <VideoClipsRangeSlider />}
           </div>
         );
