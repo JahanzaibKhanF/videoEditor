@@ -13,7 +13,7 @@ import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
 import TemplatesPanel from "./TemplatesPanel";
 import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
-import BackgroundRemovalModal from "./BackgroundRemovalModal";
+import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
 import { useLocalMediaFolder, LocalMediaFile } from "../../hooks/useLocalMediaFolder";
 import type { Template } from "../../utils/templates";
 
@@ -28,7 +28,6 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
 
   const localFolder = useLocalMediaFolder();
   const [showLocalFolder, setShowLocalFolder] = useState(false);
-  const [bgRemovalOpen, setBgRemovalOpen] = useState(false);
 
   // Route templates tab directly to TemplatesPanel
   if (activeTab === "templates") return <TemplatesPanel initialTemplate={pendingTemplate} />;
@@ -413,10 +412,6 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
             })}
         </div>
       </div>
-
-      {bgRemovalOpen && selectedClip && (
-        <BackgroundRemovalModal clip={selectedClip} onClose={() => setBgRemovalOpen(false)} />
-      )}
     </div>
   );
   }
@@ -436,32 +431,14 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
-          <button
-            onClick={() => selectedClip && setBgRemovalOpen(true)}
-            disabled={!selectedClip}
-            className="w-full flex items-center gap-3 p-4 rounded-xl text-left transition-transform enabled:hover:scale-[1.01] disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "linear-gradient(135deg,#8B5CFF 0%,#4C8CFF 100%)" }}
-          >
-            <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0 relative">
-              <Scissors size={20} color="white" />
-              <span className="absolute -top-1.5 -right-1.5 text-[7.5px] font-black bg-white text-signal rounded-full px-1.5 py-px leading-tight">AI</span>
-            </div>
-            <div>
-              <div className="text-[14px] font-bold text-white">Remove Background</div>
-              <div className="text-[11px] text-white/75">Cut out the subject — real-time preview, cancel anytime</div>
-            </div>
-          </button>
-
-          {!selectedClip && (
+          {selectedClip ? (
+            <BackgroundRemovalPanel clip={selectedClip} />
+          ) : (
             <div className="text-[11.5px] text-ink-faint italic text-center py-8 px-3">
               Tap a video clip on the timeline, then come back here.
             </div>
           )}
         </div>
-
-        {bgRemovalOpen && selectedClip && (
-          <BackgroundRemovalModal clip={selectedClip} onClose={() => setBgRemovalOpen(false)} />
-        )}
       </div>
     );
   }
