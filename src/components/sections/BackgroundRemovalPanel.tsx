@@ -110,6 +110,23 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Big colorful header card — mirrors the old tab's entry button, now
+          living permanently at the top of the panel instead of gating a
+          modal behind it. */}
+      {status === "choosing" && (
+        <div className="flex items-center gap-3 p-4 rounded-xl"
+          style={{ background: "linear-gradient(135deg,#8B5CFF 0%,#4C8CFF 100%)" }}>
+          <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0 relative">
+            <Scissors size={20} color="white" />
+            <span className="absolute -top-1.5 -right-1.5 text-[7.5px] font-black bg-white text-signal rounded-full px-1.5 py-px leading-tight">AI</span>
+          </div>
+          <div>
+            <div className="text-[14px] font-bold text-white">Remove Background</div>
+            <div className="text-[11px] text-white/75">Cut out the subject — live preview, cancel anytime</div>
+          </div>
+        </div>
+      )}
+
       {/* Live preview */}
       <div className="rounded-xl overflow-hidden aspect-video relative"
         style={{ background: "repeating-conic-gradient(#2a2a38 0% 25%, #1c1c26 0% 50%) 50% / 16px 16px" }}>
