@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { ClipDetails } from "../../types/types";
-import { removeClipBackground } from "../../utils/backgroundRemoval";
-import { Scissors, Loader2, CheckCircle2, RotateCcw } from "@/utils/icons";
+import { removeClipBackground, checkAlphaCapability } from "../../utils/backgroundRemoval";
+import { Scissors, Loader2, CheckCircle2, RotateCcw, Zap, Gem, AlertTriangle, Eye, Ban } from "@/utils/icons";
 
 /**
  * Inline sidebar version of background removal — this used to be a
@@ -23,6 +23,19 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
   const [label, setLabel] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+
+  // Checked once up front, not just discovered after the user hits Start —
+  // "no alpha-capable VideoEncoder" is a real browser/device limitation
+  // (Firefox/Safari and most mobile browsers can't do this at all), so we
+  // probe for it immediately and show a clear, actionable card instead of
+  // letting people run the model then hit a wall at the encode step.
+  const [alphaSupport, setAlphaSupport] = useState<"checking" | "supported" | "unsupported">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    checkAlphaCapability().then(ok => { if (!cancelled) setAlphaSupport(ok ? "supported" : "unsupported"); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Re-arm to "choosing" whenever the selected clip changes, so leftover
   // progress/result from a previous clip never bleeds into this one.
@@ -108,21 +121,48 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
     setResultUrl(null);
   };
 
+  const chip = (Icon: any, text: string) => (
+    <div className="flex items-center gap-1.5 bg-white/15 rounded-full px-2.5 py-1">
+      <Icon size={10} color="white" />
+      <span className="text-[9.5px] font-semibold text-white/90">{text}</span>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      {/* Big colorful header card — mirrors the old tab's entry button, now
+      {/* Big colorful header — mirrors the old tab's entry button, now
           living permanently at the top of the panel instead of gating a
           modal behind it. */}
       {status === "choosing" && (
-        <div className="flex items-center gap-3 p-4 rounded-xl"
-          style={{ background: "linear-gradient(135deg,#8B5CFF 0%,#4C8CFF 100%)" }}>
-          <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0 relative">
-            <Scissors size={20} color="white" />
-            <span className="absolute -top-1.5 -right-1.5 text-[7.5px] font-black bg-white text-signal rounded-full px-1.5 py-px leading-tight">AI</span>
+        <div className="rounded-xl p-4 relative overflow-hidden"
+          style={{ background: "linear-gradient(135deg,#8B5CFF 0%,#4C8CFF 60%,#33D8A0 100%)" }}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0 relative">
+              <Scissors size={20} color="white" />
+              <span className="absolute -top-1.5 -right-1.5 text-[7.5px] font-black bg-white text-signal rounded-full px-1.5 py-px leading-tight">AI</span>
+            </div>
+            <div>
+              <div className="text-[14.5px] font-bold text-white">Remove Background</div>
+              <div className="text-[11px] text-white/80">Cut out the subject on this clip</div>
+            </div>
           </div>
-          <div>
-            <div className="text-[14px] font-bold text-white">Remove Background</div>
-            <div className="text-[11px] text-white/75">Cut out the subject — live preview, cancel anytime</div>
+          <div className="flex flex-wrap gap-1.5">
+            {chip(Eye, "Live preview")}
+            {chip(Ban, "Cancel anytime")}
+            {chip(CheckCircle2, "Real transparency")}
+          </div>
+        </div>
+      )}
+
+      {/* Browser capability warning — shown up front, not just after a
+          failed attempt, so the user isn't left guessing at a console error. */}
+      {status === "choosing" && alphaSupport === "unsupported" && (
+        <div className="flex items-start gap-2 rounded-lg bg-danger/10 border border-danger/30 px-3 py-2.5">
+          <AlertTriangle size={14} className="text-danger flex-shrink-0 mt-0.5" />
+          <div className="text-[11px] text-danger leading-snug">
+            <span className="font-bold">Not supported in this browser.</span> Transparent-video encoding needs a
+            desktop Chrome or Edge (latest version) — it doesn't work in Firefox, Safari, or most mobile browsers.
+            This is a browser/device limitation, not a bug in the app.
           </div>
         </div>
       )}
@@ -154,15 +194,16 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
       {status === "running" && (
         <div>
           <div className="h-1.5 rounded-full bg-studio-void overflow-hidden">
-            <div className="h-full bg-signal transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div className="h-full transition-all" style={{ width: `${Math.round(progress * 100)}%`, background: "linear-gradient(90deg,#8B5CFF,#4C8CFF)" }} />
           </div>
           <div className="text-[10.5px] text-ink-faint text-right mt-1">{Math.round(progress * 100)}%</div>
         </div>
       )}
 
       {status === "error" && (
-        <div className="rounded-lg bg-danger/10 border border-danger/30 px-3 py-2 text-[11.5px] text-danger">
-          {errorMsg}
+        <div className="flex items-start gap-2 rounded-lg bg-danger/10 border border-danger/30 px-3 py-2.5">
+          <AlertTriangle size={14} className="text-danger flex-shrink-0 mt-0.5" />
+          <div className="text-[11.5px] text-danger leading-snug">{errorMsg}</div>
         </div>
       )}
       {status === "cancelled" && (
@@ -171,33 +212,37 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
         </div>
       )}
 
-      {/* Quality choice (only before starting) */}
+      {/* Quality choice (only before starting) — colorful cards instead of
+          plain toggle buttons */}
       {status === "choosing" && (
         <div>
           <div className="text-[11px] font-semibold text-ink-secondary mb-1.5">Quality</div>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setQuality("fast")}
-              className={`py-2 rounded-lg border text-[12px] font-bold transition-colors ${quality === "fast" ? "border-signal bg-signal/10 text-signal" : "border-studio-border text-ink-secondary hover:bg-studio-hover"}`}>
-              Fast
+              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "fast" ? "ring-2 ring-signal" : "opacity-70 hover:opacity-100"}`}
+              style={{ background: "linear-gradient(135deg,#4C4C5E,#2E2E3A)" }}>
+              <Zap size={15} className="text-white" />
+              <span className="text-[12px] font-bold text-white">Fast</span>
+              <span className="text-[9.5px] text-white/60">Quick cutout, good for most clips</span>
             </button>
             <button onClick={() => setQuality("quality")}
-              className={`py-2 rounded-lg border text-[12px] font-bold transition-colors ${quality === "quality" ? "border-signal bg-signal/10 text-signal" : "border-studio-border text-ink-secondary hover:bg-studio-hover"}`}>
-              Perfect
+              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "quality" ? "ring-2 ring-signal" : "opacity-70 hover:opacity-100"}`}
+              style={{ background: "linear-gradient(135deg,#8B5CFF,#4C8CFF)" }}>
+              <Gem size={15} className="text-white" />
+              <span className="text-[12px] font-bold text-white">Perfect</span>
+              <span className="text-[9.5px] text-white/70">Cleaner edges, slower</span>
             </button>
           </div>
-          <p className="text-[10.5px] text-ink-faint mt-1.5">
-            "Perfect" uses the full-precision model for cleaner edges (hair, fine detail) at the cost of noticeably slower processing.
-          </p>
         </div>
       )}
 
       {/* Actions */}
       <div className="flex gap-2">
         {status === "choosing" && (
-          <button onClick={start}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all"
+          <button onClick={start} disabled={alphaSupport !== "supported"}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(135deg,#8B5CFF,#A47CFF)" }}>
-            <Scissors size={13} /> Start
+            {alphaSupport === "checking" ? <><Loader2 size={13} className="animate-spin" /> Checking browser…</> : <><Scissors size={13} /> Start</>}
           </button>
         )}
         {status === "running" && (
