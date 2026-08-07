@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { ClipDetails } from "../../types/types";
-import { removeClipBackground, checkAlphaCapability } from "../../utils/backgroundRemoval";
+import { removeClipBackground, checkAlphaCapability, AlphaCapabilityResult } from "../../utils/backgroundRemoval";
 import { Scissors, Loader2, CheckCircle2, RotateCcw, Zap, Gem, AlertTriangle, Eye, Ban } from "@/utils/icons";
 
 /**
@@ -29,13 +29,14 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
   // (Firefox/Safari and most mobile browsers can't do this at all), so we
   // probe for it immediately and show a clear, actionable card instead of
   // letting people run the model then hit a wall at the encode step.
-  const [alphaSupport, setAlphaSupport] = useState<"checking" | "supported" | "unsupported">("checking");
+  const [alphaCheck, setAlphaCheck] = useState<AlphaCapabilityResult | { supported: undefined }>({ supported: undefined });
 
-  useEffect(() => {
-    let cancelled = false;
-    checkAlphaCapability().then(ok => { if (!cancelled) setAlphaSupport(ok ? "supported" : "unsupported"); });
-    return () => { cancelled = true; };
-  }, []);
+  const runAlphaCheck = () => {
+    setAlphaCheck({ supported: undefined });
+    checkAlphaCapability().then(setAlphaCheck);
+  };
+
+  useEffect(() => { runAlphaCheck(); }, []);
 
   // Re-arm to "choosing" whenever the selected clip changes, so leftover
   // progress/result from a previous clip never bleeds into this one.
@@ -156,14 +157,27 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
 
       {/* Browser capability warning — shown up front, not just after a
           failed attempt, so the user isn't left guessing at a console error. */}
-      {status === "choosing" && alphaSupport === "unsupported" && (
-        <div className="flex items-start gap-2 rounded-lg bg-danger/10 border border-danger/30 px-3 py-2.5">
-          <AlertTriangle size={14} className="text-danger flex-shrink-0 mt-0.5" />
-          <div className="text-[11px] text-danger leading-snug">
-            <span className="font-bold">Not supported in this browser.</span> Transparent-video encoding needs a
-            desktop Chrome or Edge (latest version) — it doesn't work in Firefox, Safari, or most mobile browsers.
-            This is a browser/device limitation, not a bug in the app.
+      {status === "choosing" && alphaCheck.supported === false && (
+        <div className="rounded-lg bg-danger/10 border border-danger/30 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={14} className="text-danger flex-shrink-0 mt-0.5" />
+            <div className="text-[11px] text-danger leading-snug">
+              <span className="font-bold">
+                {alphaCheck.reason === "no-webcodecs"
+                  ? "This browser doesn't support WebCodecs at all."
+                  : "This browser can't encode a transparent video."}
+              </span>{" "}
+              This is a browser/device limitation, not a bug in the app.
+            </div>
           </div>
+          <ul className="text-[10.5px] text-danger/90 leading-snug mt-2 ml-5 list-disc space-y-0.5">
+            <li>Make sure you're on desktop Chrome or Edge, latest version</li>
+            <li>Not supported on Firefox, Safari, or most mobile browsers</li>
+            <li>Some Linux/older-GPU setups lack this even in Chrome — check <span className="font-mono">chrome://gpu</span> for "Video Encode"</li>
+          </ul>
+          <button onClick={runAlphaCheck} className="mt-2 text-[10.5px] font-bold text-danger underline hover:no-underline">
+            Check again
+          </button>
         </div>
       )}
 
@@ -219,14 +233,14 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
           <div className="text-[11px] font-semibold text-ink-secondary mb-1.5">Quality</div>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setQuality("fast")}
-              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "fast" ? "ring-2 ring-signal" : "opacity-70 hover:opacity-100"}`}
+              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "fast" ? "ring-2 ring-signal" : "hover:brightness-110"}`}
               style={{ background: "linear-gradient(135deg,#4C4C5E,#2E2E3A)" }}>
               <Zap size={15} className="text-white" />
               <span className="text-[12px] font-bold text-white">Fast</span>
-              <span className="text-[9.5px] text-white/60">Quick cutout, good for most clips</span>
+              <span className="text-[9.5px] text-white/70">Quick cutout, good for most clips</span>
             </button>
             <button onClick={() => setQuality("quality")}
-              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "quality" ? "ring-2 ring-signal" : "opacity-70 hover:opacity-100"}`}
+              className={`flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all ${quality === "quality" ? "ring-2 ring-signal" : "hover:brightness-110"}`}
               style={{ background: "linear-gradient(135deg,#8B5CFF,#4C8CFF)" }}>
               <Gem size={15} className="text-white" />
               <span className="text-[12px] font-bold text-white">Perfect</span>
@@ -239,10 +253,10 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
       {/* Actions */}
       <div className="flex gap-2">
         {status === "choosing" && (
-          <button onClick={start} disabled={alphaSupport !== "supported"}
+          <button onClick={start} disabled={alphaCheck.supported !== true}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(135deg,#8B5CFF,#A47CFF)" }}>
-            {alphaSupport === "checking" ? <><Loader2 size={13} className="animate-spin" /> Checking browser…</> : <><Scissors size={13} /> Start</>}
+            {alphaCheck.supported === undefined ? <><Loader2 size={13} className="animate-spin" /> Checking browser…</> : <><Scissors size={13} /> Start</>}
           </button>
         )}
         {status === "running" && (

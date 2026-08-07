@@ -58,24 +58,49 @@ async function pickAlphaEncoderConfig(width: number, height: number, fps: number
   // "prefer-software" is the real fix on most machines (see comment above),
   // but on some browser/driver combos even THAT reports unsupported for
   // alpha even though a working encoder exists — so instead of giving up
-  // immediately, also try "no-preference" (let the browser pick) and
-  // finally no hint at all, in that order, before actually failing.
-  const hwModes: (HardwareAcceleration | undefined)[] = ["prefer-software", "no-preference", undefined];
+  // immediately, also try "no-preference" and "prefer-hardware" (let the
+  // browser pick, or take whatever it's already using) and finally no hint
+  // at all, in that order, before actually failing.
+  const hwModes: (HardwareAcceleration | undefined)[] = ["prefer-software", "no-preference", "prefer-hardware", undefined];
   for (const hw of hwModes) {
     for (const c of codecs) {
       try {
         const support = await VideoEncoder.isConfigSupported({
           codec: c.codec, width, height, framerate: fps, alpha: "keep",
+          // Matching the bitrate/bitrateMode actually used by configure()
+          // below (see encoder.configure call) — an unset bitrate here
+          // probes a DIFFERENT config than the one that's really used,
+          // and some Chromium builds report supported/unsupported
+          // inconsistently between the two.
+          bitrate: 8_000_000, bitrateMode: "constant",
           ...(hw ? { hardwareAcceleration: hw } : {}),
         });
         if (support.supported) return c;
       } catch { /* try the next candidate */ }
     }
   }
-  throw new Error(
-    "This browser/device can't encode a transparent video. This is a browser limitation, not a bug in the app — " +
-    "try the latest Chrome or Edge on desktop. It's not supported on Firefox or Safari, or in most mobile browsers."
-  );
+  throw new Error(ALPHA_UNSUPPORTED_MESSAGE);
+}
+
+const ALPHA_UNSUPPORTED_MESSAGE =
+  "This browser/device can't encode a transparent video. This is a browser limitation, not a bug in the app — " +
+  "try the latest Chrome or Edge on desktop. It's not supported on Firefox or Safari, or in most mobile browsers.";
+
+export type AlphaCapabilityResult =
+  | { supported: true }
+  | { supported: false; reason: "no-webcodecs" | "no-alpha-encoder" };
+
+export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
+  if (typeof VideoEncoder === "undefined") return { supported: false, reason: "no-webcodecs" };
+  try {
+    // Cheap probe using a standard resolution — codec/alpha support doesn't
+    // vary by resolution in practice, so this is representative without
+    // needing the real clip loaded yet.
+    await pickAlphaEncoderConfig(640, 360, 12);
+    return { supported: true };
+  } catch {
+    return { supported: false, reason: "no-alpha-encoder" };
+  }
 }
 
 /**
@@ -112,19 +137,6 @@ async function pickAlphaEncoderConfig(width: number, height: number, fps: number
  * WebM via `webm-muxer`, which also means the file gets correct
  * Duration/Cues from the start — no post-hoc duration-patching needed.
  */
-export async function checkAlphaCapability(): Promise<boolean> {
-  if (typeof VideoEncoder === "undefined") return false;
-  try {
-    // Cheap probe using a standard resolution — codec/alpha support doesn't
-    // vary by resolution in practice, so this is representative without
-    // needing the real clip loaded yet.
-    await pickAlphaEncoderConfig(640, 360, 12);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRemovalResult> {
   const { clip, quality, processFps = 12, onProgress, onFramePreview, signal } = opts;
 
