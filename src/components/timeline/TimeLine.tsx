@@ -248,13 +248,17 @@ function Ruler({ totalTime }: { totalTime: number }) {
 // ── LabelColumn ────────────────────────────────────────────────────────────
 function LabelColumn() {
   const {
-    blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails,
+    blursDetails, textsDetails, imagesDetails, clipsDetails, setClipsDetails, audioDetails,
     layerOrder, setLayerOrder, activeTemplate,
   } = useAppDetailsContext();
 
   if (activeTemplate) return null;
 
-  const DEFAULT: LayerType[] = ["video","audio","image","text","blur"];
+  // "audio" isn't in here anymore — it's no longer an independently
+  // orderable layer type. Each audio track now always renders paired
+  // directly under its own clip's video row (see the "video" branch
+  // below), so reordering happens per clip-pair, not per whole-audio-block.
+  const DEFAULT: LayerType[] = ["video","image","text","blur"];
   const CFG = {
     blur:  { label: "Blur",  color: "#33D8A0" },
     text:  { label: "Text",  color: "#8B5CFF" },
@@ -263,16 +267,21 @@ function LabelColumn() {
     video: { label: "Video", color: "#FFB648" },
   } as const;
 
-  // Sort descending by zIndex (same as Layers.tsx) so labels align with tracks
+  // Sort descending by zIndex (same as Layers.tsx) so labels align with
+  // tracks. Filter out "audio" in case an older saved project's layerOrder
+  // still has it from before this change.
   const order = (layerOrder.length > 0
-    ? [...layerOrder].sort((a, b) => b.zIndex - a.zIndex).map(l => l.type)
+    ? [...layerOrder].sort((a, b) => b.zIndex - a.zIndex).map(l => l.type).filter(t => t !== "audio")
     : [...DEFAULT].reverse()) as LayerType[];
   const counts: Record<LayerType, number> = {
     blur: blursDetails.length, text: textsDetails.length,
-    image: imagesDetails.length, audio: audioDetails.length, video: clipsDetails.length,
+    image: imagesDetails.length, audio: 0, video: clipsDetails.length,
   };
   const active = order.filter(t => counts[t] > 0);
 
+  // Whole-layer-type reorder (video block vs image vs text vs blur) —
+  // unchanged from before, still used for everything except per-clip audio
+  // pairing, which is handled by moveClip below instead.
   const move = (type: LayerType, dir: "up" | "down") => {
     setLayerOrder(prev => {
       const types = prev.map(l => l.type);
@@ -286,20 +295,56 @@ function LabelColumn() {
     });
   };
 
-  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; isFirst: boolean; isLast: boolean }[] = [];
+  // Reorders one clip (and its paired audio, which just follows — it's
+  // positioned by looking up `clipId` against wherever its clip ends up,
+  // not by any zIndex of its own) relative to the other clips, by simply
+  // swapping zIndex with whichever clip is adjacent in the current
+  // (ascending-zIndex) row order. This is the same ordering
+  // VideoClipsRangeSlider/CanvasEngine already sort by, so reordering here
+  // also reorders on-canvas stacking for overlapping clips — consistent
+  // with "row order = stacking order" everywhere else in the app.
+  const moveClip = (clipId: string, dir: "up" | "down") => {
+    setClipsDetails(prev => {
+      const sorted = [...prev].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+      const i = sorted.findIndex(c => c.id === clipId);
+      if (i === -1) return prev;
+      const j = dir === "up" ? i - 1 : i + 1;
+      if (j < 0 || j >= sorted.length) return prev;
+      const zi = sorted[i].zIndex ?? i;
+      const zj = sorted[j].zIndex ?? j;
+      return prev.map(c => {
+        if (c.id === sorted[i].id) return { ...c, zIndex: zj };
+        if (c.id === sorted[j].id) return { ...c, zIndex: zi };
+        return c;
+      });
+    });
+  };
+
+  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; isFirst: boolean; isLast: boolean; clipId?: string; clipIsFirst?: boolean; clipIsLast?: boolean }[] = [];
   active.forEach((type, layerIdx) => {
     const isFirst = layerIdx === 0;
     const isLast  = layerIdx === active.length - 1;
     if (type === "video") {
       const sorted = [...clipsDetails].sort((a,b) => (a.zIndex??0)-(b.zIndex??0));
       sorted.forEach((clip, ci) => {
+        // `sourceFileName` is the real original filename (e.g. "beach.mp4");
+        // `name` is often just an internal synthetic id (e.g. "video1" or
+        // "video1712345_0") used elsewhere to group/match clips against the
+        // `videos` asset list — showing THAT as the label is why every clip
+        // used to display an id-looking string instead of its real name.
         rows.push({ key: `video-${clip.id}`, type, label: "Video", color: CFG.video.color,
-          sub: clip.name?.slice(0,10), isFirst: isFirst && ci === 0, isLast: isLast && ci === sorted.length - 1 });
-      });
-    } else if (type === "audio") {
-      audioDetails.forEach((track, ti) => {
-        rows.push({ key: `audio-${track.id}`, type, label: "Audio", color: CFG.audio.color,
-          sub: track.name?.slice(0,10), isFirst: isFirst && ti === 0, isLast: isLast && ti === audioDetails.length - 1 });
+          sub: (clip.sourceFileName ?? clip.name)?.slice(0,10),
+          isFirst: isFirst && ci === 0, isLast: isLast && ci === sorted.length - 1,
+          clipId: clip.id, clipIsFirst: ci === 0, clipIsLast: ci === sorted.length - 1 });
+        // This clip's own audio row(s) go immediately after it — no ▲▼ of
+        // their own; dragging/reordering the clip above carries them along
+        // automatically since they're always looked up by clipId, never by
+        // their own position.
+        audioDetails.filter(a => a.clipId === clip.id).forEach(track => {
+          const label = clip.sourceFileName ?? clip.name;
+          rows.push({ key: `audio-${track.id}`, type: "audio", label: "Audio", color: CFG.audio.color,
+            sub: label?.slice(0,10), isFirst: false, isLast: false });
+        });
       });
     } else {
       rows.push({ key: type, type, label: CFG[type].label, color: CFG[type].color, isFirst, isLast });
@@ -321,9 +366,18 @@ function LabelColumn() {
             <div style={{ fontSize: 10, fontWeight: 800, color: row.color, lineHeight: 1.1 }}>{row.label}</div>
             {row.sub && <div style={{ fontSize: 8.5, color: "rgba(100,100,100,.8)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
           </div>
-          {/* Show ▲▼ only on first row of each layer type */}
-          {(!row.key.includes("video-") || row.key === `video-${clipsDetails[0]?.id}`) &&
-           (!row.key.includes("audio-") || row.key === `audio-${audioDetails[0]?.id}`) && (
+          {/* Per-clip pair ▲▼ — every video row gets its own (moves that
+              clip + its audio relative to other clips); paired audio rows
+              get none. Non-video row types keep the old whole-block ▲▼,
+              shown only on the first row of that type. */}
+          {row.type === "video" && row.clipId ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <button onClick={(e) => { e.stopPropagation(); moveClip(row.clipId!, "up"); }} disabled={row.clipIsFirst}
+                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.clipIsFirst ? "default" : "pointer", opacity: row.clipIsFirst ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▲</button>
+              <button onClick={(e) => { e.stopPropagation(); moveClip(row.clipId!, "down"); }} disabled={row.clipIsLast}
+                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.clipIsLast ? "default" : "pointer", opacity: row.clipIsLast ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▼</button>
+            </div>
+          ) : row.type !== "video" && row.type !== "audio" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <button onClick={(e) => { e.stopPropagation(); move(row.type, "up"); }} disabled={row.isFirst}
                 style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.isFirst ? "default" : "pointer", opacity: row.isFirst ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▲</button>
