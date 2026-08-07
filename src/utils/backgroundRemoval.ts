@@ -67,12 +67,6 @@ async function pickAlphaEncoderConfig(width: number, height: number, fps: number
       try {
         const support = await VideoEncoder.isConfigSupported({
           codec: c.codec, width, height, framerate: fps, alpha: "keep",
-          // Matching the bitrate/bitrateMode actually used by configure()
-          // below (see encoder.configure call) — an unset bitrate here
-          // probes a DIFFERENT config than the one that's really used,
-          // and some Chromium builds report supported/unsupported
-          // inconsistently between the two.
-          bitrate: 8_000_000, bitrateMode: "constant",
           ...(hw ? { hardwareAcceleration: hw } : {}),
         });
         if (support.supported) return c;

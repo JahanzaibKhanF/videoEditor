@@ -155,8 +155,13 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
         </div>
       )}
 
-      {/* Browser capability warning — shown up front, not just after a
-          failed attempt, so the user isn't left guessing at a console error. */}
+      {/* Browser capability warning — informational only. It's shown up
+          front so the user isn't flying blind, but it does NOT block
+          Start: this quick probe can be stricter than what the real
+          encoder actually accepts on some browsers, and the real attempt
+          is the only fully authoritative answer. Blocking on the probe
+          alone risks refusing to even try on a setup that would have
+          worked. */}
       {status === "choosing" && alphaCheck.supported === false && (
         <div className="rounded-lg bg-danger/10 border border-danger/30 px-3 py-2.5">
           <div className="flex items-start gap-2">
@@ -165,13 +170,13 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
               <span className="font-bold">
                 {alphaCheck.reason === "no-webcodecs"
                   ? "This browser doesn't support WebCodecs at all."
-                  : "This browser can't encode a transparent video."}
+                  : "This browser might not support transparent-video encoding."}
               </span>{" "}
-              This is a browser/device limitation, not a bug in the app.
+              You can still try — this is just a heads-up, not a hard block.
             </div>
           </div>
           <ul className="text-[10.5px] text-danger/90 leading-snug mt-2 ml-5 list-disc space-y-0.5">
-            <li>Make sure you're on desktop Chrome or Edge, latest version</li>
+            <li>Works best on desktop Chrome or Edge, latest version</li>
             <li>Not supported on Firefox, Safari, or most mobile browsers</li>
             <li>Some Linux/older-GPU setups lack this even in Chrome — check <span className="font-mono">chrome://gpu</span> for "Video Encode"</li>
           </ul>
@@ -253,10 +258,10 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
       {/* Actions */}
       <div className="flex gap-2">
         {status === "choosing" && (
-          <button onClick={start} disabled={alphaCheck.supported !== true}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          <button onClick={start}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all"
             style={{ background: "linear-gradient(135deg,#8B5CFF,#A47CFF)" }}>
-            {alphaCheck.supported === undefined ? <><Loader2 size={13} className="animate-spin" /> Checking browser…</> : <><Scissors size={13} /> Start</>}
+            <Scissors size={13} /> Start
           </button>
         )}
         {status === "running" && (
