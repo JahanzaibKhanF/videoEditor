@@ -112,6 +112,19 @@ async function pickAlphaEncoderConfig(width: number, height: number, fps: number
  * WebM via `webm-muxer`, which also means the file gets correct
  * Duration/Cues from the start — no post-hoc duration-patching needed.
  */
+export async function checkAlphaCapability(): Promise<boolean> {
+  if (typeof VideoEncoder === "undefined") return false;
+  try {
+    // Cheap probe using a standard resolution — codec/alpha support doesn't
+    // vary by resolution in practice, so this is representative without
+    // needing the real clip loaded yet.
+    await pickAlphaEncoderConfig(640, 360, 12);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRemovalResult> {
   const { clip, quality, processFps = 12, onProgress, onFramePreview, signal } = opts;
 
