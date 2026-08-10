@@ -69,10 +69,18 @@ export default function Layers() {
         // 28px each with a 3px gap (not ROW_H, which is what video/audio
         // actually use) — match that exactly here.
         const ITEM_H = 28, ITEM_GAP = 3;
-        // "video" block height must include each clip's own row PLUS one
-        // row per paired audio track rendered directly beneath it (see
-        // VideoClipsRangeSlider) — no longer just clipsDetails.length rows.
-        const videoBlockRows = clipsDetails.length + audioDetails.length;
+        // "video" block height = one row per TRACK (clip.zIndex group, see
+        // VideoClipsRangeSlider) — multiple non-overlapping clips can share
+        // a track/row now, so this is no longer clipsDetails.length — PLUS
+        // one extra row for each track that has at least one paired audio
+        // clip beneath it.
+        const videoTrackIds = new Set(clipsDetails.map(c => c.zIndex ?? 0));
+        let tracksWithAudio = 0;
+        videoTrackIds.forEach(z => {
+          const hasAudio = clipsDetails.some(c => (c.zIndex ?? 0) === z && audioDetails.some(a => a.clipId === c.id));
+          if (hasAudio) tracksWithAudio += 1;
+        });
+        const videoBlockRows = videoTrackIds.size + tracksWithAudio;
         const h = type === "video"
           ? Math.max(ROW_H, videoBlockRows * (ROW_H + ROW_GAP) - ROW_GAP)
           : type === "text"

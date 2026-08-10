@@ -67,7 +67,16 @@ export const addClipToTimeline = ({
         scale: 1,
         width,
         height,
-        zIndex: clipsDetails.length, // stack video overlays by order added
+        // All sequentially-imported clips land on the SAME base track
+        // (zIndex 0 = "Video 1") one after another in time, matching every
+        // other NLE's default import behaviour. zIndex here doubles as the
+        // clip's TRACK id (see VideoClipsRangeSlider.tsx) — clips only end
+        // up on a different track when the user explicitly drags/moves one
+        // there. Previously this was `clipsDetails.length`, which gave every
+        // single imported clip its own unique "track" and was the root
+        // cause of the timeline growing a brand-new row per clip (and per
+        // split) instead of laying clips out along one row.
+        zIndex: 0,
       };
 
       setClipsDetails(prev => [...prev, newClip]);

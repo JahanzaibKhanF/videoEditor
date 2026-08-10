@@ -107,8 +107,13 @@ export function compositeFrame(input: CompositeFrameInput) {
         ctx.restore();
       }
     } else if (layerType === "image") {
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
+      // Sort by zIndex so manually-reordered overlays (e.g. a transparent/
+      // background-removed PNG meant to sit above or below another image)
+      // actually draw in the chosen stacking order, instead of always just
+      // drawing in whatever order they happen to sit in the array.
+      const imagesSorted = [...images].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+      for (let i = 0; i < imagesSorted.length; i++) {
+        const img = imagesSorted[i];
         if (t < img.startTime || t > img.endTime) continue;
         const el = imageEls[img.id];
         if (!el) continue;

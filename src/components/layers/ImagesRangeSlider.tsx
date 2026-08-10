@@ -1,6 +1,6 @@
 "use client";
 
-import { MdOutlineAnimation } from "@/utils/icons";
+import { MdOutlineAnimation, ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
@@ -38,6 +38,24 @@ export default function ImagesRangeSlider() {
     const updated = localImages.map(img => img.id === id
       ? { ...img, startTime: Math.max(0, Math.min(newStart, totalTime)), endTime: Math.max(0, Math.min(newEnd, totalTime)) }
       : img);
+    setLocalImages(updated); setImagesDetails(updated);
+  };
+
+  // Reorders which image draws on top — useful for stacking a transparent /
+  // background-removed overlay image above (or below) another image, since
+  // compositeFrame now draws images in zIndex order (see compositeFrame.ts).
+  const moveImageStack = (id: string, dir: "up" | "down") => {
+    const sortedByZ = [...localImages].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+    const i = sortedByZ.findIndex(img => img.id === id);
+    if (i === -1) return;
+    const j = dir === "up" ? i + 1 : i - 1; // "up" = higher zIndex = drawn later = visually on top
+    if (j < 0 || j >= sortedByZ.length) return;
+    const zi = sortedByZ[i].zIndex ?? i, zj = sortedByZ[j].zIndex ?? j;
+    const updated = localImages.map(img => {
+      if (img.id === sortedByZ[i].id) return { ...img, zIndex: zj };
+      if (img.id === sortedByZ[j].id) return { ...img, zIndex: zi };
+      return img;
+    });
     setLocalImages(updated); setImagesDetails(updated);
   };
 
@@ -103,6 +121,25 @@ export default function ImagesRangeSlider() {
               <div className="absolute top-0 left-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-left"); }} />
               <div className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-right"); }} />
             </div>
+            {/* Overlay stacking order — which image/overlay draws on top of
+                which (e.g. a transparent or background-removed PNG meant to
+                sit above the base image/video). Only shown once selected. */}
+            {isSelected && (
+              <div style={{ position: "absolute", right: -18, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 1, zIndex: 15 }}>
+                <button title="Bring forward (draw on top)"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveImageStack(img.id, "up"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronUp size={9} color="white" />
+                </button>
+                <button title="Send backward"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveImageStack(img.id, "down"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronDown size={9} color="white" />
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

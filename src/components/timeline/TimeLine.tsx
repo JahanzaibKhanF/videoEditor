@@ -295,56 +295,57 @@ function LabelColumn() {
     });
   };
 
-  // Reorders one clip (and its paired audio, which just follows — it's
-  // positioned by looking up `clipId` against wherever its clip ends up,
-  // not by any zIndex of its own) relative to the other clips, by simply
-  // swapping zIndex with whichever clip is adjacent in the current
-  // (ascending-zIndex) row order. This is the same ordering
-  // VideoClipsRangeSlider/CanvasEngine already sort by, so reordering here
-  // also reorders on-canvas stacking for overlapping clips — consistent
-  // with "row order = stacking order" everywhere else in the app.
-  const moveClip = (clipId: string, dir: "up" | "down") => {
+  // Reorders an entire TRACK (every clip sharing a zIndex, i.e. one row in
+  // VideoClipsRangeSlider) relative to the other tracks, by swapping zIndex
+  // with whichever track is adjacent in the current (ascending-zIndex) row
+  // order. To move a single clip to a different track instead of its whole
+  // track, use the ▲▼ chevrons that appear on a selected clip chip in
+  // VideoClipsRangeSlider (or drag it up/down there).
+  const moveTrack = (trackZ: number, dir: "up" | "down") => {
     setClipsDetails(prev => {
-      const sorted = [...prev].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-      const i = sorted.findIndex(c => c.id === clipId);
+      const tracks = Array.from(new Set(prev.map(c => c.zIndex ?? 0))).sort((a, b) => a - b);
+      const i = tracks.indexOf(trackZ);
       if (i === -1) return prev;
       const j = dir === "up" ? i - 1 : i + 1;
-      if (j < 0 || j >= sorted.length) return prev;
-      const zi = sorted[i].zIndex ?? i;
-      const zj = sorted[j].zIndex ?? j;
+      if (j < 0 || j >= tracks.length) return prev;
+      const zi = tracks[i], zj = tracks[j];
       return prev.map(c => {
-        if (c.id === sorted[i].id) return { ...c, zIndex: zj };
-        if (c.id === sorted[j].id) return { ...c, zIndex: zi };
+        const z = c.zIndex ?? 0;
+        if (z === zi) return { ...c, zIndex: zj };
+        if (z === zj) return { ...c, zIndex: zi };
         return c;
       });
     });
   };
 
-  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; isFirst: boolean; isLast: boolean; clipId?: string; clipIsFirst?: boolean; clipIsLast?: boolean }[] = [];
+  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; isFirst: boolean; isLast: boolean; trackZ?: number }[] = [];
   active.forEach((type, layerIdx) => {
     const isFirst = layerIdx === 0;
     const isLast  = layerIdx === active.length - 1;
     if (type === "video") {
-      const sorted = [...clipsDetails].sort((a,b) => (a.zIndex??0)-(b.zIndex??0));
-      sorted.forEach((clip, ci) => {
+      // One label row per TRACK (clip.zIndex group), not per clip — several
+      // non-overlapping clips can share a track/row now (sequential imports,
+      // or a split clip's two halves), matching VideoClipsRangeSlider.
+      const trackZs = Array.from(new Set(clipsDetails.map(c => c.zIndex ?? 0))).sort((a, b) => a - b);
+      trackZs.forEach((z, ti) => {
+        const trackClips = clipsDetails.filter(c => (c.zIndex ?? 0) === z).sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0));
         // `sourceFileName` is the real original filename (e.g. "beach.mp4");
-        // `name` is often just an internal synthetic id (e.g. "video1" or
-        // "video1712345_0") used elsewhere to group/match clips against the
-        // `videos` asset list — showing THAT as the label is why every clip
-        // used to display an id-looking string instead of its real name.
-        rows.push({ key: `video-${clip.id}`, type, label: "Video", color: CFG.video.color,
-          sub: (clip.sourceFileName ?? clip.name)?.slice(0,10),
-          isFirst: isFirst && ci === 0, isLast: isLast && ci === sorted.length - 1,
-          clipId: clip.id, clipIsFirst: ci === 0, clipIsLast: ci === sorted.length - 1 });
-        // This clip's own audio row(s) go immediately after it — no ▲▼ of
-        // their own; dragging/reordering the clip above carries them along
-        // automatically since they're always looked up by clipId, never by
-        // their own position.
-        audioDetails.filter(a => a.clipId === clip.id).forEach(track => {
-          const label = clip.sourceFileName ?? clip.name;
-          rows.push({ key: `audio-${track.id}`, type: "audio", label: "Audio", color: CFG.audio.color,
-            sub: label?.slice(0,10), isFirst: false, isLast: false });
-        });
+        // `name` is often just an internal synthetic id used to group/match
+        // clips against the `videos` asset list.
+        const label = trackClips.length === 1
+          ? (trackClips[0].sourceFileName ?? trackClips[0].name)?.slice(0, 10)
+          : `${trackClips.length} clips`;
+        rows.push({ key: `track-${z}`, type, label: "Video", color: CFG.video.color,
+          sub: label, isFirst: isFirst && ti === 0, isLast: isLast && ti === trackZs.length - 1, trackZ: z });
+        // This track's shared audio row goes immediately after it — no ▲▼
+        // of its own; reordering the track above carries its audio along
+        // automatically since it's always looked up by clipId, never by
+        // its own position.
+        const hasAudio = trackClips.some(c => audioDetails.some(a => a.clipId === c.id));
+        if (hasAudio) {
+          rows.push({ key: `audio-track-${z}`, type: "audio", label: "Audio", color: CFG.audio.color,
+            sub: label, isFirst: false, isLast: false });
+        }
       });
     } else {
       rows.push({ key: type, type, label: CFG[type].label, color: CFG[type].color, isFirst, isLast });
@@ -366,16 +367,19 @@ function LabelColumn() {
             <div style={{ fontSize: 10, fontWeight: 800, color: row.color, lineHeight: 1.1 }}>{row.label}</div>
             {row.sub && <div style={{ fontSize: 8.5, color: "rgba(100,100,100,.8)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
           </div>
-          {/* Per-clip pair ▲▼ — every video row gets its own (moves that
-              clip + its audio relative to other clips); paired audio rows
-              get none. Non-video row types keep the old whole-block ▲▼,
-              shown only on the first row of that type. */}
-          {row.type === "video" && row.clipId ? (
+          {/* Per-track ▲▼ — every video row gets its own (moves that whole
+              track + its shared audio relative to other tracks); paired
+              audio rows get none. To move a single clip to a different
+              track, select it in VideoClipsRangeSlider and use the chevrons
+              on the chip (or drag it up/down there). Non-video row types
+              keep the old whole-block ▲▼, shown only on the first row of
+              that type. */}
+          {row.type === "video" && row.trackZ !== undefined ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <button onClick={(e) => { e.stopPropagation(); moveClip(row.clipId!, "up"); }} disabled={row.clipIsFirst}
-                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.clipIsFirst ? "default" : "pointer", opacity: row.clipIsFirst ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▲</button>
-              <button onClick={(e) => { e.stopPropagation(); moveClip(row.clipId!, "down"); }} disabled={row.clipIsLast}
-                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.clipIsLast ? "default" : "pointer", opacity: row.clipIsLast ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▼</button>
+              <button onClick={(e) => { e.stopPropagation(); moveTrack(row.trackZ!, "up"); }} disabled={row.isFirst}
+                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.isFirst ? "default" : "pointer", opacity: row.isFirst ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▲</button>
+              <button onClick={(e) => { e.stopPropagation(); moveTrack(row.trackZ!, "down"); }} disabled={row.isLast}
+                style={{ background: "none", border: "none", padding: "1px 2px", cursor: row.isLast ? "default" : "pointer", opacity: row.isLast ? 0.2 : 0.6, fontSize: 8, lineHeight: 1, color: "inherit" }}>▼</button>
             </div>
           ) : row.type !== "video" && row.type !== "audio" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>

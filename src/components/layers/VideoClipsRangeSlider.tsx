@@ -1,19 +1,76 @@
 "use client";
 
 /**
- * VideoClipsRangeSlider — each clip = its own row.
- * When a clip is moved, its matching audio track moves with it (same delta).
- * When a clip is resized, audio track end is trimmed to match.
+ * VideoClipsRangeSlider — real multi-clip TRACKS.
+ *
+ * `clip.zIndex` doubles as the clip's TRACK id. Every clip sharing the same
+ * zIndex lives on the same horizontal row (same "track"), laid out by time —
+ * exactly like every other NLE (CapCut/Premiere/etc). zIndex is no longer
+ * assumed unique per clip: multiple non-overlapping clips can, and normally
+ * do, share a track (e.g. sequentially-imported clips, or the two halves of
+ * a split clip — see spliteLayer.ts, which copies the original clip's
+ * zIndex onto the new half so it stays on the exact same row/track it was
+ * split from instead of spawning a new one).
+ *
+ * A clip can be moved to a different (existing or brand-new) track two ways:
+ *  - Hold + drag it up/down past half a row's height ("hold and move up/down
+ *    into new tracks").
+ *  - Select it, then use the small ▲▼ chevrons that appear on the chip.
+ * Both call `moveClipToTrack`, which picks the existing adjacent track if
+ * the clip fits there without overlapping anything already on it, or
+ * allocates a brand-new track (using a fractional zIndex slotted between
+ * the two neighbouring tracks, or one beyond the current top/bottom track)
+ * when it doesn't — so a track is only ever created when it's actually
+ * needed, never as separate persisted state.
+ *
+ * Each track's paired audio (this track's clips' own audio, keyed by
+ * clipId) renders as one shared lane directly beneath that track's video
+ * row, so moving a clip to a new track carries its audio along automatically.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import { ROW_H, ROW_GAP } from "./Layers";
 import { transitionOptions } from "../../utils/transitionOtionsConstants";
-import { Shuffle } from "@/utils/icons";
+import { Shuffle, ChevronUp, ChevronDown } from "@/utils/icons";
 import { AudioTrackRow } from "./AudioRangeSlider";
+import { ClipDetails } from "../../types/types";
 
 const MIN_W_PCT = 1;
+
+// Given a clip's own id + its live start/end position, work out which
+// existing track it should land on when moving `dir`, or allocate a new one.
+// `others` is every OTHER clip (never the one being moved).
+function resolveTargetTrack(
+  dir: "up" | "down",
+  curZ: number,
+  sp: number,
+  ep: number,
+  others: ClipDetails[],
+): number {
+  const tracks = Array.from(new Set([...others.map(c => c.zIndex ?? 0), curZ])).sort((a, b) => a - b);
+  const idx = tracks.indexOf(curZ);
+  const overlaps = (z: number) => others.some(c =>
+    (c.zIndex ?? 0) === z && sp < (c.endPosition ?? 0) && ep > (c.startPosition ?? 0)
+  );
+  if (dir === "down") {
+    if (idx < tracks.length - 1) {
+      const cand = tracks[idx + 1];
+      if (!overlaps(cand)) return cand;
+      const beyond = idx + 2 < tracks.length ? tracks[idx + 2] : cand + 1;
+      return (cand + beyond) / 2;
+    }
+    return tracks[idx] + 1;
+  } else {
+    if (idx > 0) {
+      const cand = tracks[idx - 1];
+      if (!overlaps(cand)) return cand;
+      const beyond = idx - 2 >= 0 ? tracks[idx - 2] : cand - 1;
+      return (cand + beyond) / 2;
+    }
+    return tracks[idx] - 1;
+  }
+}
 
 export default function VideoClipsRangeSlider() {
   const {
@@ -21,6 +78,7 @@ export default function VideoClipsRangeSlider() {
     clipsDetails, setClipsDetails,
     audioDetails, setAudioDetails,
     setClipEffects,
+    selectedClipId,
     setSelectedClipId: setCtxSel,
   } = useAppDetailsContext();
 
@@ -49,6 +107,20 @@ export default function VideoClipsRangeSlider() {
     return () => window.removeEventListener("keydown", fn);
   }, [selId, clipsDetails, setClipsDetails, setAudioDetails, setCtxSel]);
 
+  // Move a clip to the next track up/down — used by both the drag gesture
+  // (crossing a row-height threshold) and the chevron buttons on a selected
+  // chip. Always collision-safe: lands on the neighbouring track if there's
+  // room there, otherwise allocates a new one.
+  const moveClipToTrack = (clipId: string, dir: "up" | "down") => {
+    setClipsDetails(prev => {
+      const clip = prev.find(c => c.id === clipId);
+      if (!clip) return prev;
+      const others = prev.filter(c => c.id !== clipId);
+      const targetZ = resolveTargetTrack(dir, clip.zIndex ?? 0, clip.startPosition ?? 0, clip.endPosition ?? 0, others);
+      return prev.map(c => c.id === clipId ? { ...c, zIndex: targetZ } : c);
+    });
+  };
+
   const drag = (e: React.MouseEvent, id: string, type: "move" | "resize-left" | "resize-right") => {
     e.preventDefault(); e.stopPropagation();
     setSelId(id); setCtxSel(id);
@@ -56,9 +128,25 @@ export default function VideoClipsRangeSlider() {
     if (!el || !totalTime) return;
     const tw = el.offsetWidth;
     const startX = e.clientX;
+    let startY = e.clientY;
     const origClip = clipsDetails.find(c => c.id === id)!;
     const origAudio = audioDetails.find(a => a.clipId === id);
     const minW = (MIN_W_PCT / 100) * totalTime;
+
+    // Static snapshot of every OTHER clip — their own positions/tracks don't
+    // change during this drag, only this clip's does.
+    const otherClips = clipsDetails.filter(c => c.id !== id);
+    let curZ = origClip.zIndex ?? 0;
+
+    // Same-track neighbours, fixed for the duration of a resize (resizing
+    // never changes track).
+    const sameTrackAtStart = otherClips.filter(c => (c.zIndex ?? 0) === curZ);
+    const prevNeighbor = [...sameTrackAtStart]
+      .filter(c => (c.endPosition ?? 0) <= (origClip.startPosition ?? 0) + 0.001)
+      .sort((a, b) => (b.endPosition ?? 0) - (a.endPosition ?? 0))[0];
+    const nextNeighbor = [...sameTrackAtStart]
+      .filter(c => (c.startPosition ?? 0) >= (origClip.endPosition ?? 0) - 0.001)
+      .sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0))[0];
 
     const mv = (me: MouseEvent) => {
       const dt = ((me.clientX - startX) / tw) * totalTime;
@@ -71,16 +159,40 @@ export default function VideoClipsRangeSlider() {
         const dur = ep - sp;
         sp = Math.max(0, Math.min(totalTime - dur, sp + dt));
         ep = sp + dur;
+
+        // Hold + drag vertically past half a row's height to retarget which
+        // track this clip is on — the actual "up/down into new tracks" move.
+        const dy = me.clientY - startY;
+        if (Math.abs(dy) > ROW_H / 2) {
+          const dir: "up" | "down" = dy > 0 ? "down" : "up";
+          curZ = resolveTargetTrack(dir, curZ, sp, ep, otherClips);
+          startY = me.clientY;
+        }
+
+        // Never let this clip overlap another clip already on its
+        // (possibly just-changed) target track.
+        const sameTrack = otherClips.filter(c => (c.zIndex ?? 0) === curZ);
+        let lo = 0, hi = totalTime;
+        for (const c of sameTrack) {
+          const cs = c.startPosition ?? 0, ce = c.endPosition ?? 0;
+          const mid = (cs + ce) / 2;
+          if (sp + dur / 2 >= mid) lo = Math.max(lo, ce);
+          else hi = Math.min(hi, cs);
+        }
+        sp = Math.max(lo, Math.min(Math.max(lo, hi - dur), sp));
+        ep = sp + dur;
+
         // Move audio track by the same delta
         if (origAudio) {
           const aDur = origAudio.endTime - origAudio.startTime;
-          const newAStart = Math.max(0, origAudio.startTime + dt);
+          const newAStart = Math.max(0, origAudio.startTime + (sp - (origClip.startPosition ?? 0)));
           setAudioDetails(prev => prev.map(a =>
             a.clipId === id ? { ...a, startTime: newAStart, endTime: newAStart + aDur } : a
           ));
         }
       } else if (type === "resize-left") {
         let nsp = Math.max(0, Math.min(ep - minW, sp + dt));
+        if (prevNeighbor) nsp = Math.max(nsp, prevNeighbor.endPosition ?? 0);
         let nst = et - (ep - nsp);
         if (nst < 0) { nst = 0; nsp = ep - et; }
         if (et - nst > origClip.duration) { nst = et - origClip.duration; nsp = ep - origClip.duration; }
@@ -93,6 +205,7 @@ export default function VideoClipsRangeSlider() {
         }
       } else {
         let nep = Math.max(sp + minW, Math.min(totalTime, ep + dt));
+        if (nextNeighbor) nep = Math.min(nep, nextNeighbor.startPosition ?? totalTime);
         let net = st + (nep - sp);
         if (net > origClip.duration) { net = origClip.duration; nep = sp + (net - st); }
         ep = nep; et = net;
@@ -105,7 +218,7 @@ export default function VideoClipsRangeSlider() {
       }
 
       setClipsDetails(prev => prev.map(c =>
-        c.id === id ? { ...c, startPosition: sp, endPosition: ep, startTime: st, endTime: et } : c
+        c.id === id ? { ...c, startPosition: sp, endPosition: ep, startTime: st, endTime: et, zIndex: type === "move" ? curZ : c.zIndex } : c
       ));
     };
 
@@ -121,39 +234,43 @@ export default function VideoClipsRangeSlider() {
     document.addEventListener("mouseup", up);
   };
 
-  const sorted = [...clipsDetails].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+  // ── Group clips into tracks (rows) by zIndex ──────────────────────────
+  const trackIds = Array.from(new Set(clipsDetails.map(c => c.zIndex ?? 0))).sort((a, b) => a - b);
+  const clipsByTrack = trackIds.map(z => ({
+    z,
+    clips: clipsDetails.filter(c => (c.zIndex ?? 0) === z).sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0)),
+  }));
 
-  // Each clip now occupies its own row PLUS one row per paired audio track
-  // directly beneath it (see the render loop below) — rows are no longer
-  // 1:1 with `sorted`'s index, so bridge positioning and any other
-  // row-index math needs each clip's actual cumulative row offset, not
-  // just its position in `sorted`.
-  const audioCountFor = (clipId: string) => audioDetails.filter(a => a.clipId === clipId).length;
+  // Row offset (in ROW_H units) of each track's video row, accounting for
+  // every earlier track's video row PLUS its own audio row (if it has any
+  // paired audio) — needed to position transition bridges and to size the
+  // whole block in Layers.tsx.
   const rowOffsets: number[] = [];
   {
     let acc = 0;
-    for (const clip of sorted) { rowOffsets.push(acc); acc += 1 + audioCountFor(clip.id); }
+    for (const t of clipsByTrack) {
+      rowOffsets.push(acc);
+      const hasAudio = t.clips.some(c => audioDetails.some(a => a.clipId === c.id));
+      acc += 1 + (hasAudio ? 1 : 0);
+    }
   }
 
   // A clip's `transition` describes the transition OUT of it, into
-  // whichever clip starts right where it ends. Rows here are ordered by
-  // zIndex (for overlay stacking), not by time, so the clip immediately
-  // "next" chronologically can land on any row — precompute each bridge's
-  // (fromRowIndex, toRowIndex, timeFraction) once so it can be drawn as a
-  // simple badge at the exact boundary between the two clips, rather than
-  // needing a full point-to-point connector line.
-  const bridges = totalTime > 0 ? sorted
-    .map((clip, rowIdx) => ({ clip, rowIdx }))
-    .filter(({ clip }) => clip.transition && clip.transition !== "none")
-    .map(({ clip, rowIdx }) => {
+  // whichever clip starts right where it ends. Precompute each bridge's
+  // (fromRow, toRow, timeFraction) so it can be drawn as a badge at the
+  // exact boundary between the two clips.
+  const bridges = totalTime > 0 ? clipsDetails
+    .filter(clip => clip.transition && clip.transition !== "none")
+    .map(clip => {
+      const fromTrackIdx = trackIds.indexOf(clip.zIndex ?? 0);
       const nextClip = clipsDetails.find(c => Math.abs((c.startPosition ?? -999) - (clip.endPosition ?? 0)) < 0.05);
-      if (!nextClip) return null;
-      const nextRowIdx = sorted.findIndex(c => c.id === nextClip.id);
-      if (nextRowIdx === -1) return null;
+      if (!nextClip || fromTrackIdx === -1) return null;
+      const toTrackIdx = trackIds.indexOf(nextClip.zIndex ?? 0);
+      if (toTrackIdx === -1) return null;
       const meta = transitionOptions.find(t => t.key === clip.transition);
       return {
         id: `${clip.id}->${nextClip.id}`,
-        fromRow: rowOffsets[rowIdx], toRow: rowOffsets[nextRowIdx],
+        fromRow: rowOffsets[fromTrackIdx], toRow: rowOffsets[toTrackIdx],
         leftPct: ((clip.endPosition ?? 0) / totalTime) * 100,
         label: meta?.name ?? clip.transition,
       };
@@ -183,53 +300,82 @@ export default function VideoClipsRangeSlider() {
           </div>
         );
       })}
-      {sorted.map(clip => {
-        if (!totalTime || clip.startPosition === null || clip.endPosition === null) return null;
-        const left = `${((clip.startPosition ?? 0) / totalTime) * 100}%`;
-        const width = `${(((clip.endPosition ?? 0) - (clip.startPosition ?? 0)) / totalTime) * 100}%`;
-        const dur = (clip.endPosition ?? 0) - (clip.startPosition ?? 0);
-        const isSel = selId === clip.id;
-        const pairedAudio = audioDetails.filter(a => a.clipId === clip.id);
-
+      {clipsByTrack.map(({ z, clips: trackClips }) => {
+        const pairedAudio = audioDetails.filter(a => trackClips.some(c => c.id === a.clipId));
         return (
-          <React.Fragment key={clip.id}>
+          <React.Fragment key={`track-${z}`}>
             <div style={{ position: "relative", height: ROW_H, width: "100%", flexShrink: 0 }}>
-              <div className="vc-chip"
-                onMouseDown={e => drag(e, clip.id, "move")}
-                onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
-                style={{
-                  position: "absolute", top: 0, left, width, height: "100%",
-                  background: isSel ? "#FFC670" : "#E09A2F",
-                  outline: isSel ? "2px solid #1D4ED8" : "none",
-                  borderRadius: 6, cursor: "move",
-                  display: "flex", alignItems: "center",
-                  overflow: "hidden", userSelect: "none",
-                }}>
-                {/* Left trim */}
-                <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
-                  style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
-                {/* Content */}
-                <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: .9 }}>
-                    <rect x=".5" y="1.5" width="9" height="7" rx="1" stroke="white" strokeWidth="1" />
-                    <path d="M3.5 3.5l3 2-3 2V3.5z" fill="white" />
-                  </svg>
-                  <span style={{ color: "white", fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-                    {clip.sourceFileName ?? clip.name}
-                  </span>
-                  <span style={{ color: "rgba(255,255,255,.85)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
-                    {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
-                  </span>
-                </div>
-                {/* Right trim */}
-                <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
-                  style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
-              </div>
+              {trackClips.map(clip => {
+                if (!totalTime || clip.startPosition === null || clip.endPosition === null) return null;
+                const left = `${((clip.startPosition ?? 0) / totalTime) * 100}%`;
+                const width = `${(((clip.endPosition ?? 0) - (clip.startPosition ?? 0)) / totalTime) * 100}%`;
+                const dur = (clip.endPosition ?? 0) - (clip.startPosition ?? 0);
+                const isSel = selId === clip.id || selectedClipId === clip.id;
+
+                return (
+                  <div key={clip.id} className="vc-chip"
+                    onMouseDown={e => drag(e, clip.id, "move")}
+                    onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
+                    style={{
+                      position: "absolute", top: 0, left, width, height: "100%",
+                      background: isSel ? "#FFC670" : "#E09A2F",
+                      outline: isSel ? "2px solid #1D4ED8" : "none",
+                      borderRadius: 6, cursor: "move",
+                      display: "flex", alignItems: "center",
+                      overflow: "visible", userSelect: "none",
+                    }}>
+                    <div style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden" }}>
+                      {/* Left trim */}
+                      <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
+                        style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
+                      {/* Content */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%", height: "100%" }}>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: .9 }}>
+                          <rect x=".5" y="1.5" width="9" height="7" rx="1" stroke="white" strokeWidth="1" />
+                          <path d="M3.5 3.5l3 2-3 2V3.5z" fill="white" />
+                        </svg>
+                        <span style={{ color: "white", fontSize: 10, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+                          {clip.sourceFileName ?? clip.name}
+                        </span>
+                        <span style={{ color: "rgba(255,255,255,.85)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
+                          {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
+                        </span>
+                      </div>
+                      {/* Right trim */}
+                      <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
+                        style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
+                    </div>
+                    {/* Move-to-track chevrons — only shown on the selected
+                        chip, so idle rows stay clean. Click (not drag) way
+                        to move a clip onto a new/adjacent track. */}
+                    {isSel && (
+                      <div style={{
+                        position: "absolute", right: -18, top: "50%", transform: "translateY(-50%)",
+                        display: "flex", flexDirection: "column", gap: 1, zIndex: 15,
+                      }}>
+                        <button title="Move to track above"
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); moveClipToTrack(clip.id, "up"); }}
+                          style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                          <ChevronUp size={9} color="white" />
+                        </button>
+                        <button title="Move to track below"
+                          onMouseDown={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); moveClipToTrack(clip.id, "down"); }}
+                          style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                          <ChevronDown size={9} color="white" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            {/* This clip's own audio row(s), directly beneath it — dragging
-                THIS clip up/down (see LabelColumn's per-pair arrows) always
-                keeps its audio immediately following it, because both are
-                emitted from this same `sorted` loop iteration. */}
+            {/* This track's shared audio lane — every paired audio entry for
+                every clip on this track, positioned by its own time range,
+                directly beneath the track's video row. Moving a clip to a
+                different track (see moveClipToTrack) carries its audio here
+                automatically since audio is always looked up by clipId. */}
             {pairedAudio.map(track => (
               <AudioTrackRow key={track.id} track={track} containerRef={ref} />
             ))}
