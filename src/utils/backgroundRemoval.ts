@@ -32,86 +32,31 @@ export interface BgRemovalOptions {
 }
 
 /**
- * Builds a working alpha-capable VideoEncoder + matching WebM muxer for
- * this browser, by actually pushing one real test frame through each
- * candidate and awaiting flush() — not just calling configure() and
- * trusting that it didn't throw.
- *
- * WHY EVEN THAT ISN'T ENOUGH ON ITS OWN: `encoder.configure()` only
- * throws SYNCHRONOUSLY for obviously malformed configs. For a config
- * that's syntactically fine but the browser can't actually satisfy (e.g.
- * alpha genuinely unsupported for this codec/hardware combo), the spec
- * has it fail ASYNCHRONOUSLY instead — configure() returns normally, and
- * the failure only shows up later via the encoder's `error` callback.
- * Critically, once that `error` callback fires, the encoder is
- * automatically transitioned to "closed" by the browser — permanently,
- * it can't be reused. An earlier version of this only wrapped
- * `configure()` in try/catch, saw no synchronous throw, and returned that
- * encoder as "working" — but it had already silently failed and closed
- * itself moments later. The very first real `encoder.encode()` call in
- * the frame loop would then hit "Cannot call 'encode' on a closed codec".
- * The fix: actually encode one throwaway frame and await flush() for
- * each candidate. flush() only resolves cleanly if the encoder is
- * genuinely still open and working — if the async failure happened, the
- * encoder is already closed by the time flush() would need to reject,
- * so we check encoder.state as well as catching flush()'s rejection.
- * Only a candidate that survives this full round-trip gets returned.
+ * Picks a video codec string that this browser's WebCodecs VideoEncoder can
+ * encode WITH an alpha channel. Tries VP9 first (smaller files), falls
+ * back to VP8. Deliberately simple: just `isConfigSupported()`, no
+ * `hardwareAcceleration` hint at all, matching the original version of
+ * this file that was actually working. Several rounds of "improvements"
+ * here (explicit hardwareAcceleration hints, multi-mode fallback loops,
+ * real test-encode probing) were built on the assumption that Chromium's
+ * hardware encoder path can't do alpha and needs to be steered away from
+ * — but that assumption doesn't hold for every browser/driver, and on at
+ * least one real setup those "improvements" actively broke a config that
+ * otherwise worked fine left alone. Leaving hardwareAcceleration unset
+ * lets the browser pick, which is what was working before.
  */
-async function tryConfigureAlphaEncoder(
-  onOutput: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void,
-  onError: (e: Error) => void,
-  width: number, height: number, fps: number,
-): Promise<{ encoder: VideoEncoder; muxerCodec: string }> {
-  const codecs: { codec: string; muxerCodec: string }[] = [
+async function pickAlphaEncoderConfig(width: number, height: number, fps: number) {
+  const candidates: { codec: string; muxerCodec: string }[] = [
     { codec: "vp09.00.10.08", muxerCodec: "V_VP9" },
     { codec: "vp8", muxerCodec: "V_VP8" },
   ];
-  // Alpha encode is a software-only path in Chromium's VP8/VP9 encoders —
-  // the GPU/hardware path doesn't support it at all, and Chromium treats
-  // hardwareAcceleration as close to a hard requirement rather than a
-  // hint, so an unset value can land on a hardware encoder that correctly
-  // reports "unsupported" for alpha even though software (libvpx) would
-  // work fine. "prefer-software" is the real fix on most machines — but
-  // trying the others too, in this order, covers browsers/drivers that
-  // disagree with that general rule.
-  const hwModes: (HardwareAcceleration | undefined)[] = ["prefer-software", "no-preference", "prefer-hardware", undefined];
-
-  // A single throwaway blank frame used only to force real validation —
-  // its encoded output is discarded (see `testing` flag below), never
-  // reaches the real muxer.
-  const testCanvas = document.createElement("canvas");
-  testCanvas.width = width; testCanvas.height = height;
-
-  for (const hw of hwModes) {
-    for (const c of codecs) {
-      const config: VideoEncoderConfig = {
-        codec: c.codec, width, height, alpha: "keep", bitrate: 8_000_000, framerate: fps,
-        ...(hw ? { hardwareAcceleration: hw } : {}),
-      };
-      let encoder: VideoEncoder | null = null;
-      let testing = true;
-      let asyncFailed = false;
-      try {
-        encoder = new VideoEncoder({
-          output: (chunk, meta) => { if (!testing) onOutput(chunk, meta); },
-          error: (e) => { if (testing) { asyncFailed = true; } else { onError(e instanceof Error ? e : new Error(String(e))); } },
-        });
-        encoder.configure(config);
-
-        const testFrame = new VideoFrame(testCanvas, { timestamp: 0, duration: 1000 });
-        encoder.encode(testFrame, { keyFrame: true });
-        testFrame.close();
-        await encoder.flush();
-
-        if (asyncFailed || encoder.state === "closed") throw new Error("alpha config failed async validation");
-
-        testing = false;
-        return { encoder, muxerCodec: c.muxerCodec };
-      } catch {
-        try { encoder?.close(); } catch { /* already closed/errored */ }
-        // try the next candidate
-      }
-    }
+  for (const c of candidates) {
+    try {
+      const support = await VideoEncoder.isConfigSupported({
+        codec: c.codec, width, height, framerate: fps, alpha: "keep",
+      });
+      if (support.supported) return c;
+    } catch { /* try the next candidate */ }
   }
   throw new Error(ALPHA_UNSUPPORTED_MESSAGE);
 }
@@ -127,11 +72,7 @@ export type AlphaCapabilityResult =
 export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
   if (typeof VideoEncoder === "undefined") return { supported: false, reason: "no-webcodecs" };
   try {
-    // Same real-encode-and-flush approach as the actual run, just torn
-    // down immediately — a standard resolution is representative without
-    // needing the real clip loaded yet.
-    const { encoder } = await tryConfigureAlphaEncoder(() => {}, () => {}, 640, 360, 12);
-    encoder.close();
+    await pickAlphaEncoderConfig(640, 360, 12);
     return { supported: true };
   } catch {
     return { supported: false, reason: "no-alpha-encoder" };
@@ -213,20 +154,27 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   outCanvas.width = w; outCanvas.height = h;
   const outCtx = outCanvas.getContext("2d", { alpha: true })!;
 
+  const { codec, muxerCodec } = await pickAlphaEncoderConfig(encodeW, encodeH, processFps);
+
   const muxerTarget = new ArrayBufferTarget();
-  let muxer: Muxer<ArrayBufferTarget>;
-  let encoderError: Error | null = null;
-
-  const { encoder, muxerCodec } = await tryConfigureAlphaEncoder(
-    (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    (e) => { encoderError = e; },
-    encodeW, encodeH, processFps,
-  );
-
-  muxer = new Muxer({
+  const muxer = new Muxer({
     target: muxerTarget,
     video: { codec: muxerCodec, width: encodeW, height: encodeH, frameRate: processFps, alpha: true },
     firstTimestampBehavior: "offset",
+  });
+
+  let encoderError: Error | null = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (e) => { encoderError = e instanceof Error ? e : new Error(String(e)); },
+  });
+  encoder.configure({
+    codec,
+    width: encodeW,
+    height: encodeH,
+    alpha: "keep",
+    bitrate: 8_000_000,
+    framerate: processFps,
   });
 
   const frameDurationUs = Math.round(1_000_000 / processFps);
