@@ -1,5 +1,8 @@
 import { removeBackground } from "@imgly/background-removal";
-import { Muxer, ArrayBufferTarget } from "webm-muxer";
+import {
+  Output, WebMOutputFormat, BufferTarget, CanvasSource,
+  canEncodeVideo, type VideoCodec,
+} from "mediabunny";
 import { ClipDetails } from "../types/types";
 
 // Must match the installed @imgly/background-removal version (package.json) —
@@ -31,31 +34,36 @@ export interface BgRemovalOptions {
   signal: AbortSignal;
 }
 
+// WebM only really supports alpha with these two codecs (in order of
+// preference — VP9 gives smaller files).
+const ALPHA_CODEC_CANDIDATES: VideoCodec[] = ["vp9", "vp8"];
+
 /**
- * Picks a video codec string that this browser's WebCodecs VideoEncoder can
- * encode WITH an alpha channel. Tries VP9 first (smaller files), falls
- * back to VP8. Deliberately simple: just `isConfigSupported()`, no
- * `hardwareAcceleration` hint at all, matching the original version of
- * this file that was actually working. Several rounds of "improvements"
- * here (explicit hardwareAcceleration hints, multi-mode fallback loops,
- * real test-encode probing) were built on the assumption that Chromium's
- * hardware encoder path can't do alpha and needs to be steered away from
- * — but that assumption doesn't hold for every browser/driver, and on at
- * least one real setup those "improvements" actively broke a config that
- * otherwise worked fine left alone. Leaving hardwareAcceleration unset
- * lets the browser pick, which is what was working before.
+ * Picks a video codec this browser can actually encode WITH an alpha
+ * channel, using mediabunny's own capability check instead of a hand-rolled
+ * WebCodecs probe.
+ *
+ * WHY MEDIABUNNY'S canEncodeVideo() INSTEAD OF RAW isConfigSupported():
+ * this app went through several rounds of hand-rolling alpha-capability
+ * detection directly against the WebCodecs VideoEncoder API — explicit
+ * hardwareAcceleration hints, multi-mode fallback loops, even a real
+ * test-encode-and-flush round trip. Every one of those either failed to
+ * fix a real "browser can't do this" case, or actively broke a config
+ * that was already working, because raw WebCodecs' async failure modes
+ * (configure() succeeding, then the encoder silently closing itself later
+ * via the error callback) are genuinely easy to get wrong by hand.
+ * mediabunny's own docs are explicit that `hardwareAcceleration` is "best
+ * left on 'no-preference'" — the default — rather than steered by hand,
+ * which matches what was actually working here before any of this
+ * hand-rolled tuning started. Leaning on a maintained library for this
+ * instead of re-deriving encoder-capability edge cases ourselves is the
+ * more reliable path going forward.
  */
-async function pickAlphaEncoderConfig(width: number, height: number, fps: number) {
-  const candidates: { codec: string; muxerCodec: string }[] = [
-    { codec: "vp09.00.10.08", muxerCodec: "V_VP9" },
-    { codec: "vp8", muxerCodec: "V_VP8" },
-  ];
-  for (const c of candidates) {
+async function pickAlphaCodec(width: number, height: number): Promise<VideoCodec> {
+  for (const codec of ALPHA_CODEC_CANDIDATES) {
     try {
-      const support = await VideoEncoder.isConfigSupported({
-        codec: c.codec, width, height, framerate: fps, alpha: "keep",
-      });
-      if (support.supported) return c;
+      const ok = await canEncodeVideo(codec, { width, height, bitrate: 8_000_000, alpha: "keep" });
+      if (ok) return codec;
     } catch { /* try the next candidate */ }
   }
   throw new Error(ALPHA_UNSUPPORTED_MESSAGE);
@@ -72,7 +80,7 @@ export type AlphaCapabilityResult =
 export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
   if (typeof VideoEncoder === "undefined") return { supported: false, reason: "no-webcodecs" };
   try {
-    await pickAlphaEncoderConfig(640, 360, 12);
+    await pickAlphaCodec(640, 360);
     return { supported: true };
   } catch {
     return { supported: false, reason: "no-alpha-encoder" };
@@ -86,7 +94,7 @@ export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
  * images" here, which is also why this can take a while and needs a real
  * progress/cancel UI rather than being instant).
  *
- * ENCODING STRATEGY — why WebCodecs + explicit timestamps, not
+ * ENCODING STRATEGY — why explicit per-frame timestamps, not
  * MediaRecorder + canvas.captureStream():
  * An earlier version of this recorded the output canvas with
  * `canvas.captureStream(fps)` + `MediaRecorder`. That records in REAL
@@ -101,17 +109,15 @@ export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
  * "one frame for 11 seconds, then jump to the next" symptom) and a
  * total output duration that ~matched processing time instead of the
  * clip's real duration.
- * Encoding directly with a WebCodecs `VideoEncoder` and manually
- * assigning each frame's `timestamp`/`duration` as `i / processFps`
- * (below) fixes this at the root: playback timing is now driven purely
- * by frame INDEX, completely decoupled from how long any frame took to
- * compute. Frame 5 always lands at 5/processFps seconds into the output,
- * whether producing it took 10 ms or 10 s.
+ * `CanvasSource.add(timestamp, duration)` (below) fixes this at the
+ * root: playback timing is driven purely by frame INDEX (`i / processFps`),
+ * completely decoupled from how long any frame took to compute. Frame 5
+ * always lands at 5/processFps seconds into the output, whether producing
+ * it took 10 ms or 10 s.
  *
  * The output keeps genuine alpha transparency (not a green-screen swap):
- * each cut-out frame is encoded with `alpha: "keep"` and muxed into a
- * WebM via `webm-muxer`, which also means the file gets correct
- * Duration/Cues from the start — no post-hoc duration-patching needed.
+ * each cut-out frame is encoded with `alpha: "keep"` via mediabunny's
+ * CanvasSource/Output pipeline, muxed straight into a WebM.
  */
 export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRemovalResult> {
   const { clip, quality, processFps = 12, onProgress, onFramePreview, signal } = opts;
@@ -148,36 +154,28 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   const srcCtx = srcCanvas.getContext("2d")!;
 
   // Visible-to-the-caller canvas the CUT-OUT result gets painted onto —
-  // this is what onFramePreview shows live, and also what each frame gets
-  // captured from for encoding.
+  // this is what onFramePreview shows live, and it's also the canvas
+  // mediabunny's CanvasSource captures directly for encoding.
   const outCanvas = document.createElement("canvas");
   outCanvas.width = w; outCanvas.height = h;
   const outCtx = outCanvas.getContext("2d", { alpha: true })!;
 
-  const { codec, muxerCodec } = await pickAlphaEncoderConfig(encodeW, encodeH, processFps);
+  const codec = await pickAlphaCodec(encodeW, encodeH);
 
-  const muxerTarget = new ArrayBufferTarget();
-  const muxer = new Muxer({
-    target: muxerTarget,
-    video: { codec: muxerCodec, width: encodeW, height: encodeH, frameRate: processFps, alpha: true },
-    firstTimestampBehavior: "offset",
+  const output = new Output({
+    format: new WebMOutputFormat(),
+    target: new BufferTarget(),
   });
-
-  let encoderError: Error | null = null;
-  const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => { encoderError = e instanceof Error ? e : new Error(String(e)); },
-  });
-  encoder.configure({
+  const videoSource = new CanvasSource(outCanvas, {
     codec,
-    width: encodeW,
-    height: encodeH,
-    alpha: "keep",
     bitrate: 8_000_000,
-    framerate: processFps,
+    alpha: "keep",
+    keyFrameInterval: 1, // seconds — keeps scrubbing/seeking responsive on low-motion cutout content
   });
+  output.addVideoTrack(videoSource);
+  await output.start();
 
-  const frameDurationUs = Math.round(1_000_000 / processFps);
+  const frameDuration = 1 / processFps;
 
   const modelConfig = {
     model: (quality === "quality" ? "isnet" : "isnet_quint8") as "isnet" | "isnet_quint8",
@@ -202,7 +200,6 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   try {
     for (let i = 0; i < totalFrames; i++) {
       if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
-      if (encoderError) throw encoderError;
 
       const localTime = startTime + (i / totalFrames) * clipDuration;
       await seekVideo(sourceVideo, localTime);
@@ -239,16 +236,7 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
 
       // The whole point: timestamp/duration come from the frame INDEX, not
       // from wall-clock time — see the big comment above for why.
-      const videoFrame = new VideoFrame(outCanvas, {
-        timestamp: i * frameDurationUs,
-        duration: frameDurationUs,
-      });
-      // Force a keyframe periodically (default encoder heuristics can
-      // otherwise go a very long time between keyframes on low-motion
-      // content like a segmented subject on a flat background, which
-      // makes scrubbing/seeking within the clip sluggish later).
-      encoder.encode(videoFrame, { keyFrame: i % Math.max(1, Math.round(processFps)) === 0 });
-      videoFrame.close();
+      await videoSource.add(i * frameDuration, frameDuration);
 
       onProgress?.({
         fraction: (i + 1) / totalFrames,
@@ -256,18 +244,23 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
         label: `Removing background — frame ${i + 1} of ${totalFrames}`,
       });
     }
-
-    await encoder.flush();
-    if (encoderError) throw encoderError;
-  } finally {
-    try { encoder.close(); } catch { /* already closed/errored */ }
+  } catch (err) {
+    await output.cancel().catch(() => {});
     sourceVideo.src = "";
+    throw err;
   }
 
-  if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+  videoSource.close();
+  sourceVideo.src = "";
 
-  muxer.finalize();
-  const blob = new Blob([muxerTarget.buffer], { type: "video/webm" });
+  if (signal.aborted) {
+    await output.cancel().catch(() => {});
+    throw new DOMException("Cancelled", "AbortError");
+  }
+
+  await output.finalize();
+  const buffer = (output.target as BufferTarget).buffer!;
+  const blob = new Blob([buffer], { type: "video/webm" });
   const blobUrl = URL.createObjectURL(blob);
   return { blobUrl, blob };
 }
