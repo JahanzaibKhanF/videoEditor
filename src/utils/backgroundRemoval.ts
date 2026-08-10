@@ -33,31 +33,35 @@ export interface BgRemovalOptions {
 
 /**
  * Builds a working alpha-capable VideoEncoder + matching WebM muxer for
- * this browser, by actually trying to `configure()` each candidate for
- * real — not just asking `isConfigSupported()` and trusting the answer.
+ * this browser, by actually pushing one real test frame through each
+ * candidate and awaiting flush() — not just calling configure() and
+ * trusting that it didn't throw.
  *
- * WHY NOT JUST isConfigSupported(): an earlier version of this used
- * isConfigSupported() purely as a probe to PICK a codec/hardwareAcceleration
- * combo, then called encoder.configure() separately with a HARDCODED
- * hardwareAcceleration value that didn't necessarily match what the probe
- * actually verified. On a browser where alpha only works with, say,
- * "no-preference" (not "prefer-software"), the probe would try several
- * modes, find "no-preference" supported, return success — and then the
- * real configure() call, ignoring that, would try "prefer-software" again
- * and fail for real. Net effect: the app would confidently claim support
- * and then immediately fail anyway. Some browsers also just don't keep
- * isConfigSupported() and configure() in agreement with each other at all
- * for edge-case features like alpha.
- * The fix: for each candidate, actually build the encoder and call
- * configure() on it for real, inside try/catch. Whichever candidate's
- * REAL configure() call succeeds is the one that gets used for encoding —
- * there's no second, possibly-mismatched hardcoded call anywhere else.
+ * WHY EVEN THAT ISN'T ENOUGH ON ITS OWN: `encoder.configure()` only
+ * throws SYNCHRONOUSLY for obviously malformed configs. For a config
+ * that's syntactically fine but the browser can't actually satisfy (e.g.
+ * alpha genuinely unsupported for this codec/hardware combo), the spec
+ * has it fail ASYNCHRONOUSLY instead — configure() returns normally, and
+ * the failure only shows up later via the encoder's `error` callback.
+ * Critically, once that `error` callback fires, the encoder is
+ * automatically transitioned to "closed" by the browser — permanently,
+ * it can't be reused. An earlier version of this only wrapped
+ * `configure()` in try/catch, saw no synchronous throw, and returned that
+ * encoder as "working" — but it had already silently failed and closed
+ * itself moments later. The very first real `encoder.encode()` call in
+ * the frame loop would then hit "Cannot call 'encode' on a closed codec".
+ * The fix: actually encode one throwaway frame and await flush() for
+ * each candidate. flush() only resolves cleanly if the encoder is
+ * genuinely still open and working — if the async failure happened, the
+ * encoder is already closed by the time flush() would need to reject,
+ * so we check encoder.state as well as catching flush()'s rejection.
+ * Only a candidate that survives this full round-trip gets returned.
  */
-function tryConfigureAlphaEncoder(
+async function tryConfigureAlphaEncoder(
   onOutput: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void,
   onError: (e: Error) => void,
   width: number, height: number, fps: number,
-): { encoder: VideoEncoder; muxerCodec: string } {
+): Promise<{ encoder: VideoEncoder; muxerCodec: string }> {
   const codecs: { codec: string; muxerCodec: string }[] = [
     { codec: "vp09.00.10.08", muxerCodec: "V_VP9" },
     { codec: "vp8", muxerCodec: "V_VP8" },
@@ -72,6 +76,12 @@ function tryConfigureAlphaEncoder(
   // disagree with that general rule.
   const hwModes: (HardwareAcceleration | undefined)[] = ["prefer-software", "no-preference", "prefer-hardware", undefined];
 
+  // A single throwaway blank frame used only to force real validation —
+  // its encoded output is discarded (see `testing` flag below), never
+  // reaches the real muxer.
+  const testCanvas = document.createElement("canvas");
+  testCanvas.width = width; testCanvas.height = height;
+
   for (const hw of hwModes) {
     for (const c of codecs) {
       const config: VideoEncoderConfig = {
@@ -79,9 +89,23 @@ function tryConfigureAlphaEncoder(
         ...(hw ? { hardwareAcceleration: hw } : {}),
       };
       let encoder: VideoEncoder | null = null;
+      let testing = true;
+      let asyncFailed = false;
       try {
-        encoder = new VideoEncoder({ output: onOutput, error: (e) => onError(e instanceof Error ? e : new Error(String(e))) });
-        encoder.configure(config); // the real test — not isConfigSupported()
+        encoder = new VideoEncoder({
+          output: (chunk, meta) => { if (!testing) onOutput(chunk, meta); },
+          error: (e) => { if (testing) { asyncFailed = true; } else { onError(e instanceof Error ? e : new Error(String(e))); } },
+        });
+        encoder.configure(config);
+
+        const testFrame = new VideoFrame(testCanvas, { timestamp: 0, duration: 1000 });
+        encoder.encode(testFrame, { keyFrame: true });
+        testFrame.close();
+        await encoder.flush();
+
+        if (asyncFailed || encoder.state === "closed") throw new Error("alpha config failed async validation");
+
+        testing = false;
         return { encoder, muxerCodec: c.muxerCodec };
       } catch {
         try { encoder?.close(); } catch { /* already closed/errored */ }
@@ -103,10 +127,10 @@ export type AlphaCapabilityResult =
 export async function checkAlphaCapability(): Promise<AlphaCapabilityResult> {
   if (typeof VideoEncoder === "undefined") return { supported: false, reason: "no-webcodecs" };
   try {
-    // Same real-configure() approach as the actual run, just torn down
-    // immediately — a standard resolution is representative without
+    // Same real-encode-and-flush approach as the actual run, just torn
+    // down immediately — a standard resolution is representative without
     // needing the real clip loaded yet.
-    const { encoder } = tryConfigureAlphaEncoder(() => {}, () => {}, 640, 360, 12);
+    const { encoder } = await tryConfigureAlphaEncoder(() => {}, () => {}, 640, 360, 12);
     encoder.close();
     return { supported: true };
   } catch {
@@ -193,7 +217,7 @@ export async function removeClipBackground(opts: BgRemovalOptions): Promise<BgRe
   let muxer: Muxer<ArrayBufferTarget>;
   let encoderError: Error | null = null;
 
-  const { encoder, muxerCodec } = tryConfigureAlphaEncoder(
+  const { encoder, muxerCodec } = await tryConfigureAlphaEncoder(
     (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     (e) => { encoderError = e; },
     encodeW, encodeH, processFps,
