@@ -455,7 +455,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
           { label: "Import", icon: <Upload size={13} />, onClick: handleImport, disabled: !!activeTemplate },
           { label: "Text",   icon: <Type size={13}/>, onClick: addText, disabled: videos.length === 0 || !!activeTemplate },
           { label: "Blur",   icon: <Droplets size={13}/>, onClick: addBlur, disabled: videos.length === 0 },
-          { label: "Split",  icon: <SplitSquareHorizontal size={13}/>, onClick: () => spliteLayer(null, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
+          { label: "Split",  icon: <SplitSquareHorizontal size={13}/>, onClick: () => spliteLayer(selectedClipId, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
         ].map(btn => (
           <button key={btn.label} onClick={btn.onClick} disabled={btn.disabled}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary text-[11px] font-semibold cursor-pointer hover:bg-signal/10 hover:border-signal/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-[inherit]">

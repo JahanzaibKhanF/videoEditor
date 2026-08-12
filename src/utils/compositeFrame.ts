@@ -48,9 +48,31 @@ export function compositeFrame(input: CompositeFrameInput) {
 
   for (const layerType of drawOrder) {
     if (layerType === "video" || layerType === "audio") {
+      // Z-ORDER FIX: draw HIGHEST zIndex first (furthest back) and LOWEST
+      // zIndex last (frontmost). This matches the track convention used by
+      // VideoClipsRangeSlider/TimeLine's track list, where tracks are laid
+      // out ascending by zIndex (track 0 first) and dragging a clip "up"
+      // allocates it a LOWER (often negative) zIndex so it lands in an
+      // earlier row. An earlier/upper row is meant to sit in FRONT, the
+      // same convention every layer-based NLE (After Effects, CapCut, etc)
+      // uses: whatever is higher in the track list renders on top.
+      //
+      // BUG THIS FIXES: this used to sort ascending (lowest zIndex drawn
+      // FIRST, i.e. at the back), which is the exact opposite of that
+      // convention. A background-removed clip dragged "up" onto its own
+      // (lower-zIndex) track would visually sit above the base clip in the
+      // track list, but the base clip — despite being the visually lower
+      // track — was actually being painted last and covering it up. That
+      // read as "the layer below is showing up on top" / transparent
+      // pixels not revealing the clip underneath, even though alpha itself
+      // was being preserved correctly (canvas is created with
+      // `{ alpha: true }` in CompositorCanvas.tsx and the background-removal
+      // pipeline genuinely encodes real per-pixel alpha — see
+      // backgroundRemoval.ts). The compositing order, not the alpha data,
+      // was wrong.
       const activeClips = clipsSorted.filter(c =>
         t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity)
-      ).sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+      ).sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
 
       for (const clip of activeClips) {
         const vid = getVideoDrawable(clip.src);

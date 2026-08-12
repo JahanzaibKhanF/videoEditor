@@ -2,109 +2,129 @@ import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
 import { AudioDetails, ClipDetails } from "../types/types";
 
-export const addClipToTimeline = ({
-  video,
-  clipsDetails,
-  setTotalTime,
-  setClipsDetails,
-  setPrimaryVideoDimensions,
-  setAudioDetails,
-  startAt,
-}: {
-  video: { video: File; name: string };
-  clipsDetails: Array<ClipDetails>;
-  setTotalTime: React.Dispatch<React.SetStateAction<number>>;
-  setClipsDetails: React.Dispatch<React.SetStateAction<Array<ClipDetails>>>;
-  setPrimaryVideoDimensions: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>;
-  setAudioDetails?: React.Dispatch<React.SetStateAction<Array<AudioDetails>>>;
-  // Explicit placement override. Callers importing MULTIPLE files in one
-  // batch should compute this themselves and chain calls sequentially
-  // (using the resolved end position returned below as the next file's
-  // startAt) rather than relying on the `clipsDetails` snapshot, which is
-  // captured once per call and goes stale the moment more than one clip is
-  // being added in the same batch — every file would otherwise compute the
-  // same "current last clip" position and land on top of each other instead
-  // of stacking one after another. When omitted, falls back to the last
-  // clip's end time from `clipsDetails` (correct for single-file imports).
-  startAt?: number;
-}): Promise<number> => {
-  return new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(video.video);
-    const videoEl = document.createElement("video");
-    videoEl.preload = "metadata";
-    videoEl.src = objectUrl;
+// Minimum distance (in timeline seconds) the playhead must be from either
+// edge of a clip for a split to be allowed — splitting right at an edge
+// would just produce a zero-length segment.
+const MIN_SEGMENT = 0.05;
 
-    videoEl.onloadedmetadata = () => {
-      const duration = videoEl.duration || 0;
-      const width = videoEl.videoWidth || 0;
-      const height = videoEl.videoHeight || 0;
-
-      const maxEnd = startAt ?? clipsDetails.reduce(
-        (max, clip) => Math.max(max, clip.endPosition ?? 0),
-        0
-      );
-
-      if (clipsDetails.length === 0) {
-        setPrimaryVideoDimensions({ width, height });
-      }
-
-      const clipId = uuidv4();
-
-      const newClip: ClipDetails = {
-        id: clipId,
-        name: video.name,
-        duration,
-        startPosition: maxEnd,
-        endPosition: maxEnd + duration,
-        startTime: 0,
-        endTime: duration,
-        transition: "none",
-        src: objectUrl,
-        video: video.name,
-        sourceFileName: video.video.name,
-        x: 0,
-        y: 0,
-        scale: 1,
-        width,
-        height,
-        // All sequentially-imported clips land on the SAME base track
-        // (zIndex 0 = "Video 1") one after another in time, matching every
-        // other NLE's default import behaviour. zIndex here doubles as the
-        // clip's TRACK id (see VideoClipsRangeSlider.tsx) — clips only end
-        // up on a different track when the user explicitly drags/moves one
-        // there. Previously this was `clipsDetails.length`, which gave every
-        // single imported clip its own unique "track" and was the root
-        // cause of the timeline growing a brand-new row per clip (and per
-        // split) instead of laying clips out along one row.
-        zIndex: 0,
-      };
-
-      setClipsDetails(prev => [...prev, newClip]);
-      setTotalTime(prev => Math.max(prev, maxEnd + duration));
-
-      // Create matching audio track entry
-      if (setAudioDetails) {
-        const audioEntry: AudioDetails = {
-          id: uuidv4(),
-          clipId,
-          name: video.name,
-          startTime: maxEnd,
-          endTime: maxEnd + duration,
-          volume: 1,
-          muted: false,
-        };
-        setAudioDetails(prev => [...prev, audioEntry]);
-      }
-
-      videoEl.remove();
-      resolve(maxEnd + duration);
-    };
-
-    videoEl.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      videoEl.remove();
-      toast.error("Failed to load video metadata.");
-      resolve(startAt ?? clipsDetails.reduce((max, clip) => Math.max(max, clip.endPosition ?? 0), 0));
-    };
+/**
+ * Splits a clip at the current playhead position into two clips.
+ *
+ * TRACK INTEGRITY FIX: both resulting segments keep the SAME `zIndex` as
+ * the original clip (zIndex doubles as the track id — see
+ * VideoClipsRangeSlider.tsx). Previously this function didn't exist at all
+ * (the file only re-exported addClipToTimeline under the wrong name), so
+ * nothing enforced this — any from-scratch reimplementation that pushed the
+ * new half onto `clipsDetails` without explicitly carrying `zIndex` over
+ * would default it to whatever a fresh clip gets (0 / a brand-new track),
+ * which is exactly the "second half jumps to a different track" bug. Both
+ * halves below explicitly inherit `original.zIndex`, and only a manual
+ * drag (VideoClipsRangeSlider's moveClipToTrack) ever changes it again.
+ *
+ * @param selectedClipId  The clip to split, if the user has one selected.
+ *   May be null/stale (e.g. the selection doesn't actually sit under the
+ *   playhead) — in that case we fall back to searching every track for
+ *   whichever single clip the playhead is currently over.
+ */
+export const spliteLayer = (
+  selectedClipId: string | null,
+  clipsDetails: Array<ClipDetails>,
+  setClipsDetails: React.Dispatch<React.SetStateAction<Array<ClipDetails>>>,
+  currentTime: number,
+  audioDetails: Array<AudioDetails>,
+  setAudioDetails: React.Dispatch<React.SetStateAction<Array<AudioDetails>>>
+): void => {
+  // Every clip (on any track) whose body genuinely contains the playhead,
+  // with enough margin on both sides to produce two real segments.
+  const candidates = clipsDetails.filter(c => {
+    const sp = c.startPosition ?? 0;
+    const ep = c.endPosition ?? 0;
+    return currentTime > sp + MIN_SEGMENT && currentTime < ep - MIN_SEGMENT;
   });
+
+  let target: ClipDetails | undefined =
+    (selectedClipId ? candidates.find(c => c.id === selectedClipId) : undefined);
+
+  if (!target) {
+    if (candidates.length === 1) {
+      target = candidates[0];
+    } else if (candidates.length === 0) {
+      toast.error("Move the playhead over a clip to split it.");
+      return;
+    } else {
+      // Multiple tracks overlap the playhead and nothing usable was
+      // selected — ask rather than silently guessing which track's clip
+      // the user meant, since that guess is exactly what could land the
+      // cut on the wrong track.
+      toast.error("Select the clip you want to split first (multiple clips are under the playhead).");
+      return;
+    }
+  }
+
+  const original = target;
+  const sp = original.startPosition ?? 0;
+  const ep = original.endPosition ?? 0;
+  const st = original.startTime ?? 0;
+  const et = original.endTime ?? original.duration ?? 0;
+
+  // 1:1 mapping between timeline seconds and source seconds — the same
+  // model resize-left/resize-right use in VideoClipsRangeSlider, so a clip
+  // split right where a manual trim would have landed produces identical
+  // startTime/endTime math.
+  const splitSourceTime = st + (currentTime - sp);
+
+  const rightId = uuidv4();
+
+  const leftClip: ClipDetails = {
+    ...original,
+    endPosition: currentTime,
+    endTime: splitSourceTime,
+    // A hard cut shouldn't inherit the original clip's outgoing transition
+    // into what is now its own right-hand half — that transition (if any)
+    // belongs on the new right segment, which is still the thing that
+    // borders whatever came after the original clip.
+    transition: "none",
+  };
+
+  const rightClip: ClipDetails = {
+    ...original,
+    id: rightId,
+    startPosition: currentTime,
+    endPosition: ep,
+    startTime: splitSourceTime,
+    endTime: et,
+    // SAME TRACK as the original — see function doc comment above.
+    zIndex: original.zIndex,
+  };
+
+  setClipsDetails(prev => {
+    const idx = prev.findIndex(c => c.id === original.id);
+    if (idx === -1) return prev;
+    const next = [...prev];
+    next.splice(idx, 1, leftClip, rightClip);
+    return next;
+  });
+
+  // Carry the paired audio along, split at the same playhead position, so
+  // the right-hand video segment doesn't end up silently unlinked from any
+  // audio.
+  const originalAudio = audioDetails.find(a => a.clipId === original.id);
+  if (originalAudio && currentTime > originalAudio.startTime && currentTime < originalAudio.endTime) {
+    const rightAudio: AudioDetails = {
+      ...originalAudio,
+      id: uuidv4(),
+      clipId: rightId,
+      startTime: currentTime,
+    };
+    setAudioDetails(prev => {
+      const idx = prev.findIndex(a => a.id === originalAudio.id);
+      if (idx === -1) return [...prev, rightAudio];
+      const next = [...prev];
+      next[idx] = { ...next[idx], endTime: currentTime };
+      next.splice(idx + 1, 0, rightAudio);
+      return next;
+    });
+  }
+
+  toast.success("Clip split.");
 };
