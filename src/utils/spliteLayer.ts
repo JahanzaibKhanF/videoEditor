@@ -108,22 +108,51 @@ export const spliteLayer = (
   // Carry the paired audio along, split at the same playhead position, so
   // the right-hand video segment doesn't end up silently unlinked from any
   // audio.
+  //
+  // BUG THIS FIXES: this used to only act when `currentTime` fell strictly
+  // *inside the audio's own* startTime..endTime. That's usually true (audio
+  // is created 1:1 with its clip's startPosition/endPosition — see
+  // addClipToTimeline.ts), but AudioRangeSlider also lets someone drag an
+  // audio chip independently of its clip, so the two can legitimately drift
+  // apart. Whenever they had, the check silently failed and did NOTHING —
+  // the single audio entry stayed attached to the LEFT clip's id no matter
+  // which side of the cut it actually belonged on. That's exactly "the
+  // clip stays on the same line but not its audio": if a later drag then
+  // moved the RIGHT clip to a different track, its audio (still tagged
+  // with the LEFT clip's id) stayed behind, because track lookup is by
+  // clipId (see VideoClipsRangeSlider.tsx). Now every case is handled
+  // explicitly, so the audio is always re-tagged onto whichever clip id it
+  // actually falls under after the cut.
   const originalAudio = audioDetails.find(a => a.clipId === original.id);
-  if (originalAudio && currentTime > originalAudio.startTime && currentTime < originalAudio.endTime) {
-    const rightAudio: AudioDetails = {
-      ...originalAudio,
-      id: uuidv4(),
-      clipId: rightId,
-      startTime: currentTime,
-    };
-    setAudioDetails(prev => {
-      const idx = prev.findIndex(a => a.id === originalAudio.id);
-      if (idx === -1) return [...prev, rightAudio];
-      const next = [...prev];
-      next[idx] = { ...next[idx], endTime: currentTime };
-      next.splice(idx + 1, 0, rightAudio);
-      return next;
-    });
+  if (originalAudio) {
+    if (currentTime <= originalAudio.startTime) {
+      // The audio only starts after the cut — it belongs entirely to the
+      // right-hand segment. Re-tag it rather than leaving it pointing at
+      // the left clip's id.
+      setAudioDetails(prev => prev.map(a =>
+        a.id === originalAudio.id ? { ...a, clipId: rightId } : a
+      ));
+    } else if (currentTime >= originalAudio.endTime) {
+      // The audio ends before the cut — it already belongs entirely to the
+      // left-hand segment (which kept the original id), nothing to do.
+    } else {
+      // The cut falls inside the audio's own range — split it the same way
+      // the clip itself was split.
+      const rightAudio: AudioDetails = {
+        ...originalAudio,
+        id: uuidv4(),
+        clipId: rightId,
+        startTime: currentTime,
+      };
+      setAudioDetails(prev => {
+        const idx = prev.findIndex(a => a.id === originalAudio.id);
+        if (idx === -1) return [...prev, rightAudio];
+        const next = [...prev];
+        next[idx] = { ...next[idx], endTime: currentTime };
+        next.splice(idx + 1, 0, rightAudio);
+        return next;
+      });
+    }
   }
 
   toast.success("Clip split.");

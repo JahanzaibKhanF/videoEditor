@@ -8,7 +8,7 @@ import { formatVideoDuration } from "../../utils/formatVideoDuration";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function ImagesRangeSlider() {
-  const { totalTime, imagesDetails, setImagesDetails } = useAppDetailsContext();
+  const { totalTime, imagesDetails, setImagesDetails, clipsDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localImages, setLocalImages] = useState(imagesDetails);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -41,21 +41,58 @@ export default function ImagesRangeSlider() {
     setLocalImages(updated); setImagesDetails(updated);
   };
 
-  // Reorders which image draws on top — useful for stacking a transparent /
-  // background-removed overlay image above (or below) another image, since
-  // compositeFrame now draws images in zIndex order (see compositeFrame.ts).
+  // Reorders where this image sits in the shared VIDEO+IMAGE z-stack (see
+  // compositeFrame.ts) — not just relative to other images anymore. Images
+  // and video-track clips now share one zIndex numeric space, so an image
+  // can land directly BETWEEN two video tracks, not only fully above or
+  // fully below every video clip as a whole block.
+  //
+  // "up" = LOWER zIndex = frontmost — same convention moveClipToTrack uses
+  // in VideoClipsRangeSlider.tsx (dragging a clip up allocates it a lower,
+  // often negative, zIndex; compositeFrame draws lowest-zIndex last, i.e.
+  // on top). This used to be the opposite ("up" = higher zIndex) purely
+  // because images and video clips were drawn as two separate blocks and
+  // never had to agree on a shared convention — now that they're merged
+  // into one draw pass, both need the same rule or "up" would mean
+  // opposite things depending which type of layer you clicked.
+  //
+  // Rather than swapping zIndex values with whatever neighbour is found
+  // (which, if that neighbour is a video clip, would silently move that
+  // clip to a different track as a side effect — a clip's zIndex doubles
+  // as its track id, and a track can hold several clips that would get
+  // left behind), this always allocates a fresh slot strictly between two
+  // neighbouring zIndex values, the same fractional-gap approach
+  // resolveTargetTrack uses for auto-creating video tracks. That way
+  // moving an image never touches any other layer's zIndex.
   const moveImageStack = (id: string, dir: "up" | "down") => {
-    const sortedByZ = [...localImages].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    const i = sortedByZ.findIndex(img => img.id === id);
-    if (i === -1) return;
-    const j = dir === "up" ? i + 1 : i - 1; // "up" = higher zIndex = drawn later = visually on top
-    if (j < 0 || j >= sortedByZ.length) return;
-    const zi = sortedByZ[i].zIndex ?? i, zj = sortedByZ[j].zIndex ?? j;
-    const updated = localImages.map(img => {
-      if (img.id === sortedByZ[i].id) return { ...img, zIndex: zj };
-      if (img.id === sortedByZ[j].id) return { ...img, zIndex: zi };
-      return img;
-    });
+    const curZ = localImages.find(img => img.id === id)?.zIndex ?? 0;
+    const others = Array.from(new Set([
+      ...localImages.filter(img => img.id !== id).map(img => img.zIndex ?? 0),
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+    ]));
+    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
+    const idx = zs.indexOf(curZ);
+
+    let newZ: number;
+    if (dir === "up") {
+      if (idx === 0) {
+        newZ = zs[idx] - 1;
+      } else {
+        const cand = zs[idx - 1];
+        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
+        newZ = (cand + beyond) / 2;
+      }
+    } else {
+      if (idx === zs.length - 1) {
+        newZ = zs[idx] + 1;
+      } else {
+        const cand = zs[idx + 1];
+        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
+        newZ = (cand + beyond) / 2;
+      }
+    }
+
+    const updated = localImages.map(img => img.id === id ? { ...img, zIndex: newZ } : img);
     setLocalImages(updated); setImagesDetails(updated);
   };
 

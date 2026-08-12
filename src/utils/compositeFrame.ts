@@ -46,114 +46,54 @@ export function compositeFrame(input: CompositeFrameInput) {
 
   const clipsSorted = [...clips].sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0));
 
+  // UNIFIED VIDEO+IMAGE Z-STACK: video clips and images used to draw as two
+  // entirely separate blocks (every image always fully above or fully below
+  // every video clip, only swappable as a whole block via `layerOrder`).
+  // That meant an image could never sit BETWEEN two video tracks, and a
+  // background-removed video track dragged above one image but below
+  // another had no way to express that. They now share one zIndex numeric
+  // space (see moveClipToTrack in VideoClipsRangeSlider.tsx and
+  // moveImageStack in ImagesRangeSlider.tsx, both of which write into it),
+  // and are merged into a single descending-zIndex draw pass here — so an
+  // image's zIndex can land it anywhere in the video-track stack, not just
+  // at the very front or very back.
+  const activeImages = images
+    .filter(img => t >= img.startTime && t <= img.endTime)
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)); // ascending; merged below
+  let mergedVideoImageDrawn = false;
+
   for (const layerType of drawOrder) {
-    if (layerType === "video" || layerType === "audio") {
-      // Z-ORDER FIX: draw HIGHEST zIndex first (furthest back) and LOWEST
-      // zIndex last (frontmost). This matches the track convention used by
-      // VideoClipsRangeSlider/TimeLine's track list, where tracks are laid
-      // out ascending by zIndex (track 0 first) and dragging a clip "up"
-      // allocates it a LOWER (often negative) zIndex so it lands in an
-      // earlier row. An earlier/upper row is meant to sit in FRONT, the
-      // same convention every layer-based NLE (After Effects, CapCut, etc)
-      // uses: whatever is higher in the track list renders on top.
-      //
-      // BUG THIS FIXES: this used to sort ascending (lowest zIndex drawn
-      // FIRST, i.e. at the back), which is the exact opposite of that
-      // convention. A background-removed clip dragged "up" onto its own
-      // (lower-zIndex) track would visually sit above the base clip in the
-      // track list, but the base clip — despite being the visually lower
-      // track — was actually being painted last and covering it up. That
-      // read as "the layer below is showing up on top" / transparent
-      // pixels not revealing the clip underneath, even though alpha itself
-      // was being preserved correctly (canvas is created with
-      // `{ alpha: true }` in CompositorCanvas.tsx and the background-removal
-      // pipeline genuinely encodes real per-pixel alpha — see
-      // backgroundRemoval.ts). The compositing order, not the alpha data,
-      // was wrong.
-      const activeClips = clipsSorted.filter(c =>
-        t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity)
-      ).sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
+    if (layerType === "video" || layerType === "image") {
+      // Only actually draw once — whichever of "video"/"image" comes first
+      // in drawOrder triggers the merged pass; the other is a no-op so it
+      // doesn't get drawn twice.
+      if (mergedVideoImageDrawn) continue;
+      mergedVideoImageDrawn = true;
 
-      for (const clip of activeClips) {
-        const vid = getVideoDrawable(clip.src);
-        if (!vid) continue;
-        const cw = (clip.width ?? w) * (clip.scale ?? 1);
-        const ch = (clip.height ?? h) * (clip.scale ?? 1);
-        const cx0 = clip.x ?? 0, cy0 = clip.y ?? 0;
-        const localT = t - (clip.startPosition ?? 0);
-        const activeFx = clipEffects.filter(fx => fx.clipId === clip.id && localT >= fx.startTime && localT <= fx.endTime);
-        const shakeFx = activeFx.filter(f => f.type === "shake");
-        const wiggleFx = activeFx.filter(f => f.type === "wiggle");
-        const overlayFx = activeFx.filter(f => f.type === "colorBurst" || f.type === "particles" || f.type === "gradientOverlay");
+      type MergedLayer =
+        | { kind: "video"; z: number; clip: ClipDetails }
+        | { kind: "image"; z: number; image: ImageDetails };
 
-        ctx.save();
-        ctx.filter = buildCanvasFilterString(clip.colorAdjustments);
+      const activeClips: MergedLayer[] = clipsSorted
+        .filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity))
+        .map(clip => ({ kind: "video" as const, z: clip.zIndex ?? 0, clip }));
+      const imageLayers: MergedLayer[] = activeImages
+        .map(image => ({ kind: "image" as const, z: image.zIndex ?? 0, image }));
 
-        // shake/wiggle perturb the draw transform itself, around the
-        // clip's own center, before the frame is drawn.
-        if (shakeFx.length || wiggleFx.length) {
-          const centerX = cx0 + cw / 2, centerY = cy0 + ch / 2;
-          ctx.translate(centerX, centerY);
-          for (const fx of shakeFx) {
-            const amp = 3 + fx.intensity * 16;
-            const dx = amp * (Math.sin(localT * 37.1) * 0.5 + Math.sin(localT * 71.3) * 0.3 + Math.sin(localT * 131.7) * 0.2);
-            const dy = amp * (Math.cos(localT * 43.9) * 0.5 + Math.cos(localT * 89.1) * 0.3 + Math.cos(localT * 151.3) * 0.2);
-            ctx.translate(dx, dy);
-          }
-          for (const fx of wiggleFx) {
-            const angle = fx.intensity * 9 * Math.sin(localT * 6.2);
-            ctx.rotate((angle * Math.PI) / 180);
-          }
-          ctx.translate(-centerX, -centerY);
+      // HIGHEST zIndex drawn first (furthest back), LOWEST zIndex drawn
+      // last (frontmost) — matches "higher in the track list = drawn on
+      // top" (see the z-order fix note above resolveTargetTrack in
+      // VideoClipsRangeSlider.tsx and moveImageStack in
+      // ImagesRangeSlider.tsx, which both write into this same numeric
+      // space now).
+      const merged = [...activeClips, ...imageLayers].sort((a, b) => b.z - a.z);
+
+      for (const layer of merged) {
+        if (layer.kind === "image") {
+          drawImageLayer(ctx, layer.image, t, fps, w, h, imageEls);
+          continue;
         }
-
-        try { ctx.drawImage(vid, cx0, cy0, cw, ch); } catch {}
-        ctx.filter = "none";
-
-        for (const fx of overlayFx) drawClipEffectOverlay(ctx, fx, localT, cx0, cy0, cw, ch);
-
-        const ci = clipsSorted.findIndex(c => c.id === clip.id);
-        if (ci >= 0 && ci < clipsSorted.length - 1 && clip.transition && clip.transition !== "none") {
-          const trans = computeTransition(clip.transition, t, clip.endPosition ?? 0, fps);
-          if (trans) {
-            const nextClip = clipsSorted[ci + 1];
-            const nextVid = getVideoDrawable(nextClip?.src ?? "");
-            const nextRect = nextClip ? {
-              x: nextClip.x ?? 0, y: nextClip.y ?? 0,
-              w: (nextClip.width ?? w) * (nextClip.scale ?? 1),
-              h: (nextClip.height ?? h) * (nextClip.scale ?? 1),
-            } : { x: 0, y: 0, w, h };
-            applyTransition(ctx, trans.type, trans.progress, w, h, nextVid, nextRect);
-          }
-        }
-        ctx.restore();
-      }
-    } else if (layerType === "image") {
-      // Sort by zIndex so manually-reordered overlays (e.g. a transparent/
-      // background-removed PNG meant to sit above or below another image)
-      // actually draw in the chosen stacking order, instead of always just
-      // drawing in whatever order they happen to sit in the array.
-      const imagesSorted = [...images].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-      for (let i = 0; i < imagesSorted.length; i++) {
-        const img = imagesSorted[i];
-        if (t < img.startTime || t > img.endTime) continue;
-        const el = imageEls[img.id];
-        if (!el) continue;
-        const anim = computeAnimState(img.animation, t, img.startTime, img.endTime, fps, img.imageX, img.imageY, w, h, 100);
-        if (!anim.visible) continue;
-        const dw = img.width * (img.scaleX ?? 1), dh = img.height * (img.scaleY ?? 1);
-        ctx.save();
-        const colorFilter = buildCanvasFilterString(img.colorAdjustments);
-        const blurFilter = anim.blur > 0 ? `blur(${anim.blur}px)` : "";
-        const combinedFilter = [colorFilter !== "none" ? colorFilter : "", blurFilter].filter(Boolean).join(" ");
-        if (combinedFilter) ctx.filter = combinedFilter;
-        ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity)) * (img.opacity ?? 1);
-        ctx.translate(anim.tx + dw / 2, anim.ty + dh / 2);
-        ctx.rotate((anim.rotation * Math.PI) / 180);
-        ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
-        try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
-        ctx.filter = "none";
-        ctx.restore();
+        drawVideoClip(ctx, layer.clip, clipsSorted, t, fps, w, h, clipEffects, getVideoDrawable);
       }
     } else if (layerType === "text") {
       for (const text of texts) {
@@ -201,6 +141,101 @@ export function compositeFrame(input: CompositeFrameInput) {
       }
     }
   }
+}
+
+// Draws one video clip's current frame (+ its shake/wiggle/overlay effects
+// and any outgoing transition). Extracted out of the old dedicated "video"
+// block so it can be called from the merged video+image draw pass above in
+// whatever z-order that pass decides, instead of always running as one big
+// block before/after every image.
+function drawVideoClip(
+  ctx: CanvasRenderingContext2D,
+  clip: ClipDetails,
+  clipsSorted: ClipDetails[],
+  t: number, fps: number, w: number, h: number,
+  clipEffects: ClipEffectDetails[],
+  getVideoDrawable: (src: string) => CanvasImageSource | null | undefined,
+) {
+  const vid = getVideoDrawable(clip.src);
+  if (!vid) return;
+  const cw = (clip.width ?? w) * (clip.scale ?? 1);
+  const ch = (clip.height ?? h) * (clip.scale ?? 1);
+  const cx0 = clip.x ?? 0, cy0 = clip.y ?? 0;
+  const localT = t - (clip.startPosition ?? 0);
+  const activeFx = clipEffects.filter(fx => fx.clipId === clip.id && localT >= fx.startTime && localT <= fx.endTime);
+  const shakeFx = activeFx.filter(f => f.type === "shake");
+  const wiggleFx = activeFx.filter(f => f.type === "wiggle");
+  const overlayFx = activeFx.filter(f => f.type === "colorBurst" || f.type === "particles" || f.type === "gradientOverlay");
+
+  ctx.save();
+  ctx.filter = buildCanvasFilterString(clip.colorAdjustments);
+
+  // shake/wiggle perturb the draw transform itself, around the clip's own
+  // center, before the frame is drawn.
+  if (shakeFx.length || wiggleFx.length) {
+    const centerX = cx0 + cw / 2, centerY = cy0 + ch / 2;
+    ctx.translate(centerX, centerY);
+    for (const fx of shakeFx) {
+      const amp = 3 + fx.intensity * 16;
+      const dx = amp * (Math.sin(localT * 37.1) * 0.5 + Math.sin(localT * 71.3) * 0.3 + Math.sin(localT * 131.7) * 0.2);
+      const dy = amp * (Math.cos(localT * 43.9) * 0.5 + Math.cos(localT * 89.1) * 0.3 + Math.cos(localT * 151.3) * 0.2);
+      ctx.translate(dx, dy);
+    }
+    for (const fx of wiggleFx) {
+      const angle = fx.intensity * 9 * Math.sin(localT * 6.2);
+      ctx.rotate((angle * Math.PI) / 180);
+    }
+    ctx.translate(-centerX, -centerY);
+  }
+
+  try { ctx.drawImage(vid, cx0, cy0, cw, ch); } catch {}
+  ctx.filter = "none";
+
+  for (const fx of overlayFx) drawClipEffectOverlay(ctx, fx, localT, cx0, cy0, cw, ch);
+
+  const ci = clipsSorted.findIndex(c => c.id === clip.id);
+  if (ci >= 0 && ci < clipsSorted.length - 1 && clip.transition && clip.transition !== "none") {
+    const trans = computeTransition(clip.transition, t, clip.endPosition ?? 0, fps);
+    if (trans) {
+      const nextClip = clipsSorted[ci + 1];
+      const nextVid = getVideoDrawable(nextClip?.src ?? "");
+      const nextRect = nextClip ? {
+        x: nextClip.x ?? 0, y: nextClip.y ?? 0,
+        w: (nextClip.width ?? w) * (nextClip.scale ?? 1),
+        h: (nextClip.height ?? h) * (nextClip.scale ?? 1),
+      } : { x: 0, y: 0, w, h };
+      applyTransition(ctx, trans.type, trans.progress, w, h, nextVid, nextRect);
+    }
+  }
+  ctx.restore();
+}
+
+// Draws one image overlay. Extracted out of the old dedicated "image" block
+// for the same reason as drawVideoClip above — see the merged video+image
+// draw pass. Time-range/visibility filtering is already done by the caller.
+function drawImageLayer(
+  ctx: CanvasRenderingContext2D,
+  img: ImageDetails,
+  t: number, fps: number, w: number, h: number,
+  imageEls: Record<string, HTMLImageElement | null>,
+) {
+  const el = imageEls[img.id];
+  if (!el) return;
+  const anim = computeAnimState(img.animation, t, img.startTime, img.endTime, fps, img.imageX, img.imageY, w, h, 100);
+  if (!anim.visible) return;
+  const dw = img.width * (img.scaleX ?? 1), dh = img.height * (img.scaleY ?? 1);
+  ctx.save();
+  const colorFilter = buildCanvasFilterString(img.colorAdjustments);
+  const blurFilter = anim.blur > 0 ? `blur(${anim.blur}px)` : "";
+  const combinedFilter = [colorFilter !== "none" ? colorFilter : "", blurFilter].filter(Boolean).join(" ");
+  if (combinedFilter) ctx.filter = combinedFilter;
+  ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity)) * (img.opacity ?? 1);
+  ctx.translate(anim.tx + dw / 2, anim.ty + dh / 2);
+  ctx.rotate((anim.rotation * Math.PI) / 180);
+  ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
+  try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
+  ctx.filter = "none";
+  ctx.restore();
 }
 
 function hexToRgba(hex: string, alpha: number): string {
