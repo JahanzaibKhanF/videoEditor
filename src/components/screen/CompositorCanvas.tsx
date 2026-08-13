@@ -16,9 +16,12 @@ interface Props {
   height: number;
   onTimeUpdate: (t: number) => void;
   onEngineReady: (engine: CanvasEngine) => void;
+  // Fires when a clip finishes playing naturally (not on manual pause).
+  // Optional so existing callers that don't care still compile unchanged.
+  onEnded?: () => void;
 }
 
-export default function CompositorCanvas({ width, height, onTimeUpdate, onEngineReady }: Props) {
+export default function CompositorCanvas({ width, height, onTimeUpdate, onEngineReady, onEnded }: Props) {
   const {
     clipsDetails, textsDetails, imagesDetails, blursDetails, clipEffects,
     audioDetails, layerOrder, currentTime, fps, imageRefs,
@@ -35,6 +38,7 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
   // ── ALL mutable state in refs so drawFrame never goes stale ──────────
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onEngineReadyRef = useRef(onEngineReady);
+  const onEndedRef = useRef(onEnded);
   const clipsRef = useRef(clipsDetails);
   const textsRef = useRef(textsDetails);
   const imagesRef = useRef(imagesDetails);
@@ -51,6 +55,7 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
   // Keep all refs current
   useEffect(() => { onTimeUpdateRef.current = onTimeUpdate; }, [onTimeUpdate]);
   useEffect(() => { onEngineReadyRef.current = onEngineReady; }, [onEngineReady]);
+  useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
   useEffect(() => { clipsRef.current = clipsDetails; }, [clipsDetails]);
   useEffect(() => { textsRef.current = textsDetails; }, [textsDetails]);
   useEffect(() => { imagesRef.current = imagesDetails; }, [imagesDetails]);
@@ -135,7 +140,16 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
       drawFrame();
     };
     engine.onFrameReady = () => drawFrame();
-    engine.onEnded = () => { onTimeUpdateRef.current(0); };
+    engine.onEnded = () => {
+      // Reset the visible playhead to 0 on natural end (existing behavior)
+      // AND tell the parent playback actually stopped, so the play/pause
+      // button's `isPlaying` state doesn't stay stuck on "playing" forever
+      // — this callback used to only do the first half, leaving nothing
+      // to ever flip `isPlaying` back to false after a clip finished on
+      // its own (only an explicit manual pause did).
+      onTimeUpdateRef.current(0);
+      onEndedRef.current?.();
+    };
 
     if (clipsRef.current.length > 0) engine.load(clipsRef.current);
     onEngineReadyRef.current(engine);

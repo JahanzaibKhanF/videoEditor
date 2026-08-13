@@ -178,6 +178,11 @@ export default function Screen() {
               height={height}
               onTimeUpdate={handleTimeUpdate}
               onEngineReady={handleEngineReady}
+              // Wired to the existing (previously-unused) notifyEndedRef —
+              // without this, isPlaying stayed stuck "true" after a clip
+              // finished playing on its own, since only manual pause ever
+              // reset it. See notifyEndedRef above.
+              onEnded={() => notifyEndedRef.current()}
             />
 
             {/* Layer 2: interaction only — plain React/DOM (no canvas library), drag/resize handles + inline text edit */}

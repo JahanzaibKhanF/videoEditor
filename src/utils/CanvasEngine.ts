@@ -43,7 +43,15 @@ export class CanvasEngine {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext("2d")!;
+    // alpha:true is required so background-removed clips (which can have
+    // genuinely transparent pixels) don't get silently flattened to opaque
+    // black. Requested explicitly here rather than relying on some other
+    // caller having already created the context with alpha:true first —
+    // getContext() only honors options on the FIRST call for a given
+    // canvas, so any future caller of CanvasEngine that doesn't happen to
+    // go through CompositorCanvas.tsx would otherwise reintroduce the
+    // black-background bug silently.
+    this.ctx = canvas.getContext("2d", { alpha: true })!;
   }
 
   // ── Load clips ────────────────────────────────────────────────────────
@@ -107,6 +115,15 @@ export class CanvasEngine {
   play() {
     if (this._state === "playing") return;
     if (this._isSeeking) { this._pendingPlay = true; return; } // resumed once the in-flight seek finishes
+    // BUG THIS FIXES: after a clip finished naturally, `_currentTime` is
+    // left sitting at the very end (see the "ended" branch in the RAF
+    // loop below) and never gets reset — nothing else in the codebase
+    // rewinds it either. Pressing Play again used to just re-enter the
+    // RAF loop, immediately see `_currentTime >= total` on the very
+    // first tick, and re-fire "ended" without ever visibly playing a
+    // single frame. Matches how every normal video player behaves:
+    // pressing play after the end restarts from the beginning.
+    if (this._state === "ended") this._currentTime = 0;
     this._pendingPlay = false;
     this._state = "playing";
     this.lastRealTime = null;

@@ -88,6 +88,58 @@ export function totalSourceConsumed(clip: ClipDetails): number {
   return mapOutputElapsedToSourceTime(clip, outputDuration) - (clip.startTime ?? 0);
 }
 
+/**
+ * Splits a clip's speed value at a given point in ITS OWN 0..1 fraction
+ * space (see the model note at the top of this file) into two speed values
+ * — one for the left segment, one for the right — so a continuous ramp
+ * stays continuous across a cut instead of both halves independently
+ * replaying the whole original curve within their own (now shorter) span.
+ *
+ * BUG THIS FIXES: spliteLayer.ts used to just spread `...original` onto
+ * both new clip halves, which carries the SAME atFraction-keyed ramp array
+ * unchanged onto each. Since atFraction is relative to "this clip's own
+ * on-timeline duration" (not the pre-split duration), each half then
+ * independently re-ran the entire ramp curve end-to-end within its own
+ * shorter span — e.g. splitting a 10s "slow for first 55%, fast after"
+ * clip at the 5s mark produced two 5s halves that EACH went slow→fast
+ * again, instead of the left half staying purely slow and the right half
+ * picking up wherever the original curve actually was at the 5s mark.
+ *
+ * A plain constant speed (number, not an array) is unaffected by this bug
+ * — a fixed multiplier applies uniformly regardless of duration — so it's
+ * returned unchanged for both halves.
+ */
+export function splitSpeedAtFraction(
+  speed: number | SpeedRampPoint[] | undefined,
+  fracSplit: number
+): [number | SpeedRampPoint[] | undefined, number | SpeedRampPoint[] | undefined] {
+  if (!Array.isArray(speed) || speed.length === 0) return [speed, speed];
+
+  const f = Math.max(0.0001, Math.min(0.9999, fracSplit));
+  const sorted = [...speed].sort((a, b) => a.atFraction - b.atFraction);
+  const valueAtSplit = speedAtFraction(sorted, f);
+
+  const leftPoints: SpeedRampPoint[] = sorted
+    .filter(p => p.atFraction <= f)
+    .map(p => ({ atFraction: p.atFraction / f, speedMultiplier: p.speedMultiplier }));
+  if (leftPoints.length === 0 || leftPoints[0].atFraction > 0) {
+    leftPoints.unshift({ atFraction: 0, speedMultiplier: sorted[0].speedMultiplier });
+  }
+  leftPoints.push({ atFraction: 1, speedMultiplier: valueAtSplit });
+
+  const rightPoints: SpeedRampPoint[] = [{ atFraction: 0, speedMultiplier: valueAtSplit }];
+  for (const p of sorted) {
+    if (p.atFraction >= f) {
+      rightPoints.push({ atFraction: (p.atFraction - f) / (1 - f), speedMultiplier: p.speedMultiplier });
+    }
+  }
+  if (rightPoints[rightPoints.length - 1].atFraction < 1) {
+    rightPoints.push({ atFraction: 1, speedMultiplier: sorted[sorted.length - 1].speedMultiplier });
+  }
+
+  return [leftPoints, rightPoints];
+}
+
 // ── Curated ramp presets ────────────────────────────────────────────────
 export const SPEED_PRESETS: Record<string, { label: string; speed: number | SpeedRampPoint[] }> = {
   normal:   { label: "Normal",        speed: 1 },

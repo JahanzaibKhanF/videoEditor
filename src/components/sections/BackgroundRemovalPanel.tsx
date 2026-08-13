@@ -63,7 +63,12 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
         onFramePreview: (canvas) => {
           const target = canvasRef.current;
           if (!target) return;
-          const ctx = target.getContext("2d");
+          // alpha:true — this preview shows frames mid background-removal,
+          // which genuinely have transparent pixels. Without it, the
+          // preview panel would flatten them to opaque black even though
+          // the actual output blob is fine (same root cause already fixed
+          // for the main compositor canvas in CompositorCanvas.tsx).
+          const ctx = target.getContext("2d", { alpha: true });
           if (!ctx) return;
           target.width = canvas.width; target.height = canvas.height;
           ctx.clearRect(0, 0, target.width, target.height);

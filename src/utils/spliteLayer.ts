@@ -1,6 +1,7 @@
 import { toast } from "react-toastify";
 import { v4 as uuidv4 } from "uuid";
 import { AudioDetails, ClipDetails } from "../types/types";
+import { hasSpeedRamp, splitSpeedAtFraction } from "./speedRamp";
 
 // Minimum distance (in timeline seconds) the playhead must be from either
 // edge of a clip for a split to be allowed — splitting right at an edge
@@ -75,10 +76,25 @@ export const spliteLayer = (
 
   const rightId = uuidv4();
 
+  // SPEED-RAMP CONTINUITY FIX: without this, both halves below would
+  // inherit `original.speed` (the same atFraction-keyed ramp array)
+  // completely unchanged via the `...original` spread — and since
+  // atFraction is relative to each clip's OWN on-timeline duration (see
+  // speedRamp.ts), that means both halves would independently replay the
+  // ENTIRE original ramp curve within their own shorter span, instead of
+  // each picking up its correct slice of one continuous ramp. Only matters
+  // for actual ramp arrays; a plain constant speed number is unaffected.
+  const outputDuration = Math.max(0.0001, ep - sp);
+  const fracSplit = (currentTime - sp) / outputDuration;
+  const [leftSpeed, rightSpeed] = hasSpeedRamp(original)
+    ? splitSpeedAtFraction(original.speed, fracSplit)
+    : [original.speed, original.speed];
+
   const leftClip: ClipDetails = {
     ...original,
     endPosition: currentTime,
     endTime: splitSourceTime,
+    speed: leftSpeed,
     // A hard cut shouldn't inherit the original clip's outgoing transition
     // into what is now its own right-hand half — that transition (if any)
     // belongs on the new right segment, which is still the thing that
@@ -93,6 +109,7 @@ export const spliteLayer = (
     endPosition: ep,
     startTime: splitSourceTime,
     endTime: et,
+    speed: rightSpeed,
     // SAME TRACK as the original — see function doc comment above.
     zIndex: original.zIndex,
   };
