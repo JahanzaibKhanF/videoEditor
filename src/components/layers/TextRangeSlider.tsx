@@ -1,6 +1,6 @@
 "use client";
 
-import { MdOutlineAnimation } from "@/utils/icons";
+import { MdOutlineAnimation, ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
@@ -8,7 +8,7 @@ import { formatVideoDuration } from "../../utils/formatVideoDuration";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function TextRangeSlider() {
-  const { totalTime, textsDetails, setTextsDetails } = useAppDetailsContext();
+  const { totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null); // on the outer container for correct width
   const [localTexts, setLocalTexts] = useState(textsDetails);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
@@ -41,6 +41,42 @@ export default function TextRangeSlider() {
     setLocalTexts(updated); setTextsDetails(updated);
   };
 
+  // Shares the same zIndex space as video clips and images now (see
+  // compositeFrame.ts) so text can be sent behind a transparent/bg-removed
+  // video or image too, not just always drawn on top of everything.
+  // "up" = lower zIndex = frontmost, matching moveClipToTrack in
+  // VideoClipsRangeSlider.tsx and moveImageStack in ImagesRangeSlider.tsx.
+  const moveTextStack = (id: string, dir: "up" | "down") => {
+    const curZ = localTexts.find(t => t.id === id)?.zIndex ?? 0;
+    const others = Array.from(new Set([
+      ...localTexts.filter(t => t.id !== id).map(t => t.zIndex ?? 0),
+      ...imagesDetails.map(i => i.zIndex ?? 0),
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+    ]));
+    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
+    const idx = zs.indexOf(curZ);
+
+    let newZ: number;
+    if (dir === "up") {
+      if (idx === 0) { newZ = zs[idx] - 1; }
+      else {
+        const cand = zs[idx - 1];
+        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
+        newZ = (cand + beyond) / 2;
+      }
+    } else {
+      if (idx === zs.length - 1) { newZ = zs[idx] + 1; }
+      else {
+        const cand = zs[idx + 1];
+        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
+        newZ = (cand + beyond) / 2;
+      }
+    }
+
+    const updated = localTexts.map(t => t.id === id ? { ...t, zIndex: newZ } : t);
+    setLocalTexts(updated); setTextsDetails(updated);
+  };
+
   const handleDrag = (e: React.MouseEvent, textId: string, dragType: "move" | "resize-left" | "resize-right") => {
     e.preventDefault();
     const startX = e.clientX;
@@ -67,7 +103,9 @@ export default function TextRangeSlider() {
   // Outer div holds ref for width measurement; each row is relative inside it
   return (
     <div ref={timelineRef} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
-      {localTexts.map(text => {
+      {/* Sorted by zIndex so row position matches front/back order on the
+          canvas — see the same note in ImagesRangeSlider.tsx. */}
+      {[...localTexts].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(text => {
         if (text.startTime === null || text.endTime === null) return null;
         const left = `${(text.startTime / totalTime) * 100}%`;
         const width = `${((text.endTime - text.startTime) / totalTime) * 100}%`;
@@ -100,6 +138,22 @@ export default function TextRangeSlider() {
               <div className="absolute top-0 left-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, text.id, "resize-left"); }} />
               <div className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, text.id, "resize-right"); }} />
             </div>
+            {isSelected && (
+              <div style={{ position: "absolute", right: -18, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 1, zIndex: 15 }}>
+                <button title="Bring forward (draw on top)"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveTextStack(text.id, "up"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronUp size={9} color="white" />
+                </button>
+                <button title="Send backward"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveTextStack(text.id, "down"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronDown size={9} color="white" />
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

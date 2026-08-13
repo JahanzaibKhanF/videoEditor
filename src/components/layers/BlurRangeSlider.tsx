@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
@@ -7,7 +8,7 @@ import { formatVideoDuration } from "../../utils/formatVideoDuration";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function BlurRangeSlider() {
-  const { totalTime, blursDetails, setBlursDetails } = useAppDetailsContext();
+  const { totalTime, blursDetails, setBlursDetails, imagesDetails, clipsDetails, textsDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localBlurs, setLocalBlurs] = useState(blursDetails);
   const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
@@ -40,6 +41,41 @@ export default function BlurRangeSlider() {
     setLocalBlurs(updated); setBlursDetails(updated);
   };
 
+  // Same shared zIndex space as video/image/text now — a blur region only
+  // blurs whatever is drawn BELOW it in the stack (see compositeFrame.ts),
+  // so where it sits in this order actually changes what it blurs.
+  const moveBlurStack = (id: string, dir: "up" | "down") => {
+    const curZ = localBlurs.find(b => b.id === id)?.zIndex ?? 0;
+    const others = Array.from(new Set([
+      ...localBlurs.filter(b => b.id !== id).map(b => b.zIndex ?? 0),
+      ...imagesDetails.map(i => i.zIndex ?? 0),
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+      ...textsDetails.map(t => t.zIndex ?? 0),
+    ]));
+    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
+    const idx = zs.indexOf(curZ);
+
+    let newZ: number;
+    if (dir === "up") {
+      if (idx === 0) { newZ = zs[idx] - 1; }
+      else {
+        const cand = zs[idx - 1];
+        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
+        newZ = (cand + beyond) / 2;
+      }
+    } else {
+      if (idx === zs.length - 1) { newZ = zs[idx] + 1; }
+      else {
+        const cand = zs[idx + 1];
+        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
+        newZ = (cand + beyond) / 2;
+      }
+    }
+
+    const updated = localBlurs.map(b => b.id === id ? { ...b, zIndex: newZ } : b);
+    setLocalBlurs(updated); setBlursDetails(updated);
+  };
+
   const handleDrag = (e: React.MouseEvent, blurId: string, dragType: "move" | "resize-left" | "resize-right") => {
     e.preventDefault();
     const startX = e.clientX;
@@ -65,7 +101,7 @@ export default function BlurRangeSlider() {
 
   return (
     <div ref={timelineRef} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
-      {localBlurs.map(blur => {
+      {[...localBlurs].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(blur => {
         if (blur.startTime === null || blur.endTime === null) return null;
         const left = `${(blur.startTime / totalTime) * 100}%`;
         const width = `${((blur.endTime - blur.startTime) / totalTime) * 100}%`;
@@ -99,6 +135,22 @@ export default function BlurRangeSlider() {
               <div className="absolute top-0 left-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, blur.id, "resize-left"); }} />
               <div className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, blur.id, "resize-right"); }} />
             </div>
+            {isSelected && (
+              <div style={{ position: "absolute", right: -18, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 1, zIndex: 15 }}>
+                <button title="Bring forward (draw on top)"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveBlurStack(blur.id, "up"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronUp size={9} color="white" />
+                </button>
+                <button title="Send backward"
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); moveBlurStack(blur.id, "down"); }}
+                  style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
+                  <ChevronDown size={9} color="white" />
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

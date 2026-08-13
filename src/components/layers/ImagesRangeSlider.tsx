@@ -121,7 +121,15 @@ export default function ImagesRangeSlider() {
 
   return (
     <div ref={timelineRef} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
-      {localImages.map(img => {
+      {/* Sorted by zIndex (not insertion order) so a row's position in this
+          list actually matches its front/back position on the canvas —
+          same "lower zIndex = higher in the list = frontmost" convention as
+          VideoClipsRangeSlider.tsx. Previously this just mapped over
+          `localImages` in whatever order they were added, so an image you
+          moved behind the video with the down-chevron would still show up
+          ABOVE it in this list — the canvas was already right, only the
+          list was lying about it. */}
+      {[...localImages].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(img => {
         if (img.startTime === null || img.endTime === null) return null;
         const left = `${(img.startTime / totalTime) * 100}%`;
         const width = `${((img.endTime - img.startTime) / totalTime) * 100}%`;

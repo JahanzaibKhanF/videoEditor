@@ -46,101 +46,114 @@ export function compositeFrame(input: CompositeFrameInput) {
 
   const clipsSorted = [...clips].sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0));
 
-  // UNIFIED VIDEO+IMAGE Z-STACK: video clips and images used to draw as two
-  // entirely separate blocks (every image always fully above or fully below
-  // every video clip, only swappable as a whole block via `layerOrder`).
-  // That meant an image could never sit BETWEEN two video tracks, and a
-  // background-removed video track dragged above one image but below
-  // another had no way to express that. They now share one zIndex numeric
-  // space (see moveClipToTrack in VideoClipsRangeSlider.tsx and
-  // moveImageStack in ImagesRangeSlider.tsx, both of which write into it),
-  // and are merged into a single descending-zIndex draw pass here — so an
-  // image's zIndex can land it anywhere in the video-track stack, not just
-  // at the very front or very back.
-  const activeImages = images
+  // UNIFIED Z-STACK: video clips, images, text, and blur regions used to
+  // each draw as their own separate block (every image always fully above
+  // every video clip, every text always above every image, blur always on
+  // top of literally everything, only swappable as whole blocks via
+  // `layerOrder`). That meant an image could never sit BETWEEN two video
+  // tracks, a blur region could never blur just the video underneath it
+  // while leaving an image above untouched, etc. They now share one zIndex
+  // numeric space (see moveClipToTrack in VideoClipsRangeSlider.tsx,
+  // moveImageStack in ImagesRangeSlider.tsx, moveTextStack in
+  // TextRangeSlider.tsx, and moveBlurStack in BlurRangeSlider.tsx — all
+  // four write into it), and are merged into a single draw pass here, so
+  // any layer's zIndex can land it anywhere in the full stack, not just at
+  // the front or back of its own type.
+  //
+  // Note for blur specifically: blur genuinely needs to be drawn in true
+  // z-order (not just always-last) because it samples whatever's already
+  // been painted to the canvas so far (see drawBlurRegion below) — where it
+  // sits in the merged order determines what it actually blurs.
+  type MergedLayer =
+    | { kind: "video"; z: number; clip: ClipDetails }
+    | { kind: "image"; z: number; image: ImageDetails }
+    | { kind: "text"; z: number; text: TextDetails }
+    | { kind: "blur"; z: number; blur: BlurDetails };
+
+  const activeClips: MergedLayer[] = clipsSorted
+    .filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity))
+    .map(clip => ({ kind: "video" as const, z: clip.zIndex ?? 0, clip }));
+  const imageLayers: MergedLayer[] = images
     .filter(img => t >= img.startTime && t <= img.endTime)
-    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)); // ascending; merged below
-  let mergedVideoImageDrawn = false;
+    .map(image => ({ kind: "image" as const, z: image.zIndex ?? 0, image }));
+  const textLayers: MergedLayer[] = texts
+    .filter(text => t >= text.startTime && t <= text.endTime)
+    .map(text => ({ kind: "text" as const, z: text.zIndex ?? 0, text }));
+  const blurLayers: MergedLayer[] = blurs
+    .filter(blur => t >= blur.startTime && t <= blur.endTime)
+    .map(blur => ({ kind: "blur" as const, z: blur.zIndex ?? 0, blur }));
 
+  // HIGHEST zIndex drawn first (furthest back), LOWEST zIndex drawn last
+  // (frontmost) — matches "higher in the track/layer list = drawn on top".
+  const merged = [...activeClips, ...imageLayers, ...textLayers, ...blurLayers]
+    .sort((a, b) => b.z - a.z);
+
+  let mergedDrawn = false;
   for (const layerType of drawOrder) {
-    if (layerType === "video" || layerType === "image") {
-      // Only actually draw once — whichever of "video"/"image" comes first
-      // in drawOrder triggers the merged pass; the other is a no-op so it
-      // doesn't get drawn twice.
-      if (mergedVideoImageDrawn) continue;
-      mergedVideoImageDrawn = true;
-
-      type MergedLayer =
-        | { kind: "video"; z: number; clip: ClipDetails }
-        | { kind: "image"; z: number; image: ImageDetails };
-
-      const activeClips: MergedLayer[] = clipsSorted
-        .filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity))
-        .map(clip => ({ kind: "video" as const, z: clip.zIndex ?? 0, clip }));
-      const imageLayers: MergedLayer[] = activeImages
-        .map(image => ({ kind: "image" as const, z: image.zIndex ?? 0, image }));
-
-      // HIGHEST zIndex drawn first (furthest back), LOWEST zIndex drawn
-      // last (frontmost) — matches "higher in the track list = drawn on
-      // top" (see the z-order fix note above resolveTargetTrack in
-      // VideoClipsRangeSlider.tsx and moveImageStack in
-      // ImagesRangeSlider.tsx, which both write into this same numeric
-      // space now).
-      const merged = [...activeClips, ...imageLayers].sort((a, b) => b.z - a.z);
+    if (layerType === "video" || layerType === "image" || layerType === "text" || layerType === "blur") {
+      // Only actually draw once — whichever of these four comes first in
+      // drawOrder triggers the single merged pass; the rest are no-ops so
+      // nothing draws twice.
+      if (mergedDrawn) continue;
+      mergedDrawn = true;
 
       for (const layer of merged) {
-        if (layer.kind === "image") {
-          drawImageLayer(ctx, layer.image, t, fps, w, h, imageEls);
-          continue;
-        }
-        drawVideoClip(ctx, layer.clip, clipsSorted, t, fps, w, h, clipEffects, getVideoDrawable);
-      }
-    } else if (layerType === "text") {
-      for (const text of texts) {
-        if (t < text.startTime || t > text.endTime) continue;
-        const anim = computeAnimState(text.animation, t, text.startTime, text.endTime, fps, text.textX, text.textY, w, h, text.fontSize);
-        if (!anim.visible) continue;
-        const tw2 = text.width ?? 200, th2 = text.height ?? text.fontSize * 1.4;
-        ctx.save();
-        if (anim.blur > 0) ctx.filter = `blur(${anim.blur}px)`;
-        ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity * (text.opacity ?? 1)));
-        ctx.translate(anim.tx + tw2 / 2, anim.ty + th2 / 2);
-        ctx.rotate((anim.rotation * Math.PI) / 180);
-        ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
-        ctx.font = `${text.isItalic ? "italic" : "normal"} ${text.isBold ? "bold" : "normal"} ${text.fontSize}px "${text.fontFamily ?? "Arial"}", sans-serif`;
-        ctx.textBaseline = "top";
-        if (text.backgroundColor && text.backgroundColor !== "transparent") {
-          ctx.fillStyle = text.backgroundColor; ctx.fillRect(-tw2 / 2, -th2 / 2, tw2, th2);
-        }
-        if (text.shadowColor && text.shadowColor !== "transparent") {
-          ctx.shadowColor = text.shadowColor; ctx.shadowBlur = text.shadowBlur ?? 0;
-          ctx.shadowOffsetX = text.shadowOffsetX ?? 0; ctx.shadowOffsetY = text.shadowOffsetY ?? 0;
-        }
-        ctx.fillStyle = text.textColor ?? "#fff";
-        drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2));
-        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.filter = "none";
-        ctx.restore();
-      }
-    } else if (layerType === "blur") {
-      for (const blur of blurs) {
-        if (t < blur.startTime || t > blur.endTime) continue;
-        ctx.save();
-        ctx.filter = `blur(${blur.blurAmount ?? 10}px)`;
-        try {
-          const region = ctx.getImageData(blur.x, blur.y, blur.width, blur.height);
-          const off = new OffscreenCanvas(blur.width, blur.height);
-          const offCtx = off.getContext("2d")!;
-          offCtx.putImageData(region, 0, 0);
-          ctx.drawImage(off, blur.x, blur.y);
-        } catch {
-          ctx.fillStyle = "rgba(100,100,120,0.35)";
-          ctx.fillRect(blur.x, blur.y, blur.width, blur.height);
-        }
-        ctx.filter = "none";
-        ctx.restore();
+        if (layer.kind === "video") drawVideoClip(ctx, layer.clip, clipsSorted, t, fps, w, h, clipEffects, getVideoDrawable);
+        else if (layer.kind === "image") drawImageLayer(ctx, layer.image, t, fps, w, h, imageEls);
+        else if (layer.kind === "text") drawTextLayer(ctx, layer.text, t, fps, w, h);
+        else drawBlurRegion(ctx, layer.blur);
       }
     }
   }
+}
+
+// Draws one text layer. Extracted out of the old dedicated "text" block —
+// see the merged draw pass above.
+function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: number, fps: number, w: number, h: number) {
+  const anim = computeAnimState(text.animation, t, text.startTime, text.endTime, fps, text.textX, text.textY, w, h, text.fontSize);
+  if (!anim.visible) return;
+  const tw2 = text.width ?? 200, th2 = text.height ?? text.fontSize * 1.4;
+  ctx.save();
+  if (anim.blur > 0) ctx.filter = `blur(${anim.blur}px)`;
+  ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity * (text.opacity ?? 1)));
+  ctx.translate(anim.tx + tw2 / 2, anim.ty + th2 / 2);
+  ctx.rotate((anim.rotation * Math.PI) / 180);
+  ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
+  ctx.font = `${text.isItalic ? "italic" : "normal"} ${text.isBold ? "bold" : "normal"} ${text.fontSize}px "${text.fontFamily ?? "Arial"}", sans-serif`;
+  ctx.textBaseline = "top";
+  if (text.backgroundColor && text.backgroundColor !== "transparent") {
+    ctx.fillStyle = text.backgroundColor; ctx.fillRect(-tw2 / 2, -th2 / 2, tw2, th2);
+  }
+  if (text.shadowColor && text.shadowColor !== "transparent") {
+    ctx.shadowColor = text.shadowColor; ctx.shadowBlur = text.shadowBlur ?? 0;
+    ctx.shadowOffsetX = text.shadowOffsetX ?? 0; ctx.shadowOffsetY = text.shadowOffsetY ?? 0;
+  }
+  ctx.fillStyle = text.textColor ?? "#fff";
+  drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2));
+  ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.filter = "none";
+  ctx.restore();
+}
+
+// Draws one blur region by sampling whatever has already been painted to
+// the canvas at that point in the merged draw pass — this is exactly why
+// blur needed to join the unified z-stack instead of always running last:
+// its result now genuinely depends on what's already underneath it in the
+// merged order, not on the full final frame.
+function drawBlurRegion(ctx: CanvasRenderingContext2D, blur: BlurDetails) {
+  ctx.save();
+  ctx.filter = `blur(${blur.blurAmount ?? 10}px)`;
+  try {
+    const region = ctx.getImageData(blur.x, blur.y, blur.width, blur.height);
+    const off = new OffscreenCanvas(blur.width, blur.height);
+    const offCtx = off.getContext("2d")!;
+    offCtx.putImageData(region, 0, 0);
+    ctx.drawImage(off, blur.x, blur.y);
+  } catch {
+    ctx.fillStyle = "rgba(100,100,120,0.35)";
+    ctx.fillRect(blur.x, blur.y, blur.width, blur.height);
+  }
+  ctx.filter = "none";
+  ctx.restore();
 }
 
 // Draws one video clip's current frame (+ its shake/wiggle/overlay effects

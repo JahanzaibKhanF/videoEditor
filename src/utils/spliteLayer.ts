@@ -155,5 +155,5 @@ export const spliteLayer = (
     }
   }
 
-  toast.success("Clip split.");
+
 };
