@@ -63,16 +63,37 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
   const handleDrag = (e: React.MouseEvent, textId: string, dragType: "move" | "resize-left" | "resize-right") => {
     e.preventDefault();
     const startX = e.clientX;
+    let startY = e.clientY;
     setSelectedTextId(textId);
     const textIndex = localTexts.findIndex(t => t.id === textId);
     if (textIndex === -1 || !timelineRef.current || totalTime === 0) return;
     const timelineWidth = timelineRef.current.offsetWidth;
     const orig = { ...localTexts[textIndex] };
 
+    // Static snapshot, fixed for this drag — see the matching comment in
+    // ImagesRangeSlider.tsx's handleDrag.
+    const otherZs = [
+      ...localTexts.filter(t => t.id !== textId).map(t => t.zIndex ?? 0),
+      ...imagesDetails.map(i => i.zIndex ?? 0),
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ];
+    let curZ = orig.zIndex ?? 0;
+
     const onMouseMove = (me: MouseEvent) => {
       const dt = ((me.clientX - startX) / timelineWidth) * totalTime;
       let s = orig.startTime ?? 0, end = orig.endTime ?? 0;
-      if (dragType === "move") { const dur = end - s; s += dt; end = s + dur; }
+      if (dragType === "move") {
+        const dur = end - s; s += dt; end = s + dur;
+        // Hold + drag vertically to reorder — same gesture video clips use.
+        const dy = me.clientY - startY;
+        if (Math.abs(dy) > 14) {
+          curZ = computeAdjacentZ(dy > 0 ? "down" : "up", curZ, otherZs);
+          const updated = localTexts.map(t => t.id === textId ? { ...t, zIndex: curZ } : t);
+          setLocalTexts(updated); setTextsDetails(updated);
+          startY = me.clientY;
+        }
+      }
       else if (dragType === "resize-left") { s += dt; if (end - s < (MIN_WIDTH_PERCENT / 100) * totalTime) return; }
       else if (dragType === "resize-right") { end += dt; if (end - s < (MIN_WIDTH_PERCENT / 100) * totalTime) return; }
       if (s < 0 || end > totalTime || end <= s) return;

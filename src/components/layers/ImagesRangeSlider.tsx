@@ -81,16 +81,48 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
   const handleDrag = (e: React.MouseEvent, imageId: string, dragType: "move" | "resize-left" | "resize-right") => {
     e.preventDefault();
     const startX = e.clientX;
+    let startY = e.clientY;
     setSelectedImageId(imageId);
     const idx = localImages.findIndex(i => i.id === imageId);
     if (idx === -1 || !timelineRef.current || totalTime === 0) return;
     const timelineWidth = timelineRef.current.offsetWidth;
     const orig = { ...localImages[idx] };
 
+    // Static snapshot of every OTHER layer's zIndex, fixed for the duration
+    // of this drag — same pattern VideoClipsRangeSlider's own drag() uses,
+    // and for the same reason: deriving this fresh from React state/props
+    // on every mousemove tick would be reading a STALE closure (state
+    // updates from earlier ticks in the same gesture haven't necessarily
+    // re-rendered yet), which could make two quick vertical hops during one
+    // drag both resolve against the same starting zIndex instead of
+    // stepping further each time.
+    const otherZs = [
+      ...localImages.filter(img => img.id !== imageId).map(img => img.zIndex ?? 0),
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+      ...textsDetails.map(t => t.zIndex ?? 0),
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ];
+    let curZ = orig.zIndex ?? 0;
+
     const onMouseMove = (me: MouseEvent) => {
       const dt = ((me.clientX - startX) / timelineWidth) * totalTime;
       let s = orig.startTime ?? 0, end = orig.endTime ?? 0;
-      if (dragType === "move") { const dur = end - s; s += dt; end = s + dur; }
+      if (dragType === "move") {
+        const dur = end - s; s += dt; end = s + dur;
+        // Hold + drag vertically past half a row's height to reorder this
+        // image in the shared stack — same gesture VideoClipsRangeSlider
+        // uses to retarget a clip's track. Previously the ▲▼ chevrons on a
+        // selected chip were the ONLY way to reorder an image/blur; video
+        // clips could additionally just be dragged up/down, so this closed
+        // that gap.
+        const dy = me.clientY - startY;
+        if (Math.abs(dy) > 14) {
+          curZ = computeAdjacentZ(dy > 0 ? "down" : "up", curZ, otherZs);
+          const updated = localImages.map(img => img.id === imageId ? { ...img, zIndex: curZ } : img);
+          setLocalImages(updated); setImagesDetails(updated);
+          startY = me.clientY;
+        }
+      }
       else if (dragType === "resize-left") { s += dt; if (end - s < (MIN_WIDTH_PERCENT / 100) * totalTime) return; }
       else if (dragType === "resize-right") { end += dt; if (end - s < (MIN_WIDTH_PERCENT / 100) * totalTime) return; }
       if (s < 0 || end > totalTime || end <= s) return;
