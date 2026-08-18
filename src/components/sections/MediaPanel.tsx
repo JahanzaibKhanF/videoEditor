@@ -8,6 +8,7 @@ import { useAppDetailsContext } from "../../context/useAppContext";
 import { addClipToTimeline } from "../../utils/addClipToTimeline";
 import { deleteVideo } from "../../utils/deleteVideo";
 import { spliteLayer } from "../../utils/spliteLayer";
+import { frontmostZ } from "../../utils/zStack";
 import { formatVideoSize } from "../../utils/formatVideoSize";
 import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
 import TemplatesPanel from "./TemplatesPanel";
@@ -84,13 +85,27 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
         // from the same spot (the same class of bug as the ref collision
         // above, just for on-screen position instead of pixel content).
         const placementIndex = imagesDetails.length + index;
+        // NEW-LAYER-ON-TOP FIX: a freshly imported image used to get no
+        // zIndex at all, which every reorder/composite path then defaulted
+        // to 0 via `?? 0` — tying it with video's own default track zIndex
+        // (also 0, see addClipToTimeline.ts) and landing it wherever that
+        // tie happened to fall in the merged draw order, NOT necessarily on
+        // top. Explicitly placing it strictly in front of every existing
+        // layer (video/image/text/blur) matches how every other editor
+        // treats a newly added layer.
+        const zIndex = frontmostZ([
+          ...clipsDetails.map(c => c.zIndex ?? 0),
+          ...imagesDetails.map(i => i.zIndex ?? 0),
+          ...textsDetails.map(t => t.zIndex ?? 0),
+          ...blursDetails.map(b => b.zIndex ?? 0),
+        ]);
         const imgEl = new Image();
         imgEl.src = URL.createObjectURL(file);
         imgEl.onload = () => {
           newRefs[id] = imgEl;
           const reader = new FileReader();
           reader.onload = () => {
-            newImages.push({ id, src: imgEl.src, image: file, sourceFileName: file.name, opacity: 1, imageX: placementIndex * 40, imageY: placementIndex * 30, width: imgEl.width, height: imgEl.height, scaleX: .4, scaleY: .4, startTime: 0, endTime: totalTime, animation: "none" });
+            newImages.push({ id, src: imgEl.src, image: file, sourceFileName: file.name, opacity: 1, imageX: placementIndex * 40, imageY: placementIndex * 30, width: imgEl.width, height: imgEl.height, scaleX: .4, scaleY: .4, startTime: 0, endTime: totalTime, animation: "none", zIndex });
             setImagesDetails([...newImages]);
             setImageRefs({ ...newRefs });
             setSelectedImageID(id);
@@ -154,13 +169,33 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     const width = Math.min(420, Math.max(220, containerDimenions.width * 0.4));
     const height = measureWrappedTextHeight(defaultText, fontSize, "Arial", 1, width, false, false);
     const defaultDuration = Math.min(5, totalTime || 5);
-    const t = { text: defaultText, textColor: "white", backgroundColor: "transparent", shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 3, shadowOffsetY: 1, fontFamily: "Arial", textX: (containerDimenions.width - width) / 2, textY: (containerDimenions.height - height) / 2, width, height, fontSize, lineHeight: 1, isBold: false, isItalic: false, isUnderline: false, opacity: 1, id: uuidv4(), startTime: 0, endTime: defaultDuration, animation: "none" };
+    // NEW-LAYER-ON-TOP FIX — see the matching comment in ingestFiles above.
+    const textZIndex = frontmostZ([
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+      ...imagesDetails.map(i => i.zIndex ?? 0),
+      ...textsDetails.map(tx => tx.zIndex ?? 0),
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ]);
+    const t = { text: defaultText, textColor: "white", backgroundColor: "transparent", shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 3, shadowOffsetY: 1, fontFamily: "Arial", textX: (containerDimenions.width - width) / 2, textY: (containerDimenions.height - height) / 2, width, height, fontSize, lineHeight: 1, isBold: false, isItalic: false, isUnderline: false, opacity: 1, id: uuidv4(), startTime: 0, endTime: defaultDuration, animation: "none", zIndex: textZIndex };
     setTextsDetails(prev => [...prev, t]);
     setSelectedTextId(t.id);
   };
 
   const addBlur = () => {
-    const b = { id: uuidv4(), x: (containerDimenions.width - 200) / 2, y: 100, width: 400, height: 200, blurAmount: 10, startTime: 0, endTime: totalTime };
+    // NEW-LAYER-ON-TOP FIX — see the matching comment in ingestFiles above.
+    // Blur especially needs to default to the front: a blur region only
+    // blurs whatever's already been drawn BELOW it (see drawBlurRegion in
+    // compositeFrame.ts), so a fresh blur that silently landed BEHIND
+    // something (via the old zIndex-0 tie) would render as if it did
+    // nothing at all — exactly the "why did my blur not show up / show up
+    // behind my image" symptom.
+    const blurZIndex = frontmostZ([
+      ...clipsDetails.map(c => c.zIndex ?? 0),
+      ...imagesDetails.map(i => i.zIndex ?? 0),
+      ...textsDetails.map(t => t.zIndex ?? 0),
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ]);
+    const b = { id: uuidv4(), x: (containerDimenions.width - 200) / 2, y: 100, width: 400, height: 200, blurAmount: 10, startTime: 0, endTime: totalTime, zIndex: blurZIndex };
     setBlursDetails(prev => [...prev, b]);
     setSelectedBlurId(b.id);
   };

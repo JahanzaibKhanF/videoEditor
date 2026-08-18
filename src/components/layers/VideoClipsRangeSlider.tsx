@@ -34,25 +34,35 @@ import { ROW_H, ROW_GAP } from "./Layers";
 import { transitionOptions } from "../../utils/transitionOtionsConstants";
 import { Shuffle, ChevronUp, ChevronDown } from "@/utils/icons";
 import { AudioTrackRow } from "./AudioRangeSlider";
-import { ClipDetails } from "../../types/types";
+import { ClipDetails, ImageDetails, TextDetails, BlurDetails } from "../../types/types";
+import { computeAdjacentZ } from "../../utils/zStack";
 
 const MIN_W_PCT = 1;
 
 // Given a clip's own id + its live start/end position, work out which
 // existing track it should land on when moving `dir`, or allocate a new one.
-// `others` is every OTHER clip (never the one being moved).
+// `others` is every OTHER clip (never the one being moved); `otherLayerZs`
+// is every image/text/blur's zIndex (also in the shared unified stack —
+// see zStack.ts) so a clip can step to a slot BETWEEN two of those too, not
+// just between two other video tracks.
 function resolveTargetTrack(
   dir: "up" | "down",
   curZ: number,
   sp: number,
   ep: number,
   others: ClipDetails[],
+  otherLayerZs: number[] = [],
 ): number {
   const tracks = Array.from(new Set([...others.map(c => c.zIndex ?? 0), curZ])).sort((a, b) => a - b);
   const idx = tracks.indexOf(curZ);
   const overlaps = (z: number) => others.some(c =>
     (c.zIndex ?? 0) === z && sp < (c.endPosition ?? 0) && ep > (c.startPosition ?? 0)
   );
+  // If the immediately adjacent TRACK slot is free of overlapping clips,
+  // still prefer stepping onto it (image/text/blur layers don't occupy a
+  // "track" the same clip-overlap way, so they never block a track move —
+  // computeAdjacentZ below is only used as a fallback when no track exists
+  // in that direction at all, to land between/beyond image/text/blur layers).
   if (dir === "down") {
     if (idx < tracks.length - 1) {
       const cand = tracks[idx + 1];
@@ -60,7 +70,7 @@ function resolveTargetTrack(
       const beyond = idx + 2 < tracks.length ? tracks[idx + 2] : cand + 1;
       return (cand + beyond) / 2;
     }
-    return tracks[idx] + 1;
+    return computeAdjacentZ("down", curZ, [...others.map(c => c.zIndex ?? 0), ...otherLayerZs]);
   } else {
     if (idx > 0) {
       const cand = tracks[idx - 1];
@@ -68,11 +78,11 @@ function resolveTargetTrack(
       const beyond = idx - 2 >= 0 ? tracks[idx - 2] : cand - 1;
       return (cand + beyond) / 2;
     }
-    return tracks[idx] - 1;
+    return computeAdjacentZ("up", curZ, [...others.map(c => c.zIndex ?? 0), ...otherLayerZs]);
   }
 }
 
-export default function VideoClipsRangeSlider() {
+export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: number[] } = {}) {
   const {
     totalTime, setTotalTime,
     clipsDetails, setClipsDetails,
@@ -80,7 +90,17 @@ export default function VideoClipsRangeSlider() {
     setClipEffects,
     selectedClipId,
     setSelectedClipId: setCtxSel,
+    imagesDetails, textsDetails, blursDetails,
   } = useAppDetailsContext();
+
+  // Every image/text/blur zIndex — used so a video clip stepping up/down
+  // past the last existing track can land in a slot between/beyond those
+  // layers too (shared unified stack, see zStack.ts).
+  const otherLayerZs = [
+    ...imagesDetails.map((i: ImageDetails) => i.zIndex ?? 0),
+    ...textsDetails.map((t: TextDetails) => t.zIndex ?? 0),
+    ...blursDetails.map((b: BlurDetails) => b.zIndex ?? 0),
+  ];
 
   const ref = useRef<HTMLDivElement>(null);
   const [selId, setSelId] = useState<string | null>(null);
@@ -116,7 +136,7 @@ export default function VideoClipsRangeSlider() {
       const clip = prev.find(c => c.id === clipId);
       if (!clip) return prev;
       const others = prev.filter(c => c.id !== clipId);
-      const targetZ = resolveTargetTrack(dir, clip.zIndex ?? 0, clip.startPosition ?? 0, clip.endPosition ?? 0, others);
+      const targetZ = resolveTargetTrack(dir, clip.zIndex ?? 0, clip.startPosition ?? 0, clip.endPosition ?? 0, others, otherLayerZs);
       return prev.map(c => c.id === clipId ? { ...c, zIndex: targetZ } : c);
     });
   };
@@ -165,7 +185,7 @@ export default function VideoClipsRangeSlider() {
         const dy = me.clientY - startY;
         if (Math.abs(dy) > ROW_H / 2) {
           const dir: "up" | "down" = dy > 0 ? "down" : "up";
-          curZ = resolveTargetTrack(dir, curZ, sp, ep, otherClips);
+          curZ = resolveTargetTrack(dir, curZ, sp, ep, otherClips, otherLayerZs);
           startY = me.clientY;
         }
 
@@ -235,7 +255,15 @@ export default function VideoClipsRangeSlider() {
   };
 
   // ── Group clips into tracks (rows) by zIndex ──────────────────────────
-  const trackIds = Array.from(new Set(clipsDetails.map(c => c.zIndex ?? 0))).sort((a, b) => a - b);
+  // When `onlyTrackZs` is given, this instance only renders that subset of
+  // tracks — used by Layers.tsx to interleave a run of video tracks with
+  // image/text/blur runs above and below it in the unified AE-style stack
+  // (see layerStack.ts). Move/drag logic below still always operates
+  // against the FULL clipsDetails from context, so a clip can still be
+  // dragged/moved onto any track anywhere in the whole stack, not just one
+  // rendered by this particular run.
+  const allTrackIds = Array.from(new Set(clipsDetails.map(c => c.zIndex ?? 0))).sort((a, b) => a - b);
+  const trackIds = onlyTrackZs ? allTrackIds.filter(z => onlyTrackZs.includes(z)) : allTrackIds;
   const clipsByTrack = trackIds.map(z => ({
     z,
     clips: clipsDetails.filter(c => (c.zIndex ?? 0) === z).sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0)),

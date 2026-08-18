@@ -4,11 +4,12 @@ import { MdOutlineAnimation, ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
+import { computeAdjacentZ } from "../../utils/zStack";
 
 const MIN_WIDTH_PERCENT = 1;
 
-export default function TextRangeSlider() {
-  const { totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails } = useAppDetailsContext();
+export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
+  const { totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails, blursDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null); // on the outer container for correct width
   const [localTexts, setLocalTexts] = useState(textsDetails);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
@@ -48,31 +49,13 @@ export default function TextRangeSlider() {
   // VideoClipsRangeSlider.tsx and moveImageStack in ImagesRangeSlider.tsx.
   const moveTextStack = (id: string, dir: "up" | "down") => {
     const curZ = localTexts.find(t => t.id === id)?.zIndex ?? 0;
-    const others = Array.from(new Set([
+    const others = [
       ...localTexts.filter(t => t.id !== id).map(t => t.zIndex ?? 0),
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
-    ]));
-    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
-    const idx = zs.indexOf(curZ);
-
-    let newZ: number;
-    if (dir === "up") {
-      if (idx === 0) { newZ = zs[idx] - 1; }
-      else {
-        const cand = zs[idx - 1];
-        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
-        newZ = (cand + beyond) / 2;
-      }
-    } else {
-      if (idx === zs.length - 1) { newZ = zs[idx] + 1; }
-      else {
-        const cand = zs[idx + 1];
-        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
-        newZ = (cand + beyond) / 2;
-      }
-    }
-
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ];
+    const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localTexts.map(t => t.id === id ? { ...t, zIndex: newZ } : t);
     setLocalTexts(updated); setTextsDetails(updated);
   };
@@ -105,7 +88,9 @@ export default function TextRangeSlider() {
     <div ref={timelineRef} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
       {/* Sorted by zIndex so row position matches front/back order on the
           canvas — see the same note in ImagesRangeSlider.tsx. */}
-      {[...localTexts].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(text => {
+      {[...localTexts]
+        .filter(text => !onlyIds || onlyIds.includes(text.id))
+        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(text => {
         if (text.startTime === null || text.endTime === null) return null;
         const left = `${(text.startTime / totalTime) * 100}%`;
         const width = `${((text.endTime - text.startTime) / totalTime) * 100}%`;

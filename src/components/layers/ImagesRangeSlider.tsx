@@ -4,11 +4,12 @@ import { MdOutlineAnimation, ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
+import { computeAdjacentZ } from "../../utils/zStack";
 
 const MIN_WIDTH_PERCENT = 1;
 
-export default function ImagesRangeSlider() {
-  const { totalTime, imagesDetails, setImagesDetails, clipsDetails } = useAppDetailsContext();
+export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
+  const { totalTime, imagesDetails, setImagesDetails, clipsDetails, textsDetails, blursDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localImages, setLocalImages] = useState(imagesDetails);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
@@ -66,32 +67,13 @@ export default function ImagesRangeSlider() {
   // moving an image never touches any other layer's zIndex.
   const moveImageStack = (id: string, dir: "up" | "down") => {
     const curZ = localImages.find(img => img.id === id)?.zIndex ?? 0;
-    const others = Array.from(new Set([
+    const others = [
       ...localImages.filter(img => img.id !== id).map(img => img.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
-    ]));
-    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
-    const idx = zs.indexOf(curZ);
-
-    let newZ: number;
-    if (dir === "up") {
-      if (idx === 0) {
-        newZ = zs[idx] - 1;
-      } else {
-        const cand = zs[idx - 1];
-        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
-        newZ = (cand + beyond) / 2;
-      }
-    } else {
-      if (idx === zs.length - 1) {
-        newZ = zs[idx] + 1;
-      } else {
-        const cand = zs[idx + 1];
-        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
-        newZ = (cand + beyond) / 2;
-      }
-    }
-
+      ...textsDetails.map(t => t.zIndex ?? 0),
+      ...blursDetails.map(b => b.zIndex ?? 0),
+    ];
+    const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localImages.map(img => img.id === id ? { ...img, zIndex: newZ } : img);
     setLocalImages(updated); setImagesDetails(updated);
   };
@@ -129,7 +111,9 @@ export default function ImagesRangeSlider() {
           moved behind the video with the down-chevron would still show up
           ABOVE it in this list — the canvas was already right, only the
           list was lying about it. */}
-      {[...localImages].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(img => {
+      {[...localImages]
+        .filter(img => !onlyIds || onlyIds.includes(img.id))
+        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(img => {
         if (img.startTime === null || img.endTime === null) return null;
         const left = `${(img.startTime / totalTime) * 100}%`;
         const width = `${((img.endTime - img.startTime) / totalTime) * 100}%`;

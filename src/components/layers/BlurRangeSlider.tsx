@@ -4,10 +4,11 @@ import { ChevronUp, ChevronDown } from "@/utils/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
+import { computeAdjacentZ } from "../../utils/zStack";
 
 const MIN_WIDTH_PERCENT = 1;
 
-export default function BlurRangeSlider() {
+export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
   const { totalTime, blursDetails, setBlursDetails, imagesDetails, clipsDetails, textsDetails } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localBlurs, setLocalBlurs] = useState(blursDetails);
@@ -46,32 +47,13 @@ export default function BlurRangeSlider() {
   // so where it sits in this order actually changes what it blurs.
   const moveBlurStack = (id: string, dir: "up" | "down") => {
     const curZ = localBlurs.find(b => b.id === id)?.zIndex ?? 0;
-    const others = Array.from(new Set([
+    const others = [
       ...localBlurs.filter(b => b.id !== id).map(b => b.zIndex ?? 0),
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...textsDetails.map(t => t.zIndex ?? 0),
-    ]));
-    const zs = Array.from(new Set([...others, curZ])).sort((a, b) => a - b);
-    const idx = zs.indexOf(curZ);
-
-    let newZ: number;
-    if (dir === "up") {
-      if (idx === 0) { newZ = zs[idx] - 1; }
-      else {
-        const cand = zs[idx - 1];
-        const beyond = idx - 2 >= 0 ? zs[idx - 2] : cand - 1;
-        newZ = (cand + beyond) / 2;
-      }
-    } else {
-      if (idx === zs.length - 1) { newZ = zs[idx] + 1; }
-      else {
-        const cand = zs[idx + 1];
-        const beyond = idx + 2 < zs.length ? zs[idx + 2] : cand + 1;
-        newZ = (cand + beyond) / 2;
-      }
-    }
-
+    ];
+    const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localBlurs.map(b => b.id === id ? { ...b, zIndex: newZ } : b);
     setLocalBlurs(updated); setBlursDetails(updated);
   };
@@ -101,7 +83,9 @@ export default function BlurRangeSlider() {
 
   return (
     <div ref={timelineRef} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 3 }}>
-      {[...localBlurs].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(blur => {
+      {[...localBlurs]
+        .filter(blur => !onlyIds || onlyIds.includes(blur.id))
+        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(blur => {
         if (blur.startTime === null || blur.endTime === null) return null;
         const left = `${(blur.startTime / totalTime) * 100}%`;
         const width = `${((blur.endTime - blur.startTime) / totalTime) * 100}%`;

@@ -1,34 +1,42 @@
 "use client";
 
 /**
- * Layers — track rows only.
- * Layer order from context controls both visual stack AND compositor draw order.
- * New layers always seeded at top (highest zIndex).
+ * Layers — the actual draggable track rows.
+ *
+ * REWRITE: this used to render 4 fixed blocks (video, image, text, blur)
+ * stacked in whatever order a separate `layerOrder` state said — but that
+ * state had NO effect on actual on-screen compositing (compositeFrame.ts
+ * merges every layer type by its own per-item zIndex regardless of
+ * `layerOrder`; see the comment there). So the timeline could show
+ * "Image" sitting above "Video" as a whole block while, on screen, half
+ * the images were actually drawn behind a video clip and half in front —
+ * the timeline was lying about the real stacking order.
+ *
+ * Now the timeline is built from the exact same merged/z-sorted list
+ * compositeFrame.ts draws from (see layerStack.ts) and split into runs so
+ * a layer type can appear more than once in the stack (an image strictly
+ * between two video tracks, etc.) — true Adobe-After-Effects-style: the
+ * TOP row in this list is always the FRONTMOST thing on screen.
  */
-import { useEffect } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import BlurRangeSlider from "./BlurRangeSlider";
 import ImagesRangeSlider from "./ImagesRangeSlider";
 import TextRangeSlider from "./TextRangeSlider";
 import VideoClipsRangeSlider from "./VideoClipsRangeSlider";
-import { LayerType } from "../../types/types";
+import { buildMergedEntries, groupIntoRuns } from "../../utils/layerStack";
 
-const DEFAULT_ORDER: LayerType[] = ["video","image","text","blur"];
 export const ROW_H = 36;
 export const ROW_GAP = 3;
+// Text/image/blur chips are 28px each with a 3px gap (not ROW_H, which is
+// what video/audio rows actually use).
+const ITEM_H = 28;
+const ITEM_GAP = 3;
 
 export default function Layers() {
   const {
     videos, blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails,
-    layerOrder, setLayerOrder, activeTemplate,
+    activeTemplate,
   } = useAppDetailsContext();
-
-  // Seed layer order once — blur, text, image always on top
-  useEffect(() => {
-    if (layerOrder.length === 0) {
-      setLayerOrder(DEFAULT_ORDER.map((type, zIndex) => ({ type, zIndex })));
-    }
-  }, []); // eslint-disable-line
 
   if (!videos.length) return null;
   // Template mode locks all clip/text/blur editing to the dedicated
@@ -37,64 +45,38 @@ export default function Layers() {
   // (no direct timeline manipulation while a template is active).
   if (activeTemplate) return null;
 
-  // Sort descending so highest zIndex (text/blur) appears at TOP of timeline.
-  // "audio" is filtered out here even if an older saved project's
-  // layerOrder still has it — audio no longer has its own top-level block
-  // (see VideoClipsRangeSlider), it renders paired directly under its own
-  // clip's video row instead, so it can't be independently reordered
-  // relative to "video" as a whole anymore.
-  const order = (layerOrder.length > 0
-    ? [...layerOrder].sort((a, b) => b.zIndex - a.zIndex).map(l => l.type).filter(t => t !== "audio")
-    : [...DEFAULT_ORDER].reverse()) as LayerType[];
-  const has: Record<LayerType, boolean> = {
-    blur:  blursDetails.length > 0,
-    text:  textsDetails.length > 0,
-    image: imagesDetails.length > 0,
-    audio: false, // never its own block — see above
-    video: clipsDetails.length > 0,
-  };
-
-  const active = order.filter(t => has[t]);
+  const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails);
+  const runs = groupIntoRuns(entries);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ROW_GAP }}>
-      {active.map(type => {
-        // Every layer type stacks one sub-row per item internally (see
-        // TextRangeSlider/ImagesRangeSlider/BlurRangeSlider/
-        // VideoClipsRangeSlider), but this row wrapper used to always
-        // allocate a single fixed ROW_H for text/image/blur regardless of
-        // how many items existed — with 2+ items of the same type, the
-        // extra sub-rows overflowed the fixed-height wrapper and visually
-        // overlapped whichever row came next. Text/image/blur items are
-        // 28px each with a 3px gap (not ROW_H, which is what video/audio
-        // actually use) — match that exactly here.
-        const ITEM_H = 28, ITEM_GAP = 3;
-        // "video" block height = one row per TRACK (clip.zIndex group, see
-        // VideoClipsRangeSlider) — multiple non-overlapping clips can share
-        // a track/row now, so this is no longer clipsDetails.length — PLUS
-        // one extra row for each track that has at least one paired audio
-        // clip beneath it.
-        const videoTrackIds = new Set(clipsDetails.map(c => c.zIndex ?? 0));
-        let tracksWithAudio = 0;
-        videoTrackIds.forEach(z => {
-          const hasAudio = clipsDetails.some(c => (c.zIndex ?? 0) === z && audioDetails.some(a => a.clipId === c.id));
-          if (hasAudio) tracksWithAudio += 1;
-        });
-        const videoBlockRows = videoTrackIds.size + tracksWithAudio;
-        const h = type === "video"
-          ? Math.max(ROW_H, videoBlockRows * (ROW_H + ROW_GAP) - ROW_GAP)
-          : type === "text"
-          ? Math.max(ROW_H, textsDetails.length * (ITEM_H + ITEM_GAP) - ITEM_GAP)
-          : type === "image"
-          ? Math.max(ROW_H, imagesDetails.length * (ITEM_H + ITEM_GAP) - ITEM_GAP)
-          : Math.max(ROW_H, blursDetails.length * (ITEM_H + ITEM_GAP) - ITEM_GAP);
+      {runs.map((run, runIdx) => {
+        if (run.kind === "video") {
+          const trackZs = run.entries.map(e => e.trackZ!);
+          // Video block height = one row per TRACK in this run PLUS one
+          // extra row for each track that has at least one paired audio
+          // clip beneath it (matches VideoClipsRangeSlider's own layout).
+          let tracksWithAudio = 0;
+          trackZs.forEach(z => {
+            const hasAudio = clipsDetails.some(c => (c.zIndex ?? 0) === z && audioDetails.some(a => a.clipId === c.id));
+            if (hasAudio) tracksWithAudio += 1;
+          });
+          const rows = trackZs.length + tracksWithAudio;
+          const h = Math.max(ROW_H, rows * (ROW_H + ROW_GAP) - ROW_GAP);
+          return (
+            <div key={`run-${runIdx}-video`} style={{ height: h, position: "relative" }}>
+              <VideoClipsRangeSlider onlyTrackZs={trackZs} />
+            </div>
+          );
+        }
 
+        const ids = run.entries.map(e => e.id!);
+        const h = Math.max(ROW_H, ids.length * (ITEM_H + ITEM_GAP) - ITEM_GAP);
         return (
-          <div key={type} style={{ height: h, position: "relative" }}>
-            {type === "blur"  && <BlurRangeSlider />}
-            {type === "text"  && <TextRangeSlider />}
-            {type === "image" && <ImagesRangeSlider />}
-            {type === "video" && <VideoClipsRangeSlider />}
+          <div key={`run-${runIdx}-${run.kind}`} style={{ height: h, position: "relative" }}>
+            {run.kind === "blur" && <BlurRangeSlider onlyIds={ids} />}
+            {run.kind === "text" && <TextRangeSlider onlyIds={ids} />}
+            {run.kind === "image" && <ImagesRangeSlider onlyIds={ids} />}
           </div>
         );
       })}
