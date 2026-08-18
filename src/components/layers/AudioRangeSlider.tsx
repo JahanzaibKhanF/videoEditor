@@ -20,7 +20,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
-import { ROW_H } from "./Layers";
 import { VolumeX, Volume2 } from "@/utils/icons";
 import { AudioDetails } from "../../types/types";
 
@@ -100,62 +99,60 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
   const isSel = selId === track.id;
 
   return (
-    <div style={{ position: "relative", height: ROW_H, width: "100%", flexShrink: 0 }}>
-      <div
-        className="audio-chip"
-        data-audio-id={track.id}
-        onClick={() => setSelId(track.id)}
-        onMouseDown={e => handleDrag(e, "move")}
-        style={{
-          position: "absolute", top: 0, left, width, height: "100%",
-          background: track.muted
-            ? "rgba(107,114,128,.35)"
-            : isSel ? "#6EA8FF" : "#3D6FE0",
-          outline: isSel ? "2px solid #4C8CFF" : "none",
-          borderRadius: 6, cursor: "move",
-          display: "flex", alignItems: "center",
-          overflow: "hidden", userSelect: "none",
-          opacity: track.muted ? 0.5 : 1,
-        }}
-      >
-        {/* Left resize */}
-        <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-left"); }}
-          style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
+    <div
+      className="audio-chip"
+      data-audio-id={track.id}
+      onClick={() => setSelId(track.id)}
+      onMouseDown={e => handleDrag(e, "move")}
+      style={{
+        position: "absolute", top: 0, left, width, height: "100%",
+        background: track.muted
+          ? "rgba(107,114,128,.35)"
+          : isSel ? "#6EA8FF" : "#3D6FE0",
+        outline: isSel ? "2px solid #4C8CFF" : "none",
+        borderRadius: 6, cursor: "move",
+        display: "flex", alignItems: "center",
+        overflow: "hidden", userSelect: "none",
+        opacity: track.muted ? 0.5 : 1,
+      }}
+    >
+      {/* Left resize */}
+      <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-left"); }}
+        style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
 
-        {/* Content */}
-        <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
-          {/* Waveform decoration */}
-          <div style={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
-            {[3, 7, 4, 9, 5, 8, 3, 7, 4].map((h, i) => (
-              <div key={i} style={{ width: 2, height: h, background: "rgba(255,255,255,.6)", borderRadius: 1 }} />
-            ))}
-          </div>
-          <span style={{ color: "white", fontSize: 10, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-            {track.name}
-          </span>
-          <span style={{ color: "rgba(255,255,255,.65)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
-            {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
-          </span>
-          {/* Mute button */}
-          <button
-            onClick={toggleMute}
-            onMouseDown={e => e.stopPropagation()}
-            title={track.muted ? "Unmute" : "Mute"}
-            style={{
-              background: "rgba(255,255,255,.15)", border: "none",
-              borderRadius: 4, padding: "1px 5px",
-              cursor: "pointer", color: "white",
-              fontSize: 9, fontWeight: 700, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-            {track.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}
-          </button>
+      {/* Content */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
+        {/* Waveform decoration */}
+        <div style={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
+          {[3, 7, 4, 9, 5, 8, 3, 7, 4].map((h, i) => (
+            <div key={i} style={{ width: 2, height: h, background: "rgba(255,255,255,.6)", borderRadius: 1 }} />
+          ))}
         </div>
-
-        {/* Right resize */}
-        <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-right"); }}
-          style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
+        <span style={{ color: "white", fontSize: 10, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+          {track.name}
+        </span>
+        <span style={{ color: "rgba(255,255,255,.65)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
+          {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
+        </span>
+        {/* Mute button */}
+        <button
+          onClick={toggleMute}
+          onMouseDown={e => e.stopPropagation()}
+          title={track.muted ? "Unmute" : "Mute"}
+          style={{
+            background: "rgba(255,255,255,.15)", border: "none",
+            borderRadius: 4, padding: "1px 5px",
+            cursor: "pointer", color: "white",
+            fontSize: 9, fontWeight: 700, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+          {track.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+        </button>
       </div>
+
+      {/* Right resize */}
+      <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-right"); }}
+        style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
     </div>
   );
 }

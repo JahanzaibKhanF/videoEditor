@@ -400,13 +400,27 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
               })}
             </div>
             {/* This track's shared audio lane — every paired audio entry for
-                every clip on this track, positioned by its own time range,
-                directly beneath the track's video row. Moving a clip to a
-                different track (see moveClipToTrack) carries its audio here
-                automatically since audio is always looked up by clipId. */}
-            {pairedAudio.map(track => (
-              <AudioTrackRow key={track.id} track={track} containerRef={ref} />
-            ))}
+                every clip on this track shares ONE row (positioned by its
+                own time range, absolutely, same pattern the video clips
+                above use), directly beneath the track's video row. Moving a
+                clip to a different track (see moveClipToTrack) carries its
+                audio here automatically since audio is always looked up by
+                clipId.
+                BUG THIS FIXES: each audio entry used to render inside its
+                OWN full-height block-flow row (AudioTrackRow used to size
+                itself), so a track with 2+ audio clips (e.g. right after a
+                split — the original audio stays on the left half, a new
+                entry is created for the right half) stacked them as
+                separate lines underneath each other instead of side-by-side
+                on the same line the way the video clips themselves already
+                correctly do. */}
+            {pairedAudio.length > 0 && (
+              <div style={{ position: "relative", height: ROW_H, width: "100%", flexShrink: 0 }}>
+                {pairedAudio.map(track => (
+                  <AudioTrackRow key={track.id} track={track} containerRef={ref} />
+                ))}
+              </div>
+            )}
           </React.Fragment>
         );
       })}
