@@ -89,7 +89,25 @@ async function handleInit(msg: {
     target,
     video: { codec: msg.muxerVideoCodec, width: msg.width, height: msg.height, frameRate: msg.fps },
     audio: msg.hasAudio ? { codec: "aac", numberOfChannels: msg.audioChannels, sampleRate: msg.audioSampleRate } : undefined,
-    fastStart: "in-memory",
+    // MEMORY FIX (2026-08-21): this was `'in-memory'`, which per mp4-muxer's
+    // own docs holds EVERY encoded video/audio chunk in a separate buffered
+    // list — on top of the final ArrayBufferTarget's own growing buffer —
+    // purely so it can compute and place the moov (metadata) box before the
+    // media data for "progressive playback" (start playing before the whole
+    // file has downloaded). That's a real, expensive feature — for a video
+    // being streamed over a network. It's dead weight here: this file goes
+    // straight to a local Blob download, never streamed, so nothing ever
+    // benefits from progressive playback. `false` places metadata at the
+    // END of the file instead (irrelevant for a fully-downloaded local
+    // file) and, per mp4-muxer's docs, is "fastest and uses the least
+    // memory" — it writes each chunk immediately instead of holding a
+    // second full copy of the whole encode until finalize(). This was very
+    // likely the actual cause of "Encode worker crashed" with zero
+    // JS-catchable error on long/heavy exports (multiple video layers +
+    // effects + background-removed alpha video, many minutes long): a hard
+    // browser-level OOM kill of the worker process, which bypasses every
+    // try/catch — nothing to catch, the process is just gone.
+    fastStart: false,
   });
 
   videoEncoder = new VideoEncoder({
