@@ -23,6 +23,29 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 // gives it the correct two-argument (message, transferList) worker shape.
 const post: (message: unknown, transfer?: Transferable[]) => void = postMessage as never;
 
+// Global safety net: VideoEncoder's `output`/`error` callbacks (and
+// AudioEncoder's) fire ASYNCHRONOUSLY, outside the try/catch wrapping
+// self.onmessage below — a throw inside them (e.g. muxer.addVideoChunk
+// rejecting a chunk) was previously a genuinely uncaught worker exception.
+// That's what showed up on the main thread as the generic, undiagnosable
+// "Encode worker crashed." (worker.onerror only ever gets a bare message,
+// no stack, no context on which chunk/frame). Catching it here and posting
+// a proper structured {type:"error"} instead means: (1) a real, specific
+// error message reaches the console instead of a dead end, (2) the
+// existing error-handling path in webCodecsRender.ts (reject `finished`,
+// unstick a pending waitForFrameAck) runs cleanly instead of the worker
+// dying mid-frame with whatever was in flight — including the transferred
+// VideoFrame for that frame — left in an undefined state.
+self.addEventListener("error", (event) => {
+  post({ type: "error", message: `Encode worker internal error: ${event.message ?? "unknown"}` });
+  event.preventDefault();
+});
+self.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason as { message?: string } | undefined;
+  post({ type: "error", message: `Encode worker unhandled rejection: ${reason?.message ?? String(event.reason)}` });
+  event.preventDefault();
+});
+
 let muxer: Muxer<ArrayBufferTarget> | null = null;
 let videoEncoder: VideoEncoder | null = null;
 let audioEncoder: AudioEncoder | null = null;
@@ -70,7 +93,13 @@ async function handleInit(msg: {
   });
 
   videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => muxer!.addVideoChunk(chunk, meta),
+    output: (chunk, meta) => {
+      try {
+        muxer!.addVideoChunk(chunk, meta);
+      } catch (err) {
+        post({ type: "error", message: `Failed to mux video chunk: ${(err as Error)?.message ?? String(err)}` });
+      }
+    },
     error: (err) => post({ type: "error", message: `Video encode failed: ${err.message}` }),
   });
   // This codec string was already verified via VideoEncoder.isConfigSupported
@@ -89,7 +118,13 @@ async function handleInit(msg: {
 
   if (msg.hasAudio) {
     audioEncoder = new AudioEncoder({
-      output: (chunk, meta) => muxer!.addAudioChunk(chunk, meta),
+      output: (chunk, meta) => {
+        try {
+          muxer!.addAudioChunk(chunk, meta);
+        } catch (err) {
+          post({ type: "error", message: `Failed to mux audio chunk: ${(err as Error)?.message ?? String(err)}` });
+        }
+      },
       error: (err) => post({ type: "error", message: `Audio encode failed: ${err.message}` }),
     });
     audioEncoder.configure({
