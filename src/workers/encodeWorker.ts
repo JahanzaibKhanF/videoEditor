@@ -62,7 +62,7 @@ self.onmessage = async (e: MessageEvent) => {
       await handleInit(msg);
     } else if (msg.type === "audio") {
       pendingAudioFlush = handleAudio(msg).catch((err) => {
-        post({ type: "error", message: `Audio setup failed: ${(err as Error)?.message ?? String(err)}` });
+        post({ type: "error", message: `Audio setup failed inside worker: ${(err as Error)?.message ?? String(err)}` });
         throw err; // still reject pendingAudioFlush so handleFinish's await surfaces it too
       });
     } else if (msg.type === "frame") {
@@ -188,7 +188,7 @@ function handleFrame(msg: { frame: VideoFrame; keyFrame: boolean }) {
 // ahead frame production can ever get, at the cost of the main thread
 // occasionally waiting a few ms for the encoder to catch up — trivial
 // compared to a crashed export.
-const QUEUE_HIGH_WATERMARK = 6;
+const QUEUE_HIGH_WATERMARK = 3;
 function signalReadyForNextFrame() {
   const trySignal = () => {
     if (!videoEncoder || videoEncoder.encodeQueueSize <= QUEUE_HIGH_WATERMARK) {

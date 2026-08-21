@@ -91,13 +91,28 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
 
   // ── 2. Mix audio up front (independent of the video frame loop) ────────
   onProgress?.(0.05, "Mixing audio…");
-  const audioSupported = audioTracks.length > 0 ? await isAudioEncodingSupported(44100, 2) : false;
-  const mixedAudio = audioTracks.length > 0 && audioSupported
-    ? await mixAudioTracks(audioTracks, clips, totalDuration)
-    : null;
+  let mixedAudio: AudioBuffer | null = null;
+  try {
+    const audioSupported = audioTracks.length > 0 ? await isAudioEncodingSupported(44100, 2) : false;
+    mixedAudio = audioTracks.length > 0 && audioSupported
+      ? await mixAudioTracks(audioTracks, clips, totalDuration)
+      : null;
+  } catch (err) {
+    // DIAGNOSTIC (2026-08-21): a throw here used to propagate up disguised
+    // as the encode worker's own generic "crashed" message once it reached
+    // renderVideo.ts's single catch-all — nothing pointed at audio mixing
+    // specifically. Tagging it here means the console now says WHERE it
+    // actually failed instead of leaving every failure looking identical.
+    throw new Error(`Audio mixing failed: ${(err as Error)?.message ?? String(err)}`);
+  }
 
   // ── 3. Spin up the encode worker ────────────────────────────────────────
-  const worker = new Worker(new URL("../workers/encodeWorker.ts", import.meta.url), { type: "module" });
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL("../workers/encodeWorker.ts", import.meta.url), { type: "module" });
+  } catch (err) {
+    throw new Error(`Encode worker failed to start: ${(err as Error)?.message ?? String(err)}`);
+  }
   const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
 
   let ackResolve: (() => void) | null = null;
@@ -215,9 +230,18 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
         currentCanvasBySrc.set(src, value ? value.canvas : null);
       }));
 
-      compositeFrameSafe(ctx, width, height, t, fps, clips, texts, images, blurs, clipEffects, imageEls, layerOrder, getVideoDrawable);
+      try {
+        compositeFrameSafe(ctx, width, height, t, fps, clips, texts, images, blurs, clipEffects, imageEls, layerOrder, getVideoDrawable);
+      } catch (err) {
+        throw new Error(`Compositing failed at frame ${i} (t=${t.toFixed(2)}s): ${(err as Error)?.message ?? String(err)}`);
+      }
 
-      const frame = new VideoFrame(offscreen, { timestamp: Math.round((t * 1_000_000)) });
+      let frame: VideoFrame;
+      try {
+        frame = new VideoFrame(offscreen, { timestamp: Math.round((t * 1_000_000)) });
+      } catch (err) {
+        throw new Error(`Failed to create VideoFrame at frame ${i}: ${(err as Error)?.message ?? String(err)}`);
+      }
       const keyFrame = i % (fps * 2) === 0; // one keyframe every ~2s
       worker.postMessage({ type: "frame", frame, keyFrame }, [frame]);
       await waitForFrameAck();
