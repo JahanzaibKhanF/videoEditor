@@ -35,6 +35,40 @@ export default function RenderButton() {
 
   const handleRender = async () => {
     setShowModal(true);
+
+    // DISK STREAMING (2026-08-21): ask up front, before any other work,
+    // where to save the file — this MUST happen synchronously-ish within
+    // the click handler (a user gesture) or Chrome refuses to show the
+    // picker. Only available in Chromium browsers; anywhere else (or if the
+    // user cancels the dialog) this silently falls through to the previous
+    // in-memory export, exactly as before — this is a pure improvement for
+    // supported browsers, never a requirement.
+    //
+    // Why bother: without it, the whole encoded output has to be held in
+    // memory for the entire export. For a long/heavy timeline (multiple
+    // video layers, effects, background-removed alpha video) that can
+    // exceed what the browser will allow a worker to hold, and the browser
+    // hard-kills the worker with zero catchable JS error — that's the
+    // "Encode worker crashed" with no detail. Streaming straight to disk as
+    // it encodes keeps memory usage flat no matter how long the export
+    // runs, because the growing file never exists in memory at all.
+    let saveHandle: FileSystemFileHandle | undefined;
+    if (typeof window !== "undefined" && window.showSaveFilePicker) {
+      try {
+        saveHandle = await window.showSaveFilePicker({
+          suggestedName: `${(videos[0]?.video.name ?? "export").replace(/\.[^.]+$/, "")}.mp4`,
+          types: [{ description: "MP4 Video", accept: { "video/mp4": [".mp4"] } }],
+        });
+      } catch (err) {
+        // AbortError = user cancelled the dialog — treat exactly like the
+        // API not being available at all, just proceed without it.
+        if ((err as Error)?.name !== "AbortError") {
+          console.error("[RenderButton] save picker failed, falling back to in-memory export:", err);
+        }
+        saveHandle = undefined;
+      }
+    }
+
     try {
       await renderVideo(
         videos, mediaPath, primaryVideoDimensions, containerDimenions,
@@ -74,6 +108,7 @@ export default function RenderButton() {
         },
         imageRefs, layerOrder,
         clipEffects,
+        saveHandle,
       );
     } catch (err) {
       console.error("Render failed:", err);

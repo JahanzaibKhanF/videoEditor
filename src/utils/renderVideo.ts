@@ -41,6 +41,7 @@ export async function renderVideo(
   imageRefs?: ImageRefs,
   layerOrder?: LayerOrderList,
   clipEffects: ClipEffectDetails[] = [],
+  saveHandle?: FileSystemFileHandle,
 ): Promise<string> {
   const width = Math.max(2, Math.round(containerDimensions.width || 1280));
   const height = Math.max(2, Math.round(containerDimensions.height || 720));
@@ -81,6 +82,7 @@ export async function renderVideo(
       width, height, fps: outFps,
       totalDuration: totalTime,
       videoConfig,
+      saveHandle,
       onProgress: (fraction, label) => {
         if (isJobCancelled(jobId)) return;
         onJobUpdate({ jobId, processName: "Rendering…", progress: Math.round(fraction * 100), logs: [label] });

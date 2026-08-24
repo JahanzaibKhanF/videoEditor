@@ -14,7 +14,7 @@
  *   ← {type:"done", buffer: ArrayBuffer}   (the finished .mp4 file)
  *   ← {type:"error", message}
  */
-import { Muxer, ArrayBufferTarget } from "mp4-muxer";
+import { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } from "mp4-muxer";
 
 // The ambient `postMessage` in this file resolves to `Window.postMessage`'s
 // signature under the project's "dom"-only tsconfig lib (no "webworker" lib,
@@ -46,7 +46,8 @@ self.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
 });
 
-let muxer: Muxer<ArrayBufferTarget> | null = null;
+let muxer: Muxer<ArrayBufferTarget> | Muxer<FileSystemWritableFileStreamTarget> | null = null;
+let diskWritable: FileSystemWritableFileStream | null = null;
 let videoEncoder: VideoEncoder | null = null;
 let audioEncoder: AudioEncoder | null = null;
 let totalFrames = 1;
@@ -79,36 +80,52 @@ async function handleInit(msg: {
   width: number; height: number; fps: number; totalFrames: number;
   videoCodec: string; muxerVideoCodec: "avc" | "vp9"; bitrate: number;
   hasAudio: boolean; audioSampleRate: number; audioChannels: number;
+  writable?: FileSystemWritableFileStream;
 }) {
   totalFrames = msg.totalFrames;
   audioSampleRate = msg.audioSampleRate;
   audioChannels = msg.audioChannels;
 
-  const target = new ArrayBufferTarget();
-  muxer = new Muxer({
-    target,
+  // DISK STREAMING (2026-08-21): when the main thread was able to get a
+  // save-file handle up front (see webCodecsRender.ts — needs the File
+  // System Access API, i.e. Chrome/Edge, and a user gesture to prompt the
+  // save dialog), `msg.writable` is a FileSystemWritableFileStream
+  // TRANSFERRED into this worker. Writing directly to it means the muxed
+  // output is flushed to disk as it's produced instead of accumulating
+  // anywhere in memory — mp4-muxer's own docs recommend exactly this for
+  // "creating files way larger than the available RAM". This is the real
+  // fix for a long/heavy export hard-crashing the worker via a browser-level
+  // OOM kill that `fastStart:false` alone wasn't enough to prevent: memory
+  // usage now stays flat regardless of how long the export runs, because
+  // there's no longer a growing in-memory file at all.
+  //
+  // Falls back to the previous ArrayBufferTarget (whole file built in
+  // memory, returned as a Blob at the end) when no writable was provided —
+  // e.g. the browser doesn't support the File System Access API, or the
+  // user cancelled the save dialog. Same as before for short/light exports.
+  diskWritable = msg.writable ?? null;
+
+  const muxerOptions = {
     video: { codec: msg.muxerVideoCodec, width: msg.width, height: msg.height, frameRate: msg.fps },
-    audio: msg.hasAudio ? { codec: "aac", numberOfChannels: msg.audioChannels, sampleRate: msg.audioSampleRate } : undefined,
+    audio: msg.hasAudio ? { codec: "aac" as const, numberOfChannels: msg.audioChannels, sampleRate: msg.audioSampleRate } : undefined,
     // MEMORY FIX (2026-08-21): this was `'in-memory'`, which per mp4-muxer's
     // own docs holds EVERY encoded video/audio chunk in a separate buffered
-    // list — on top of the final ArrayBufferTarget's own growing buffer —
-    // purely so it can compute and place the moov (metadata) box before the
-    // media data for "progressive playback" (start playing before the whole
-    // file has downloaded). That's a real, expensive feature — for a video
-    // being streamed over a network. It's dead weight here: this file goes
-    // straight to a local Blob download, never streamed, so nothing ever
+    // list — on top of the final target's own buffer — purely so it can
+    // compute and place the moov (metadata) box before the media data for
+    // "progressive playback" (start playing before the whole file has
+    // downloaded). That's a real, expensive feature — for a video being
+    // streamed over a network. It's dead weight here: this file goes
+    // straight to a local download, never streamed, so nothing ever
     // benefits from progressive playback. `false` places metadata at the
     // END of the file instead (irrelevant for a fully-downloaded local
     // file) and, per mp4-muxer's docs, is "fastest and uses the least
-    // memory" — it writes each chunk immediately instead of holding a
-    // second full copy of the whole encode until finalize(). This was very
-    // likely the actual cause of "Encode worker crashed" with zero
-    // JS-catchable error on long/heavy exports (multiple video layers +
-    // effects + background-removed alpha video, many minutes long): a hard
-    // browser-level OOM kill of the worker process, which bypasses every
-    // try/catch — nothing to catch, the process is just gone.
-    fastStart: false,
-  });
+    // memory". Required (not just preferred) when streaming to disk —
+    // `'in-memory'` is fundamentally incompatible with a streaming target.
+    fastStart: false as const,
+  };
+  muxer = diskWritable
+    ? new Muxer({ ...muxerOptions, target: new FileSystemWritableFileStreamTarget(diskWritable) })
+    : new Muxer({ ...muxerOptions, target: new ArrayBufferTarget() });
 
   videoEncoder = new VideoEncoder({
     output: (chunk, meta) => {
@@ -226,6 +243,14 @@ async function handleFinish() {
   await audioEncoder?.flush();
   if (!muxer) throw new Error("Muxer was never initialized.");
   muxer.finalize();
-  const { buffer } = muxer.target as ArrayBufferTarget;
-  post({ type: "done", buffer }, [buffer]);
+
+  if (diskWritable) {
+    // Already written straight to disk as we went — nothing to transfer
+    // back. Just close the file handle to flush/finalize it on the OS side.
+    await diskWritable.close();
+    post({ type: "done", streamedToDisk: true });
+  } else {
+    const { buffer } = (muxer as Muxer<ArrayBufferTarget>).target;
+    post({ type: "done", buffer }, [buffer]);
+  }
 }

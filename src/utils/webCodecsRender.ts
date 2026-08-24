@@ -52,6 +52,15 @@ export interface WebCodecsRenderParams {
   totalDuration: number;
   videoConfig: PickedVideoConfig;
   onProgress?: (fraction: number, label: string) => void;
+  /**
+   * When provided, the muxed output is streamed straight to this file on
+   * disk as it's encoded instead of being held in memory the whole time —
+   * see the DISK STREAMING comment in encodeWorker.ts. Get one via
+   * `window.showSaveFilePicker()` (Chrome/Edge only — check
+   * `"showSaveFilePicker" in window` first) BEFORE calling this function.
+   * Omit to keep the previous in-memory behavior (fine for short exports).
+   */
+  saveHandle?: FileSystemFileHandle;
 }
 
 /**
@@ -66,7 +75,7 @@ export async function pickSupportedWebCodecsConfig(width: number, height: number
 }
 
 export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promise<Blob> {
-  const { clips, texts, images, blurs, clipEffects = [], audioTracks, layerOrder, imageEls, width, height, fps, totalDuration, videoConfig, onProgress } = params;
+  const { clips, texts, images, blurs, clipEffects = [], audioTracks, layerOrder, imageEls, width, height, fps, totalDuration, videoConfig, onProgress, saveHandle } = params;
 
   onProgress?.(0, "Opening video sources…");
 
@@ -115,6 +124,21 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
   }
   const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
 
+  // If we have a save-file handle, open its writable stream NOW (before
+  // the "init" postMessage below transfers it into the worker) — see the
+  // DISK STREAMING comment in encodeWorker.ts's handleInit.
+  let diskWritable: FileSystemWritableFileStream | null = null;
+  if (saveHandle) {
+    try {
+      diskWritable = await saveHandle.createWritable();
+    } catch (err) {
+      // Not fatal — just means we fall back to the in-memory path below,
+      // same as if no saveHandle had been passed at all.
+      console.error("[webCodecsRender] couldn't open writable stream for save handle, falling back to in-memory:", err);
+      diskWritable = null;
+    }
+  }
+
   let ackResolve: (() => void) | null = null;
   let ackReject: ((err: Error) => void) | null = null;
   let workerFailure: Error | null = null;
@@ -127,7 +151,18 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
         ackResolve?.();
         ackResolve = null; ackReject = null;
       } else if (msg.type === "done") {
-        resolve(new Blob([msg.buffer], { type: "video/mp4" }));
+        if (msg.streamedToDisk && saveHandle) {
+          // Bytes are already fully flushed to disk (see handleFinish in
+          // encodeWorker.ts) — read the finished file back ONCE here so the
+          // rest of the app (recent-videos list, "Watch Video" preview) can
+          // keep working with a Blob exactly like before. This is a single
+          // bounded read of an already-complete file, not the same thing as
+          // the growing-buffer-during-encode problem this whole change
+          // exists to avoid.
+          saveHandle.getFile().then(resolve).catch(reject);
+        } else {
+          resolve(new Blob([msg.buffer], { type: "video/mp4" }));
+        }
       } else if (msg.type === "error") {
         const err = new Error(msg.message);
         workerFailure = err;
@@ -171,7 +206,8 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
     hasAudio: !!mixedAudio,
     audioSampleRate: mixedAudio?.sampleRate ?? 44100,
     audioChannels: mixedAudio?.numberOfChannels ?? 2,
-  });
+    writable: diskWritable ?? undefined,
+  }, diskWritable ? [diskWritable] : []);
 
   if (mixedAudio) {
     // Transfer raw interleaved PCM once — the worker encodes it independently
