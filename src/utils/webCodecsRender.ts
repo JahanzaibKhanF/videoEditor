@@ -125,8 +125,12 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
   const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
 
   // If we have a save-file handle, open its writable stream NOW (before
-  // the "init" postMessage below transfers it into the worker) — see the
-  // DISK STREAMING comment in encodeWorker.ts's handleInit.
+  // "init" is posted below) and keep it HERE on the main thread — see the
+  // DISK STREAMING comment in encodeWorker.ts's handleInit for why it can't
+  // just be transferred into the worker (FileSystemWritableFileStream
+  // isn't transferable in every browser — DataCloneError). Instead the
+  // worker posts back small "diskChunk" messages and this thread performs
+  // the actual positioned writes.
   let diskWritable: FileSystemWritableFileStream | null = null;
   if (saveHandle) {
     try {
@@ -138,6 +142,15 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
       diskWritable = null;
     }
   }
+  // Chained onto for every "diskChunk" message so writes always land in the
+  // order the worker sent them — message-handler invocations for two
+  // different "diskChunk" messages CAN overlap (the handler below is async,
+  // and the browser doesn't wait for one dispatch's returned promise before
+  // delivering the next queued message), so without this a slow write for
+  // an earlier chunk could still be in flight when a later chunk's write
+  // starts, landing bytes at the wrong position in the file.
+  let diskWriteQueue: Promise<void> = Promise.resolve();
+  let diskWriteFailure: Error | null = null;
 
   let ackResolve: (() => void) | null = null;
   let ackReject: ((err: Error) => void) | null = null;
@@ -150,16 +163,33 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
       } else if (msg.type === "frameAck") {
         ackResolve?.();
         ackResolve = null; ackReject = null;
+      } else if (msg.type === "diskChunk") {
+        diskWriteQueue = diskWriteQueue.then(async () => {
+          if (diskWriteFailure || !diskWritable) return;
+          try {
+            await diskWritable.write({ type: "write", position: msg.position, data: msg.data });
+          } catch (err) {
+            diskWriteFailure = new Error(`Failed writing to disk: ${(err as Error)?.message ?? String(err)}`);
+          }
+        });
       } else if (msg.type === "done") {
-        if (msg.streamedToDisk && saveHandle) {
-          // Bytes are already fully flushed to disk (see handleFinish in
-          // encodeWorker.ts) — read the finished file back ONCE here so the
-          // rest of the app (recent-videos list, "Watch Video" preview) can
-          // keep working with a Blob exactly like before. This is a single
-          // bounded read of an already-complete file, not the same thing as
-          // the growing-buffer-during-encode problem this whole change
-          // exists to avoid.
-          saveHandle.getFile().then(resolve).catch(reject);
+        if (msg.streamedToDisk && saveHandle && diskWritable) {
+          // Every "diskChunk" write was queued above, possibly still in
+          // flight — wait for the whole queue to actually finish (in
+          // order) before closing the file, then read it back once as a
+          // Blob so the rest of the app keeps working exactly as before
+          // (recent-videos list, "Watch Video" preview). A single bounded
+          // read of an already-finished file is nothing like the
+          // growing-buffer-during-encode problem this whole change exists
+          // to avoid.
+          diskWriteQueue
+            .then(async () => {
+              if (diskWriteFailure) throw diskWriteFailure;
+              await diskWritable!.close();
+              return saveHandle!.getFile();
+            })
+            .then(resolve)
+            .catch(reject);
         } else {
           resolve(new Blob([msg.buffer], { type: "video/mp4" }));
         }
@@ -206,8 +236,8 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
     hasAudio: !!mixedAudio,
     audioSampleRate: mixedAudio?.sampleRate ?? 44100,
     audioChannels: mixedAudio?.numberOfChannels ?? 2,
-    writable: diskWritable ?? undefined,
-  }, diskWritable ? [diskWritable] : []);
+    streamToDisk: !!diskWritable,
+  });
 
   if (mixedAudio) {
     // Transfer raw interleaved PCM once — the worker encodes it independently

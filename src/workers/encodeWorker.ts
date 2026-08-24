@@ -6,15 +6,16 @@
  *
  * Owns the VideoEncoder, AudioEncoder, and mp4-muxer Muxer for one export
  * job. Protocol (see webCodecsRender.ts for the sending side):
- *   → {type:"init", width, height, fps, totalFrames, hasAudio, audioSampleRate, audioChannels}
+ *   → {type:"init", width, height, fps, totalFrames, hasAudio, audioSampleRate, audioChannels, streamToDisk}
  *   → {type:"audio", channelData: Float32Array[], length}   (sent once, optional)
  *   → {type:"frame", frame: VideoFrame (transferred), keyFrame: boolean}   (sent totalFrames times)
  *   → {type:"finish"}
  *   ← {type:"progress", fraction, label}
- *   ← {type:"done", buffer: ArrayBuffer}   (the finished .mp4 file)
+ *   ← {type:"diskChunk", data: Uint8Array (transferred), position}   (streamToDisk mode only, many times)
+ *   ← {type:"done", buffer?: ArrayBuffer, streamedToDisk?: true}   (the finished .mp4 file, unless streamed to disk already)
  *   ← {type:"error", message}
  */
-import { Muxer, ArrayBufferTarget, FileSystemWritableFileStreamTarget } from "mp4-muxer";
+import { Muxer, ArrayBufferTarget, StreamTarget } from "mp4-muxer";
 
 // The ambient `postMessage` in this file resolves to `Window.postMessage`'s
 // signature under the project's "dom"-only tsconfig lib (no "webworker" lib,
@@ -46,8 +47,8 @@ self.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
 });
 
-let muxer: Muxer<ArrayBufferTarget> | Muxer<FileSystemWritableFileStreamTarget> | null = null;
-let diskWritable: FileSystemWritableFileStream | null = null;
+let muxer: Muxer<ArrayBufferTarget> | Muxer<StreamTarget> | null = null;
+let streamingToDisk = false;
 let videoEncoder: VideoEncoder | null = null;
 let audioEncoder: AudioEncoder | null = null;
 let totalFrames = 1;
@@ -80,30 +81,29 @@ async function handleInit(msg: {
   width: number; height: number; fps: number; totalFrames: number;
   videoCodec: string; muxerVideoCodec: "avc" | "vp9"; bitrate: number;
   hasAudio: boolean; audioSampleRate: number; audioChannels: number;
-  writable?: FileSystemWritableFileStream;
+  streamToDisk?: boolean;
 }) {
   totalFrames = msg.totalFrames;
   audioSampleRate = msg.audioSampleRate;
   audioChannels = msg.audioChannels;
 
-  // DISK STREAMING (2026-08-21): when the main thread was able to get a
-  // save-file handle up front (see webCodecsRender.ts — needs the File
-  // System Access API, i.e. Chrome/Edge, and a user gesture to prompt the
-  // save dialog), `msg.writable` is a FileSystemWritableFileStream
-  // TRANSFERRED into this worker. Writing directly to it means the muxed
-  // output is flushed to disk as it's produced instead of accumulating
-  // anywhere in memory — mp4-muxer's own docs recommend exactly this for
-  // "creating files way larger than the available RAM". This is the real
-  // fix for a long/heavy export hard-crashing the worker via a browser-level
-  // OOM kill that `fastStart:false` alone wasn't enough to prevent: memory
-  // usage now stays flat regardless of how long the export runs, because
-  // there's no longer a growing in-memory file at all.
-  //
-  // Falls back to the previous ArrayBufferTarget (whole file built in
-  // memory, returned as a Blob at the end) when no writable was provided —
-  // e.g. the browser doesn't support the File System Access API, or the
-  // user cancelled the save dialog. Same as before for short/light exports.
-  diskWritable = msg.writable ?? null;
+  // DISK STREAMING (2026-08-21, revised): a `FileSystemWritableFileStream`
+  // turned out to NOT be transferable into a worker at all in this browser
+  // — `DataCloneError: FileSystemWritableFileStream object could not be
+  // cloned` — so the writable stream stays on the MAIN THREAD (which is
+  // where it has to live anyway; that's who owns the file handle). Instead,
+  // this worker uses mp4-muxer's `StreamTarget`, whose `onData` callback
+  // fires with each chunk of muxed bytes AND the exact byte position they
+  // belong at (mp4-muxer sometimes needs to patch earlier bytes once their
+  // final size is known, not just append) — each chunk gets forwarded to
+  // the main thread as a `diskChunk` message, and the main thread performs
+  // the actual positioned write via `writable.write({type:'write',
+  // position, data})`, which natively supports exactly this kind of
+  // out-of-order/patch write. Net effect is the same as directly owning the
+  // stream: nothing accumulates in this worker's memory, because every
+  // chunk is handed off and forgotten immediately instead of being kept
+  // around in an in-memory buffer.
+  streamingToDisk = !!msg.streamToDisk;
 
   const muxerOptions = {
     video: { codec: msg.muxerVideoCodec, width: msg.width, height: msg.height, frameRate: msg.fps },
@@ -123,8 +123,21 @@ async function handleInit(msg: {
     // `'in-memory'` is fundamentally incompatible with a streaming target.
     fastStart: false as const,
   };
-  muxer = diskWritable
-    ? new Muxer({ ...muxerOptions, target: new FileSystemWritableFileStreamTarget(diskWritable) })
+
+  muxer = streamingToDisk
+    ? new Muxer({
+        ...muxerOptions,
+        target: new StreamTarget({
+          onData: (data, position) => {
+            // .slice() copies — mp4-muxer may reuse the underlying buffer
+            // after this callback returns, and we're about to transfer
+            // ownership of it away to the main thread.
+            const chunk = data.slice();
+            post({ type: "diskChunk", data: chunk, position }, [chunk.buffer]);
+          },
+          chunked: true, // batch small writes into ~16MiB chunks — far fewer postMessage round-trips than one per mp4 box
+        }),
+      })
     : new Muxer({ ...muxerOptions, target: new ArrayBufferTarget() });
 
   videoEncoder = new VideoEncoder({
@@ -242,12 +255,12 @@ async function handleFinish() {
   await videoEncoder?.flush();
   await audioEncoder?.flush();
   if (!muxer) throw new Error("Muxer was never initialized.");
-  muxer.finalize();
+  muxer.finalize(); // for streamingToDisk, this may still fire a few more onData calls (e.g. patching box sizes) — all forwarded via the same "diskChunk" messages above before we get here
 
-  if (diskWritable) {
-    // Already written straight to disk as we went — nothing to transfer
-    // back. Just close the file handle to flush/finalize it on the OS side.
-    await diskWritable.close();
+  if (streamingToDisk) {
+    // Every byte has already been forwarded via "diskChunk" messages —
+    // nothing left to send. The main thread closes the actual file stream
+    // once it's applied all of them (see webCodecsRender.ts).
     post({ type: "done", streamedToDisk: true });
   } else {
     const { buffer } = (muxer as Muxer<ArrayBufferTarget>).target;
