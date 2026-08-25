@@ -1,15 +1,21 @@
 /**
- * renderVideo — top-level export entry point. Tries the WebCodecs pipeline
- * first (webCodecsRender.ts); if the browser doesn't support it (currently:
- * anything non-Chromium — Firefox and Safari don't implement WebCodecs) or
- * it throws for any reason, automatically falls back to the FFmpeg.wasm
- * pipeline (clientRender.ts), which works everywhere. This is the same
- * "progressive enhancement" pattern real video-editing web apps use — pick
- * the fastest/most modern path when available, never leave someone on an
- * unsupported browser with no export option at all.
+ * renderVideo — top-level export entry point.
  *
- * Same call signature and job-update contract as the old direct
- * `clientRender` call, so RenderButton.tsx barely had to change.
+ * 2026-08-24 CHANGE (explicit request: always use WebCodecs, no silent
+ * engine-swap): this used to catch ANY WebCodecs failure — including a
+ * mid-render encode-worker crash — and quietly retry the whole export on
+ * the FFmpeg.wasm pipeline instead. That's the "progressive enhancement"
+ * pattern real editors use for the ONE case where it actually makes sense
+ * (browser genuinely can't do WebCodecs at all — currently non-Chromium:
+ * Firefox/Safari don't implement it), but it was ALSO firing for real
+ * WebCodecs bugs, which just papered over the crash with a different,
+ * slower engine instead of surfacing it. Now:
+ *   - No WebCodecs support at all → still falls back to FFmpeg (there is
+ *     genuinely no other export option on those browsers).
+ *   - WebCodecs IS supported but something fails mid-render → the job is
+ *     marked Failed with the real error message, NOT silently retried on a
+ *     different engine. See webCodecsRender.ts / encodeWorker.ts for the
+ *     backpressure + fail-fast fixes aimed at the actual crash cause.
  */
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -99,15 +105,14 @@ export async function renderVideo(
     onJobUpdate({ jobId, processName: "Completed", progress: 100, logs: ["Exported via WebCodecs (hardware-accelerated)."], videoUrl });
     return jobId;
   } catch (err) {
-    console.error("[renderVideo] WebCodecs path failed, falling back to FFmpeg:", err);
-    unregisterJob(jobId);
-    // Fall back to the FFmpeg pipeline with a fresh job — surfaces as a new
-    // job in the UI rather than silently swapping engines mid-job.
-    return clientRender(
-      videos, mediaPath, primaryVideoDimensions, containerDimensions,
-      textsDetails, blursDetails, imagesDetails, clipsDetails, audioDetails,
-      totalTime, fps, transitionsFrames, onJobUpdate,
-    );
+    // No more silent fallback here — surface the real failure on THIS job
+    // so it shows up in RenderButton.tsx's error box, and let the person
+    // decide what to do next (retry, shorten the export, etc.) instead of
+    // transparently re-running on a different engine.
+    const message = (err as Error)?.message ?? String(err);
+    console.error("[renderVideo] WebCodecs export failed:", err);
+    onJobUpdate({ jobId, processName: "Failed", progress: 0, logs: [message], error: message });
+    return jobId;
   } finally {
     unregisterJob(jobId);
   }

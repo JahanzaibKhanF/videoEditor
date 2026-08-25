@@ -286,6 +286,17 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
 
   try {
     for (let i = 0; i < totalFrames; i++) {
+      // FAIL-FAST GUARD (fixes the "VideoFrame was garbage collected without
+      // being closed" warning): if the worker already died on a PRIOR
+      // iteration, `workerFailure` is set here before we've had a chance to
+      // notice via `waitForFrameAck()` (that only rejects once we're
+      // actually awaiting it). Without this check the loop would happily
+      // create ANOTHER full-resolution VideoFrame and hand it to a dead
+      // worker — `postMessage` to an already-terminated/crashed worker
+      // doesn't throw, it just silently drops the message, so that frame's
+      // `close()` would never be called by anyone. Bailing out immediately
+      // means we never manufacture a frame nobody is going to consume.
+      if (workerFailure) throw workerFailure;
       const t = i / fps;
 
       const perSrc = perFrameSrcTimes[i];
@@ -309,7 +320,15 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
         throw new Error(`Failed to create VideoFrame at frame ${i}: ${(err as Error)?.message ?? String(err)}`);
       }
       const keyFrame = i % (fps * 2) === 0; // one keyframe every ~2s
-      worker.postMessage({ type: "frame", frame, keyFrame }, [frame]);
+      try {
+        worker.postMessage({ type: "frame", frame, keyFrame }, [frame]);
+      } catch (err) {
+        // postMessage itself threw (e.g. worker already gone) — the transfer
+        // never completed, so `frame` is still OURS and would otherwise leak
+        // until GC. Close it explicitly before propagating the failure.
+        frame.close();
+        throw new Error(`Failed to send frame ${i} to encode worker: ${(err as Error)?.message ?? String(err)}`);
+      }
       await waitForFrameAck();
 
       if (i % 10 === 0) onProgress?.(0.1 + (i / totalFrames) * 0.85, `Rendering frame ${i + 1} / ${totalFrames}`);
