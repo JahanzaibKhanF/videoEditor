@@ -377,6 +377,14 @@ async function mixAudioTracks(
     if (track.muted || track.volume <= 0) continue;
     const clip = clips.find(c => c.id === track.clipId);
     if (!clip) continue;
+    // Consistency fix: the FFmpeg fallback path (clientRender.ts) mutes a
+    // track when EITHER the clip itself is muted OR its AudioDetails entry
+    // is muted (`clip.muted || audioMeta?.muted`). This path only checked
+    // `track.muted`, so if a clip's own `muted` flag were ever set, the
+    // WebCodecs export would still include its audio while the FFmpeg
+    // fallback would correctly drop it — a silent divergence between the
+    // two export engines for what should be identical output.
+    if (clip.muted) continue;
 
     let buffer = decodeCache.get(clip.src);
     if (!buffer) {

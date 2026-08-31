@@ -58,7 +58,17 @@ export function ffmpegColorFilterString(adj?: ColorAdjustments): string | null {
   if (a.saturation !== 1) eqParts.push(`saturation=${a.saturation.toFixed(3)}`);
   if (eqParts.length > 0) filters.push(`eq=${eqParts.join(":")}`);
   if (a.temperature !== 0) {
-    const kelvin = Math.round(6500 + (a.temperature / 100) * 3500); // ~3000K..10000K
+    // BUG FIX: this was `6500 + (temperature/100)*3500`, which sends warm
+    // (positive) values toward HIGHER Kelvin and cool (negative) values
+    // toward LOWER Kelvin. FFmpeg's `colortemperature` filter simulates
+    // being lit by a source AT that Kelvin value — physically, a LOWER
+    // color temperature (e.g. ~3000K tungsten) looks warmer/orange, and a
+    // HIGHER one (e.g. ~10000K overcast sky) looks cooler/blue. The old
+    // formula was exactly backwards from that (and from the canvas-side
+    // `buildCanvasFilterString` above, which correctly pushes warm →
+    // orange/sepia), so every FFmpeg-fallback export inverted the
+    // temperature slider versus what was shown live in the preview.
+    const kelvin = Math.round(6500 - (a.temperature / 100) * 3500); // ~3000K (warm)..10000K (cool)
     filters.push(`colortemperature=temperature=${kelvin}`);
   }
   return filters.length > 0 ? filters.join(",") : null;
