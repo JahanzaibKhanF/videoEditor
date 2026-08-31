@@ -362,9 +362,14 @@ export function applyTransition(
     case "crossDissolve": case "filmDissolve": case "fadeIn":
       ctx.globalAlpha = progress; drawNext(); break;
     case "dipToBlack":
+      // Second half: reveal the incoming clip UNDER the fading overlay, or
+      // it never appears until the transition window ends (hard cut instead
+      // of "fade to black, then fade in B").
+      if (progress >= 0.5) drawNext();
       ctx.fillStyle = "#000"; ctx.globalAlpha = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
       ctx.fillRect(0, 0, w, h); break;
     case "dipToWhite":
+      if (progress >= 0.5) drawNext();
       ctx.fillStyle = "#fff"; ctx.globalAlpha = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
       ctx.fillRect(0, 0, w, h); break;
     case "wipeLeftToRight":
@@ -377,7 +382,11 @@ export function applyTransition(
     case "push": ctx.translate(-w * progress, 0); drawNext(); break;
     case "zoom":
       ctx.translate(w / 2, h / 2); ctx.scale(1 + progress * 0.3, 1 + progress * 0.3);
-      ctx.translate(-w / 2, -h / 2); ctx.globalAlpha = 1 - progress * 0.5; drawNext(); break;
+      // Ramp UP to full opacity as the transition completes (was inverted:
+      // it used to start opaque and fade to 50% right at the cut point,
+      // producing a visible opacity "pop" back to 100% on the very next
+      // frame once the transition window ended).
+      ctx.translate(-w / 2, -h / 2); ctx.globalAlpha = 0.5 + progress * 0.5; drawNext(); break;
     case "blurIn":
       ctx.filter = `blur(${(1 - progress) * 10}px)`; ctx.globalAlpha = progress; drawNext(); ctx.filter = "none"; break;
     case "scaleIn":
