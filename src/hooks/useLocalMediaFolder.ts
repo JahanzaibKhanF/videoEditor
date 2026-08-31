@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useAppDetailsContext } from "../context/useAppContext";
 
 // Minimal ambient types for the File System Access API — not yet in
@@ -119,6 +119,124 @@ function classify(name: string): LocalMediaFile["kind"] {
   return "other";
 }
 
+// ── SHARED STORE (module-level singleton) ──────────────────────────────
+//
+// REAL BUG THIS FIXES: this hook used to keep ALL of its state (dirHandle,
+// files, permissionState, linking, error) in local `useState` — fine for a
+// hook called from exactly one place, but this one is called from BOTH
+// `MediaPanel.tsx` AND `MediaRelinkBanner.tsx`. Two separate `useState`
+// call sites means two completely independent copies of "is a folder
+// linked / what files does it have," which never synchronized with each
+// other except by each separately re-reading IndexedDB on their own mount.
+//
+// Concretely, this produced exactly the symptom reported: linking or
+// reconnecting the folder from MediaPanel updated ONLY MediaPanel's own
+// copy of `files`/`permissionState` — MediaRelinkBanner's separate copy
+// had no idea anything changed, so the "N media files aren't linked yet"
+// banner kept showing even though the folder WAS actually linked, right
+// up until something forced a full remount (e.g. a hard refresh) to
+// re-sync both copies from IndexedDB from scratch. On a fresh project it
+// could look even worse: MediaPanel might briefly show "granted" while
+// MediaRelinkBanner (mounted a beat earlier/later, or just never told)
+// still renders the stale "relink" state.
+//
+// Fixed by moving the actual state out of React entirely into ONE
+// module-level store that every call site reads via `useSyncExternalStore`
+// and writes through the setter functions below. There is now only ever a
+// single dirHandle/files/permissionState for the whole app at any given
+// time, so a change made from any one component is instantly visible to
+// every other component using this hook — no remount required, and no more
+// "I just linked it and it still says relink."
+interface FolderStore {
+  supported: boolean;
+  dirHandle: FileSystemDirectoryHandle | null;
+  files: LocalMediaFile[];
+  permissionState: UseLocalMediaFolderResult["permissionState"];
+  linking: boolean;
+  error: string | null;
+  // Which project's handle/files `dirHandle`/`files` currently reflect —
+  // lets the restore effect avoid re-doing the IndexedDB round trip every
+  // time a new component instance of this hook happens to mount.
+  restoredForKey: string | null;
+}
+
+let store: FolderStore = {
+  supported: false,
+  dirHandle: null,
+  files: [],
+  permissionState: "unknown",
+  linking: false,
+  error: null,
+  restoredForKey: null,
+};
+
+const listeners = new Set<() => void>();
+
+function setStore(partial: Partial<FolderStore>) {
+  store = { ...store, ...partial };
+  listeners.forEach((l) => l());
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot(): FolderStore {
+  return store;
+}
+
+// SSR-safe snapshot — the store's initial shape is identical on server and
+// client, so this can just reuse getSnapshot.
+function getServerSnapshot(): FolderStore {
+  return store;
+}
+
+async function readFilesIntoStore(handle: FileSystemDirectoryHandle): Promise<void> {
+  const collected: LocalMediaFile[] = [];
+  for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === "file") {
+      const fh = entry as FileSystemFileHandle;
+      collected.push({
+        name,
+        kind: classify(name),
+        handle: fh,
+        getFile: () => fh.getFile(),
+      });
+    }
+  }
+  setStore({ files: collected });
+}
+
+async function tryRestore(projectId: string | null): Promise<void> {
+  const key = handleKeyFor(projectId);
+  try {
+    const saved = await idbGet<FileSystemDirectoryHandle>(key);
+    if (!saved) {
+      // Nothing saved for THIS project specifically — reset so we don't
+      // keep showing a previous project's folder as if it were this one's.
+      setStore({ dirHandle: null, files: [], permissionState: "unknown", restoredForKey: key });
+      return;
+    }
+    // queryPermission needs no user gesture — if Chrome still considers
+    // this origin+handle "granted" from a previous visit (it persists this
+    // across sessions for as long as the browser keeps the grant), this
+    // reconnects and loads files with ZERO clicks needed at all.
+    const state: "granted" | "prompt" | "denied" =
+      (await saved.queryPermission?.({ mode: "read" })) ?? "prompt";
+    setStore({ dirHandle: saved, permissionState: state, restoredForKey: key });
+    if (state === "granted") {
+      await readFilesIntoStore(saved);
+    } else {
+      setStore({ files: [] });
+    }
+  } catch {
+    // No saved handle yet, or IndexedDB unavailable — fine, user just
+    // links a folder fresh via the button.
+    setStore({ restoredForKey: key });
+  }
+}
+
 /**
  * Links a local folder via the File System Access API so media never has
  * to be uploaded to a server. The directory handle is persisted in
@@ -128,81 +246,37 @@ function classify(name: string): LocalMediaFile["kind"] {
  */
 export function useLocalMediaFolder(): UseLocalMediaFolderResult {
   const { resumedProjectId } = useAppDetailsContext();
-  const [supported, setSupported] = useState(false);
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [files, setFiles] = useState<LocalMediaFile[]>([]);
-  const [permissionState, setPermissionState] =
-    useState<UseLocalMediaFolderResult["permissionState"]>("unknown");
-  const [linking, setLinking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    setSupported(typeof window !== "undefined" && !!window.showDirectoryPicker);
+    if (typeof window !== "undefined" && !!window.showDirectoryPicker && !store.supported) {
+      setStore({ supported: true });
+    }
   }, []);
 
-  const readFiles = useCallback(async (handle: FileSystemDirectoryHandle) => {
-    const collected: LocalMediaFile[] = [];
-    for await (const [name, entry] of handle.entries()) {
-      if (entry.kind === "file") {
-        const fh = entry as FileSystemFileHandle;
-        collected.push({
-          name,
-          kind: classify(name),
-          handle: fh,
-          getFile: () => fh.getFile(),
-        });
-      }
-    }
-    setFiles(collected);
-  }, []);
-
-  const tryRestore = useCallback(async () => {
-    try {
-      const saved = await idbGet<FileSystemDirectoryHandle>(handleKeyFor(resumedProjectId));
-      if (!saved) {
-        // Nothing saved for THIS project specifically — reset so we don't
-        // keep showing a previous project's folder as if it were this
-        // one's.
-        setDirHandle(null);
-        setFiles([]);
-        setPermissionState("unknown");
-        return;
-      }
-      // queryPermission needs no user gesture — if Chrome still considers
-      // this origin+handle "granted" from a previous visit (it persists
-      // this across sessions for as long as the browser keeps the grant),
-      // this reconnects and loads files with ZERO clicks needed at all.
-      const state: "granted" | "prompt" | "denied" = await saved.queryPermission({ mode: "read" });
-      setDirHandle(saved);
-      setPermissionState(state);
-      if (state === "granted") {
-        await readFiles(saved);
-      } else {
-        setFiles([]);
-      }
-    } catch {
-      // No saved handle yet, or IndexedDB unavailable — fine, user just
-      // links a folder fresh via the button.
-    }
-  }, [readFiles, resumedProjectId]);
-
+  // Restore (or switch to) the handle for whichever project is currently
+  // active. Guarded by `restoredForKey` so mounting a SECOND component that
+  // also uses this hook (MediaPanel + MediaRelinkBanner, at the same time)
+  // doesn't kick off a redundant duplicate IndexedDB read/permission
+  // check — both instances share the same store either way.
   useEffect(() => {
-    if (supported) tryRestore();
-  }, [supported, resumedProjectId, tryRestore]);
+    if (!state.supported) return;
+    const key = handleKeyFor(resumedProjectId);
+    if (store.restoredForKey === key) return;
+    tryRestore(resumedProjectId);
+  }, [state.supported, resumedProjectId]);
 
   const linkFolder = useCallback(async () => {
     if (!window.showDirectoryPicker) {
-      setError("Your browser doesn't support local folder linking. Try Chrome or Edge.");
+      setStore({ error: "Your browser doesn't support local folder linking. Try Chrome or Edge." });
       return;
     }
-    setLinking(true);
-    setError(null);
+    setStore({ linking: true, error: null });
     try {
       const handle = await window.showDirectoryPicker({ mode: "read" });
       await idbSet(handleKeyFor(resumedProjectId), handle);
-      setDirHandle(handle);
-      setPermissionState("granted");
-      await readFiles(handle);
+      setStore({ dirHandle: handle, permissionState: "granted", restoredForKey: handleKeyFor(resumedProjectId) });
+      await readFilesIntoStore(handle);
     } catch (err) {
       const e = err as DOMException;
       if (e?.name === "AbortError") {
@@ -211,23 +285,23 @@ export function useLocalMediaFolder(): UseLocalMediaFolderResult {
         // message needed; they can just try again or use "pick files
         // directly" instead.
       } else {
-        setError(
-          (e?.message ? `Couldn't link that folder: ${e.message}. ` : "Couldn't link that folder. ") +
-          "If you picked Downloads, Desktop, Documents, or your home folder directly, Chrome blocks those — try a subfolder instead, or use \"pick files directly\" below."
-        );
+        setStore({
+          error:
+            (e?.message ? `Couldn't link that folder: ${e.message}. ` : "Couldn't link that folder. ") +
+            "If you picked Downloads, Desktop, Documents, or your home folder directly, Chrome blocks those — try a subfolder instead, or use \"pick files directly\" below.",
+        });
       }
     } finally {
-      setLinking(false);
+      setStore({ linking: false });
     }
-  }, [readFiles, resumedProjectId]);
+  }, [resumedProjectId]);
 
   const linkIndividualFiles = useCallback(async () => {
     if (!window.showOpenFilePicker) {
-      setError("Your browser doesn't support picking individual files this way. Try Chrome or Edge.");
+      setStore({ error: "Your browser doesn't support picking individual files this way. Try Chrome or Edge." });
       return;
     }
-    setLinking(true);
-    setError(null);
+    setStore({ linking: true, error: null });
     try {
       const handles = await window.showOpenFilePicker({ multiple: true, excludeAcceptAllOption: false });
       const picked: LocalMediaFile[] = handles.map((fh) => ({
@@ -239,54 +313,54 @@ export function useLocalMediaFolder(): UseLocalMediaFolderResult {
       // Merge with whatever's already linked (folder-based or previously
       // individually-picked) rather than replacing it, so this can be used
       // to top up just the couple of files a folder-relink missed.
-      setFiles((prev) => {
-        const byName = new Map(prev.map((f) => [f.name, f]));
-        for (const f of picked) byName.set(f.name, f);
-        return Array.from(byName.values());
-      });
-      if (!dirHandle) setPermissionState("granted"); // no folder handle, but we do have usable files now
+      const byName = new Map(store.files.map((f) => [f.name, f]));
+      for (const f of picked) byName.set(f.name, f);
+      const nextFiles = Array.from(byName.values());
+      if (!store.dirHandle) {
+        setStore({ files: nextFiles, permissionState: "granted" }); // no folder handle, but we do have usable files now
+      } else {
+        setStore({ files: nextFiles });
+      }
     } catch (err) {
       if ((err as DOMException)?.name !== "AbortError") {
-        setError((err as Error)?.message ? `Couldn't open those files: ${(err as Error).message}` : "Couldn't open those files. Please try again.");
+        setStore({
+          error: (err as Error)?.message ? `Couldn't open those files: ${(err as Error).message}` : "Couldn't open those files. Please try again.",
+        });
       }
     } finally {
-      setLinking(false);
+      setStore({ linking: false });
     }
-  }, [dirHandle]);
+  }, []);
 
   const reconnectFolder = useCallback(async () => {
-    if (!dirHandle) return;
-    setLinking(true);
-    setError(null);
+    if (!store.dirHandle) return;
+    setStore({ linking: true, error: null });
     try {
-      // @ts-expect-error — requestPermission is part of the File System
-      // Access permissions spec, not yet in TS's default lib types.
-      const state: "granted" | "denied" = await dirHandle.requestPermission({ mode: "read" });
-      setPermissionState(state);
+      const state: "granted" | "denied" | "prompt" =
+        (await store.dirHandle.requestPermission?.({ mode: "read" })) ?? "denied";
+      setStore({ permissionState: state });
       if (state === "granted") {
-        await readFiles(dirHandle);
+        await readFilesIntoStore(store.dirHandle);
       } else {
-        setError("Permission denied — ClipFlow can't read that folder without access.");
+        setStore({ error: "Permission denied — ClipFlow can't read that folder without access." });
       }
     } finally {
-      setLinking(false);
+      setStore({ linking: false });
     }
-  }, [dirHandle, readFiles]);
+  }, []);
 
   const forgetFolder = useCallback(async () => {
     await idbSet(handleKeyFor(resumedProjectId), null);
-    setDirHandle(null);
-    setFiles([]);
-    setPermissionState("unknown");
+    setStore({ dirHandle: null, files: [], permissionState: "unknown" });
   }, [resumedProjectId]);
 
   return {
-    supported,
-    folderName: dirHandle?.name ?? null,
-    files,
-    permissionState,
-    linking,
-    error,
+    supported: state.supported,
+    folderName: state.dirHandle?.name ?? null,
+    files: state.files,
+    permissionState: state.permissionState,
+    linking: state.linking,
+    error: state.error,
     linkFolder,
     reconnectFolder,
     forgetFolder,
