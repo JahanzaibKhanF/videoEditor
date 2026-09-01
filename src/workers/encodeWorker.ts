@@ -80,6 +80,7 @@ self.onmessage = async (e: MessageEvent) => {
 async function handleInit(msg: {
   width: number; height: number; fps: number; totalFrames: number;
   videoCodec: string; muxerVideoCodec: "avc" | "vp9"; bitrate: number;
+  hardwareAcceleration?: "no-preference" | "prefer-hardware" | "prefer-software";
   hasAudio: boolean; audioSampleRate: number; audioChannels: number;
   streamToDisk?: boolean;
 }) {
@@ -162,6 +163,11 @@ async function handleInit(msg: {
     height: msg.height,
     bitrate: msg.bitrate,
     framerate: msg.fps,
+    // Must match exactly what was verified via isConfigSupported on the
+    // main thread (see videoCodecSelect.ts) — this is the actual fix for
+    // the Linux hardware-encoder crash: "prefer-software" steers Chrome
+    // away from its often-unstable native GPU encoder path.
+    hardwareAcceleration: msg.hardwareAcceleration ?? "no-preference",
   });
 
   if (msg.hasAudio) {

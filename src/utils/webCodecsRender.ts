@@ -269,6 +269,12 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
     videoCodec: videoConfig.codec,
     muxerVideoCodec: videoConfig.muxerCodec,
     bitrate: videoConfig.bitrate,
+    // Carried through from whichever config actually passed
+    // isConfigSupported (see the crash-fix note in videoCodecSelect.ts) —
+    // the real configure() call in encodeWorker.ts must use the SAME
+    // hardwareAcceleration hint that was verified, not a default that
+    // could silently re-enable the crash-prone hardware path.
+    hardwareAcceleration: videoConfig.hardwareAcceleration ?? "no-preference",
     hasAudio: !!mixedAudio,
     audioSampleRate: mixedAudio?.sampleRate ?? 44100,
     audioChannels: mixedAudio?.numberOfChannels ?? 2,

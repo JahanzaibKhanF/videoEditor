@@ -29,6 +29,14 @@ export interface PickedVideoConfig {
   height: number;
   bitrate: number;
   framerate: number;
+  /**
+   * "prefer-software" (see the crash-fix note above pickVideoEncoderConfig)
+   * — carried through from whichever config actually passed
+   * isConfigSupported, so the real encoder configure() call in
+   * encodeWorker.ts always matches exactly what was verified. Optional
+   * only because older cached callers/tests may not set it.
+   */
+  hardwareAcceleration?: "no-preference" | "prefer-hardware" | "prefer-software";
 }
 
 // AVC (H.264) level_idc values in hex, ascending — Baseline profile (0x42).
@@ -51,27 +59,59 @@ export async function pickVideoEncoderConfig(
   if (typeof VideoEncoder === "undefined") return null;
   const bitrate = estimateBitrate(width, height);
 
-  for (const level of AVC_LEVELS) {
-    const codec = `avc1.4200${level}`;
-    try {
-      const support = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
-      if (support.supported) {
-        return { codec, muxerCodec: "avc", width, height, bitrate, framerate: fps };
+  // CRASH FIX: on some platforms — Linux Chrome in particular, this has
+  // been the case for the entire lifetime of this app's exports, not
+  // something that regressed — a GPU-accelerated VideoEncoder can pass
+  // `isConfigSupported` (the check genuinely reports it CAN encode this
+  // config) and then bring down the browser's entire media/GPU process the
+  // moment it's actually handed a real frame to encode. That failure
+  // happens below the level any JS try/catch, worker error listener, or
+  // encoder `error` callback can observe — there's no exception to catch,
+  // the process is just gone — which is exactly why every export failure
+  // on an affected machine has looked identical ("Encode worker crashed.",
+  // reported via the bare `Worker.onerror`) no matter what varies about the
+  // project: the crash isn't happening in any code this app controls.
+  //
+  // `hardwareAcceleration: "prefer-software"` is a real, standard
+  // WebCodecs hint (part of the spec — not a workaround hack) that steers
+  // the browser toward its software encoder instead. Software encoding is
+  // slower, but it runs as regular code in the same sandboxed process
+  // instead of talking to (often poorly-supported-on-Linux) native
+  // GPU/VAAPI encoder drivers, so it doesn't have this failure mode.
+  // Checked and used FIRST, falling through to "no-preference" (the
+  // previous, hardware-eligible behavior) only if software specifically
+  // isn't available for this config — this keeps hardware's speed
+  // advantage on every platform where software isn't the only stable
+  // option, while making the common Linux crash avoidable without the
+  // person needing to know any of this.
+  const hwPrefs: Array<"prefer-software" | "no-preference"> = ["prefer-software", "no-preference"];
+
+  for (const hardwareAcceleration of hwPrefs) {
+    for (const level of AVC_LEVELS) {
+      const codec = `avc1.4200${level}`;
+      try {
+        const support = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps, hardwareAcceleration });
+        if (support.supported) {
+          return { codec, muxerCodec: "avc", width, height, bitrate, framerate: fps, hardwareAcceleration };
+        }
+      } catch {
+        // Some browsers throw instead of returning {supported:false} for a
+        // malformed/unsupported codec string — treat the same as unsupported.
       }
-    } catch {
-      // Some browsers throw instead of returning {supported:false} for a
-      // malformed/unsupported codec string — treat the same as unsupported.
     }
   }
 
   // No AVC level worked for this resolution (unusual) — try VP9, which
-  // doesn't have the same fixed level/resolution table.
-  try {
-    const codec = "vp09.00.10.08";
-    const support = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps });
-    if (support.supported) return { codec, muxerCodec: "vp9", width, height, bitrate, framerate: fps };
-  } catch {
-    // fall through to null
+  // doesn't have the same fixed level/resolution table. Same
+  // software-first order and same reasoning as above.
+  for (const hardwareAcceleration of hwPrefs) {
+    try {
+      const codec = "vp09.00.10.08";
+      const support = await VideoEncoder.isConfigSupported({ codec, width, height, bitrate, framerate: fps, hardwareAcceleration });
+      if (support.supported) return { codec, muxerCodec: "vp9", width, height, bitrate, framerate: fps, hardwareAcceleration };
+    } catch {
+      // fall through
+    }
   }
 
   return null;
