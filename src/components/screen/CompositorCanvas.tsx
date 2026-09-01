@@ -90,8 +90,10 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
       clipEffects: clipEffectsRef.current,
       imageEls: imageRefsRef.current,
       layerOrder: layerOrderRef.current,
-      getVideoDrawable: (src) => {
-        const vid = engine?.getVideoElement(src);
+      // Keyed by clip.id, not clip.src — see the bug-fix note in
+      // CanvasEngine.ts for why (two clips can share the same source file).
+      getVideoDrawable: (clipId) => {
+        const vid = engine?.getVideoElement(clipId);
         return (vid && vid.readyState >= 2) ? vid : null;
       },
     });
@@ -108,7 +110,9 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
       const clip = clipsDetails.find(c => c.id === track.clipId);
       if (!clip) continue;
       const outsideWindow = currentTime < track.startTime || currentTime > track.endTime;
-      engine.setClipAudio(clip.src, track.muted || outsideWindow, track.volume ?? 1);
+      // clip.id, not clip.src — the video pool is keyed per clip now (see
+      // CanvasEngine.ts), so this must match.
+      engine.setClipAudio(clip.id, track.muted || outsideWindow, track.volume ?? 1);
     }
   }, [currentTime, clipsDetails, audioDetails]);
 

@@ -28,8 +28,14 @@ export interface CompositeFrameInput {
   clipEffects?: ClipEffectDetails[];
   imageEls: Record<string, HTMLImageElement | null>;
   layerOrder: LayerOrder[];
-  /** Given a clip's src, return the <video>/<canvas>/ImageBitmap-like drawable currently seeked to the right frame. */
-  getVideoDrawable: (src: string) => CanvasImageSource | null | undefined;
+  /**
+   * Given a clip's id (NOT its src — two clips can share the same source
+   * file, e.g. one duplicated/blurred as the other's background, and each
+   * needs its own independently-seeked drawable), return the
+   * <video>/<canvas>/ImageBitmap-like drawable currently seeked to the
+   * right frame for that specific clip.
+   */
+  getVideoDrawable: (clipId: string) => CanvasImageSource | null | undefined;
 }
 
 export function compositeFrame(input: CompositeFrameInput) {
@@ -167,9 +173,9 @@ function drawVideoClip(
   clipsSorted: ClipDetails[],
   t: number, fps: number, w: number, h: number,
   clipEffects: ClipEffectDetails[],
-  getVideoDrawable: (src: string) => CanvasImageSource | null | undefined,
+  getVideoDrawable: (clipId: string) => CanvasImageSource | null | undefined,
 ) {
-  const vid = getVideoDrawable(clip.src);
+  const vid = getVideoDrawable(clip.id);
   if (!vid) return;
   const cw = (clip.width ?? w) * (clip.scale ?? 1);
   const ch = (clip.height ?? h) * (clip.scale ?? 1);
@@ -211,7 +217,7 @@ function drawVideoClip(
     const trans = computeTransition(clip.transition, t, clip.endPosition ?? 0, fps);
     if (trans) {
       const nextClip = clipsSorted[ci + 1];
-      const nextVid = getVideoDrawable(nextClip?.src ?? "");
+      const nextVid = getVideoDrawable(nextClip?.id ?? "");
       const nextRect = nextClip ? {
         x: nextClip.x ?? 0, y: nextClip.y ?? 0,
         w: (nextClip.width ?? w) * (nextClip.scale ?? 1),

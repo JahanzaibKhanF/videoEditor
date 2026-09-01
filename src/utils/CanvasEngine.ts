@@ -1,9 +1,31 @@
 /**
  * CanvasEngine — the core compositor.
  *
- * One hidden HTMLVideoElement per clip src (never in DOM, just for decoding).
+ * One hidden HTMLVideoElement PER CLIP (never in DOM, just for decoding).
  * Drives playback via requestAnimationFrame + wall-clock dt.
  * Seek is synchronous to the RAF loop — loop is stopped during seek, restarted after.
+ *
+ * BUG FIX (crash: two clips using the SAME source file at once — e.g. a
+ * clip duplicated and blurred/stretched as its own full-bleed background,
+ * a very common layout): the video pool used to be keyed by `clip.src`,
+ * meaning two clips referencing the same file SHARED one HTMLVideoElement.
+ * Every tick, both clips' scheduling logic fought over that one element's
+ * `currentTime`/play state — whichever clip's code ran last in the loop
+ * "won" for that frame, so both layers displayed IDENTICAL content instead
+ * of each clip's own trim/speed, and the seek target could visibly fight
+ * between the two clips' positions. The WebCodecs export pipeline mirrors
+ * this same src-keyed pattern (see webCodecsRender.ts) and could
+ * additionally throw a hard decoder error in this scenario (surfaced as
+ * "Encode worker crashed"), because the decode timestamps requested for
+ * that one shared source could jump backward whenever the "winning" clip
+ * changed between frames — WebCodecs requires monotonically increasing
+ * decode order per stream.
+ *
+ * Fixed by keying the pool by `clip.id` instead: every clip gets its own
+ * independent `<video>` element (and, on export, its own independent
+ * decoder), even when several clips point at the exact same file. Slightly
+ * more decode work when a source is reused, but the only way to give each
+ * clip a fully independent, always-valid playhead.
  */
 
 import { ClipDetails } from "../types/types";
@@ -15,6 +37,7 @@ export class CanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
 
+  // Keyed by clip.id (NOT clip.src — see the class-level bug-fix note above).
   private videoPool: Map<string, HTMLVideoElement> = new Map();
   private clips: ClipDetails[] = [];
   private _currentTime = 0;
@@ -39,7 +62,8 @@ export class CanvasEngine {
   // loading indicator (like After Effects' "please wait") instead of
   // letting the canvas just go black while a clip buffers or seeks.
   public onBufferingChange: ((isBuffering: boolean) => void) | null = null;
-  private waitingSrcs = new Set<string>();
+  // Keyed by clip.id, same as videoPool.
+  private waitingClipIds = new Set<string>();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -57,27 +81,37 @@ export class CanvasEngine {
   // ── Load clips ────────────────────────────────────────────────────────
   load(clips: ClipDetails[]) {
     this.clips = [...clips].sort((a, b) => a.startPosition - b.startPosition);
-    const newSrcs = new Set(clips.map(c => c.src));
+    const newClipIds = new Set(clips.map(c => c.id));
 
-    for (const [src, vid] of this.videoPool) {
-      if (!newSrcs.has(src)) {
+    for (const [id, vid] of this.videoPool) {
+      if (!newClipIds.has(id)) {
         vid.src = "";
         vid.load();
-        this.videoPool.delete(src);
-        if (this.waitingSrcs.delete(src)) this.onBufferingChange?.(this.waitingSrcs.size > 0);
+        this.videoPool.delete(id);
+        if (this.waitingClipIds.delete(id)) this.onBufferingChange?.(this.waitingClipIds.size > 0);
       }
     }
 
     for (const clip of clips) {
-      if (!this.videoPool.has(clip.src)) {
+      const existing = this.videoPool.get(clip.id);
+      if (!existing) {
         const vid = document.createElement("video");
         vid.src = clip.src;
         vid.preload = "auto";
         vid.muted = clip.muted ?? false;
         vid.playsInline = true;
         vid.load();
-        this.videoPool.set(clip.src, vid);
-        this._attachBufferingListeners(vid, clip.src);
+        this.videoPool.set(clip.id, vid);
+        this._attachBufferingListeners(vid, clip.id);
+      } else if (clip.src && existing.src !== clip.src) {
+        // Same clip id, but its src changed — e.g. media was just relinked
+        // (empty src -> real blob URL) or the folder was reconnected with a
+        // fresh object URL. Re-point the SAME pooled element rather than
+        // leaving it stuck showing the old/empty source: since the pool is
+        // now keyed by clip.id (not src), a src change alone would
+        // otherwise never be picked up here.
+        existing.src = clip.src;
+        existing.load();
       }
     }
 
@@ -85,14 +119,14 @@ export class CanvasEngine {
     this._drawFrame();
   }
 
-  private _attachBufferingListeners(vid: HTMLVideoElement, src: string) {
+  private _attachBufferingListeners(vid: HTMLVideoElement, clipId: string) {
     const markWaiting = () => {
-      this.waitingSrcs.add(src);
-      this.onBufferingChange?.(this.waitingSrcs.size > 0);
+      this.waitingClipIds.add(clipId);
+      this.onBufferingChange?.(this.waitingClipIds.size > 0);
     };
     const markReady = () => {
-      if (this.waitingSrcs.delete(src)) {
-        this.onBufferingChange?.(this.waitingSrcs.size > 0);
+      if (this.waitingClipIds.delete(clipId)) {
+        this.onBufferingChange?.(this.waitingClipIds.size > 0);
       }
       // While playing, the RAF loop redraws every frame anyway. While
       // paused, NOTHING else will ever redraw the canvas once a clip
@@ -178,7 +212,7 @@ export class CanvasEngine {
     const seekPromises: Promise<void>[] = [];
 
     for (const clip of this.clips) {
-      const vid = this.videoPool.get(clip.src);
+      const vid = this.videoPool.get(clip.id);
       if (!vid) continue;
       const inRange = this._currentTime >= (clip.startPosition ?? 0) &&
                       this._currentTime <= (clip.endPosition ?? 0);
@@ -229,13 +263,13 @@ export class CanvasEngine {
   }
 
   // ── Audio control ─────────────────────────────────────────────────────
-  setClipMuted(src: string, muted: boolean) {
-    const vid = this.videoPool.get(src);
+  setClipMuted(clipId: string, muted: boolean) {
+    const vid = this.videoPool.get(clipId);
     if (vid) vid.muted = muted;
   }
 
-  setClipAudio(src: string, muted: boolean, volume: number) {
-    const vid = this.videoPool.get(src);
+  setClipAudio(clipId: string, muted: boolean, volume: number) {
+    const vid = this.videoPool.get(clipId);
     if (vid) {
       vid.muted = muted;
       vid.volume = Math.max(0, Math.min(1, volume));
@@ -258,7 +292,7 @@ export class CanvasEngine {
 
   private _syncAllVideoPositions() {
     for (const clip of this.clips) {
-      const vid = this.videoPool.get(clip.src);
+      const vid = this.videoPool.get(clip.id);
       if (!vid) continue;
       if (this._currentTime >= clip.startPosition && this._currentTime <= clip.endPosition) {
         const localTime = mapOutputElapsedToSourceTime(clip, this._currentTime - (clip.startPosition ?? 0));
@@ -305,7 +339,7 @@ export class CanvasEngine {
       // actually supply a frame for that time, so during a stall the
       // seekbar kept sliding forward while the picture stayed frozen —
       // instead of pausing like Premiere/After Effects do while waiting.
-      const isBuffering = this.waitingSrcs.size > 0;
+      const isBuffering = this.waitingClipIds.size > 0;
       if (this.lastRealTime !== null && !isBuffering) {
         const dt = Math.min((now - this.lastRealTime) / 1000, 0.1);
         this._currentTime += dt;
@@ -325,7 +359,7 @@ export class CanvasEngine {
 
       // Keep video elements in sync regardless of whether we draw a frame.
       const activeClips = this._getActiveClips();
-      const activeSrcs = new Set(activeClips.map(c => c.src));
+      const activeClipIds = new Set(activeClips.map(c => c.id));
       // Pause every pooled video whose clip ISN'T currently active. Without
       // this, a clip's <video> just kept playing in the background forever
       // once it had ever been active — for a multi-clip template, every
@@ -333,11 +367,11 @@ export class CanvasEngine {
       // reached the last one, competing for CPU/GPU with the clips actually
       // on screen. This is the real cause of playback getting progressively
       // more stuttery/stuck the further into a multi-clip project you get.
-      for (const [src, vid] of this.videoPool) {
-        if (!activeSrcs.has(src) && !vid.paused) vid.pause();
+      for (const [id, vid] of this.videoPool) {
+        if (!activeClipIds.has(id) && !vid.paused) vid.pause();
       }
       for (const clip of activeClips) {
-        const vid = this.videoPool.get(clip.src);
+        const vid = this.videoPool.get(clip.id);
         if (!vid) continue;
         if (hasSpeedRamp(clip)) {
           // A ramped clip's source consumption rate isn't constant, so it
@@ -366,8 +400,8 @@ export class CanvasEngine {
         }
         if (vid.paused) vid.play().catch(() => {});
       }
-      for (const [src, vid] of this.videoPool) {
-        if (!activeClips.some(c => c.src === src) && !vid.paused) vid.pause();
+      for (const [id, vid] of this.videoPool) {
+        if (!activeClips.some(c => c.id === id) && !vid.paused) vid.pause();
       }
 
       // FPS-throttled draw — skip canvas work if the frame is too early or
@@ -402,7 +436,7 @@ export class CanvasEngine {
     );
 
     for (const clip of activeClips) {
-      const vid = this.videoPool.get(clip.src);
+      const vid = this.videoPool.get(clip.id);
       if (!vid || vid.readyState < 2) continue;
       const x = clip.x ?? 0;
       const y = clip.y ?? 0;
@@ -414,7 +448,7 @@ export class CanvasEngine {
     this.onFrameReady?.();
   }
 
-  getVideoElement(src: string): HTMLVideoElement | undefined {
-    return this.videoPool.get(src);
+  getVideoElement(clipId: string): HTMLVideoElement | undefined {
+    return this.videoPool.get(clipId);
   }
 }

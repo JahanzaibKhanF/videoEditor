@@ -79,22 +79,58 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
 
   onProgress?.(0, "Opening video sources…");
 
-  // ── 1. Open each unique clip source via Mediabunny, one CanvasSink per
-  // source. `alpha: true` unconditionally: there's no per-clip flag telling
-  // us which sources are background-removed (transparent) videos, so every
+  // ── 1. Open one CanvasSink PER CLIP (not per unique source file).
+  //
+  // BUG FIX ("Encode worker crashed" when a video is used twice at once —
+  // e.g. a clip duplicated, blurred and stretched to fill the frame as its
+  // OWN background layer, sitting behind the original): this used to open
+  // one shared CanvasSink per unique `src`, and key every decode-timestamp
+  // request and decoded-canvas cache by that same src string. When two
+  // clips pointed at the same file and were both visible on the same
+  // output frame, every one of those maps collapsed the two clips onto a
+  // single entry — whichever clip came later in the `clips` array silently
+  // overwrote the other's requested local time on every frame. Two clips
+  // showed IDENTICAL decoded content regardless of their own trim/speed,
+  // and — critically — the moment the two clips' active ranges didn't
+  // fully overlap, the sequence of timestamps handed to that shared sink
+  // could jump BACKWARD (e.g. clip A's schedule for frames where only A is
+  // active, then clip B's much-earlier local time the instant both become
+  // active). WebCodecs' VideoDecoder requires strictly non-decreasing
+  // decode timestamps per stream — that backward jump throws inside
+  // Mediabunny's CanvasSink and took the whole export down with it.
+  //
+  // Fixed by opening an independent CanvasSink per CLIP id, so two clips
+  // sharing a file get two fully independent decode pipelines with their
+  // own always-monotonic timestamp schedules — the network fetch is still
+  // deduplicated per unique src (below) so this doesn't re-download
+  // anything, it only re-demuxes/decodes independently, which is the only
+  // way to give overlapping same-source clips correct, crash-proof output.
+  //
+  // `alpha: true` unconditionally: there's no per-clip flag telling us
+  // which sources are background-removed (transparent) videos, so every
   // sink is opened alpha-capable to match the alpha:true export canvas
   // below — a no-op cost for ordinary opaque sources.
   const uniqueSrcs = Array.from(new Set(clips.map(c => c.src)));
-  const sinks = new Map<string, CanvasSink>();
+  const blobCache = new Map<string, Blob>();
   await Promise.all(uniqueSrcs.map(async (src) => {
     try {
-      const blob = await (await fetch(src)).blob();
+      blobCache.set(src, await (await fetch(src)).blob());
+    } catch (err) {
+      console.error("[webCodecsRender] failed to fetch source:", src, err);
+    }
+  }));
+
+  const sinks = new Map<string, CanvasSink>(); // keyed by clip.id
+  await Promise.all(clips.map(async (clip) => {
+    const blob = blobCache.get(clip.src);
+    if (!blob) return; // that source failed to fetch — compositeFrame already tolerates a missing drawable
+    try {
       const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
       const track = await input.getPrimaryVideoTrack();
       if (!track) return; // audio-only / broken source — compositeFrame already tolerates a missing drawable
-      sinks.set(src, new CanvasSink(track, { alpha: true }));
+      sinks.set(clip.id, new CanvasSink(track, { alpha: true }));
     } catch (err) {
-      console.error("[webCodecsRender] failed to open source via Mediabunny:", src, err);
+      console.error("[webCodecsRender] failed to open source via Mediabunny:", clip.src, err);
     }
   }));
 
@@ -258,31 +294,32 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
   // whole export's worth of requests as one batched, forward `canvasesAtTimestamps`
   // call instead of a cold lookup every frame — Mediabunny can then decode
   // in order and never re-decode shared work between nearby requests.
-  const perFrameSrcTimes: Map<string, number>[] = new Array(totalFrames);
+  // Keyed by clip.id throughout (see the bug-fix note above `sinks`).
+  const perFrameClipTimes: Map<string, number>[] = new Array(totalFrames);
   const requestedTimestamps = new Map<string, number[]>();
   for (let i = 0; i < totalFrames; i++) {
     const t = i / fps;
     const active = clips.filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity));
-    const perSrc = new Map<string, number>();
+    const perClip = new Map<string, number>();
     for (const c of active) {
-      if (!sinks.has(c.src)) continue; // source failed to open — compositeFrame tolerates a missing drawable
+      if (!sinks.has(c.id)) continue; // source failed to open — compositeFrame tolerates a missing drawable
       const localTime = mapOutputElapsedToSourceTime(c, t - (c.startPosition ?? 0));
-      perSrc.set(c.src, localTime);
-      if (!requestedTimestamps.has(c.src)) requestedTimestamps.set(c.src, []);
-      requestedTimestamps.get(c.src)!.push(localTime);
+      perClip.set(c.id, localTime);
+      if (!requestedTimestamps.has(c.id)) requestedTimestamps.set(c.id, []);
+      requestedTimestamps.get(c.id)!.push(localTime);
     }
-    perFrameSrcTimes[i] = perSrc;
+    perFrameClipTimes[i] = perClip;
   }
 
   type CanvasIter = AsyncIterator<{ canvas: HTMLCanvasElement | OffscreenCanvas; timestamp: number } | null>;
   const sinkIterators = new Map<string, CanvasIter>();
-  for (const [src, sink] of sinks) {
-    const timestamps = requestedTimestamps.get(src) ?? [];
-    sinkIterators.set(src, sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]() as CanvasIter);
+  for (const [clipId, sink] of sinks) {
+    const timestamps = requestedTimestamps.get(clipId) ?? [];
+    sinkIterators.set(clipId, sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]() as CanvasIter);
   }
 
-  const currentCanvasBySrc = new Map<string, HTMLCanvasElement | OffscreenCanvas | null>();
-  const getVideoDrawable = (src: string) => currentCanvasBySrc.get(src) ?? null;
+  const currentCanvasByClipId = new Map<string, HTMLCanvasElement | OffscreenCanvas | null>();
+  const getVideoDrawable = (clipId: string) => currentCanvasByClipId.get(clipId) ?? null;
 
   try {
     for (let i = 0; i < totalFrames; i++) {
@@ -299,12 +336,12 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
       if (workerFailure) throw workerFailure;
       const t = i / fps;
 
-      const perSrc = perFrameSrcTimes[i];
-      await Promise.all(Array.from(perSrc.keys()).map(async (src) => {
-        const it = sinkIterators.get(src);
+      const perClip = perFrameClipTimes[i];
+      await Promise.all(Array.from(perClip.keys()).map(async (clipId) => {
+        const it = sinkIterators.get(clipId);
         if (!it) return;
         const { value } = await it.next();
-        currentCanvasBySrc.set(src, value ? value.canvas : null);
+        currentCanvasByClipId.set(clipId, value ? value.canvas : null);
       }));
 
       try {
