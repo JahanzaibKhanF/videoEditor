@@ -157,6 +157,13 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
     // change during this drag, only this clip's does.
     const otherClips = clipsDetails.filter(c => c.id !== id);
     let curZ = origClip.zIndex ?? 0;
+    // Tracks THIS clip's own live endPosition across the drag — `up()`
+    // below needs the just-finished value, and reading it back out of
+    // `clipsDetails` there would be a stale closure (React state updates
+    // from `mv`'s setClipsDetails calls are async and this native
+    // mouseup listener isn't tied to a re-render), same as `otherClips`
+    // being a fixed snapshot from drag-start above.
+    let liveEp = origClip.endPosition ?? 0;
 
     // Same-track neighbours, fixed for the duration of a resize (resizing
     // never changes track).
@@ -240,12 +247,36 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
       setClipsDetails(prev => prev.map(c =>
         c.id === id ? { ...c, startPosition: sp, endPosition: ep, startTime: st, endTime: et, zIndex: type === "move" ? curZ : c.zIndex } : c
       ));
+      liveEp = ep;
     };
 
     const up = () => {
-      setTotalTime(prev => {
-        const maxEnd = clipsDetails.reduce((m, c) => Math.max(m, c.endPosition ?? 0), 0);
-        return Math.max(prev, maxEnd);
+      // BUG FIX ("render includes extra black padding / stale-long
+      // export duration after trimming a clip shorter"): this used to be
+      // `setTotalTime(prev => Math.max(prev, maxEnd))`, which can only
+      // ever GROW the timeline, never shrink it. Dragging a clip's right
+      // edge to trim it shorter (resize-right) reduces that clip's
+      // endPosition, but the overall project `totalTime` — which drives
+      // export's total frame count in renderVideo.ts/webCodecsRender.ts —
+      // stayed at whatever the longest point ever reached was. Concretely:
+      // add a clip (totalTime grows to its full length), then trim it
+      // shorter — totalTime never moved, so export still rendered frames
+      // all the way out to the OLD, no-longer-real end of the timeline
+      // (nothing active there, so just wasted trailing black frames, but
+      // for the browser's encoder that's real extra encode/memory work it
+      // didn't need to do, on every single export from then on).
+      //
+      // Fixed by actually RECOMPUTING totalTime from the current end of
+      // every layer (clips, using this drag's just-finished `liveEp`
+      // rather than a stale `clipsDetails` closure; plus images/texts/
+      // blurs, so trimming video never cuts off other content that
+      // extends further right).
+      setTotalTime(() => {
+        const maxClipEnd = otherClips.reduce((m, c) => Math.max(m, c.endPosition ?? 0), liveEp);
+        const maxImageEnd = imagesDetails.reduce((m, i) => Math.max(m, i.endTime ?? 0), 0);
+        const maxTextEnd = textsDetails.reduce((m, t) => Math.max(m, t.endTime ?? 0), 0);
+        const maxBlurEnd = blursDetails.reduce((m, b) => Math.max(m, b.endTime ?? 0), 0);
+        return Math.max(maxClipEnd, maxImageEnd, maxTextEnd, maxBlurEnd);
       });
       document.removeEventListener("mousemove", mv);
       document.removeEventListener("mouseup", up);

@@ -210,16 +210,42 @@ async function handleAudio(msg: { channelData: Float32Array[]; length: number })
 }
 
 function handleFrame(msg: { frame: VideoFrame; keyFrame: boolean }) {
-  if (!videoEncoder) { msg.frame.close(); signalReadyForNextFrame(); return; }
-  videoEncoder.encode(msg.frame, { keyFrame: msg.keyFrame });
-  msg.frame.close();
+  // BUG FIX ("A VideoFrame was garbage collected without being closed" +
+  // generic "Encode worker crashed"): this used to call
+  // `videoEncoder.encode(msg.frame, ...)` and `msg.frame.close()` as two
+  // separate statements. `encode()` throws SYNCHRONOUSLY if the encoder is
+  // no longer in a usable state — most commonly because an EARLIER frame's
+  // encode already failed asynchronously (the `error` callback registered
+  // in handleInit fires and the spec puts the encoder in the "closed"
+  // state), and this frame arrived before the main thread had any chance
+  // to react to that. When `encode()` throws, execution never reached the
+  // `msg.frame.close()` line right after it — the transferred VideoFrame
+  // was silently abandoned, which is exactly what the browser's GC warning
+  // was reporting. The underlying encoder error still got reported via the
+  // `error` callback, but this specific frame's memory leaked on top of it,
+  // and this function returned without ever calling
+  // `signalReadyForNextFrame()` either, which could leave the main thread's
+  // `waitForFrameAck()` hanging until the separate `{type:"error"}` message
+  // unstuck it.
+  //
+  // Fixed with try/finally: the frame is now ALWAYS closed exactly once no
+  // matter how `encode()` behaves, and any throw is re-raised so
+  // self.onmessage's existing try/catch reports it as a proper, specific
+  // {type:"error"} instead of the frame just vanishing.
+  let encoderMissing = false;
+  try {
+    if (!videoEncoder) { encoderMissing = true; return; }
+    videoEncoder.encode(msg.frame, { keyFrame: msg.keyFrame });
+  } finally {
+    msg.frame.close();
+  }
+  if (encoderMissing) { signalReadyForNextFrame(); return; }
   framesEncoded++;
   if (framesEncoded % 5 === 0 || framesEncoded === totalFrames) {
     post({ type: "progress", fraction: framesEncoded / totalFrames, label: `Encoding frame ${framesEncoded} / ${totalFrames}` });
   }
   signalReadyForNextFrame();
 }
-
 // ── Backpressure ────────────────────────────────────────────────────────
 // The main thread produces frames (seek + canvas draw) independently of how
 // fast this worker's VideoEncoder can actually consume them. Without any
