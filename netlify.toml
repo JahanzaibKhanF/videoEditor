@@ -4,3 +4,17 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# next.config.mjs's headers() only reaches server-rendered routes on
+# Netlify — static files under /_next/static/** are served straight from
+# the CDN, bypassing it. That gap is why the WebCodecs encode worker's own
+# script (_next/static/chunks/*.js) has no Cross-Origin-Embedder-Policy
+# header, which the browser requires to match the page's COEP before it
+# will start a Worker at all — silently blocking it with no real error
+# message ("Encode worker crashed."). Setting the header here, at Netlify's
+# own edge, covers every path including static chunks.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
