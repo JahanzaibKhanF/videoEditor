@@ -95,7 +95,7 @@ export function totalSourceConsumed(clip: ClipDetails): number {
  * stays continuous across a cut instead of both halves independently
  * replaying the whole original curve within their own (now shorter) span.
  *
- * BUG THIS FIXES: spliteLayer.ts used to just spread `...original` onto
+ * BUG THIS FIXES: splitLayer.ts used to just spread `...original` onto
  * both new clip halves, which carries the SAME atFraction-keyed ramp array
  * unchanged onto each. Since atFraction is relative to "this clip's own
  * on-timeline duration" (not the pre-split duration), each half then

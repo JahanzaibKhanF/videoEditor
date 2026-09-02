@@ -8,7 +8,7 @@
  * exactly like every other NLE (CapCut/Premiere/etc). zIndex is no longer
  * assumed unique per clip: multiple non-overlapping clips can, and normally
  * do, share a track (e.g. sequentially-imported clips, or the two halves of
- * a split clip — see spliteLayer.ts, which copies the original clip's
+ * a split clip — see splitLayer.ts, which copies the original clip's
  * zIndex onto the new half so it stays on the exact same row/track it was
  * split from instead of spawning a new one).
  *
@@ -31,7 +31,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import { ROW_H, ROW_GAP } from "./Layers";
-import { transitionOptions } from "../../utils/transitionOtionsConstants";
+import { transitionOptions } from "../../utils/transitionOptionsConstants";
 import { Shuffle, ChevronUp, ChevronDown } from "@/utils/icons";
 import { AudioTrackRow } from "./AudioRangeSlider";
 import { ClipDetails, ImageDetails, TextDetails, BlurDetails } from "../../types/types";

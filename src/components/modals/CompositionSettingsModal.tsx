@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * CompostionSettingsModal — read-only composition info.
+ * CompositionSettingsModal — read-only composition info.
  *
  * Aspect ratio is a one-time decision made on the startup screen, not
  * something you flip mid-edit (that used to live here as an interactive
@@ -26,12 +26,12 @@ const RATIO_LABELS: Record<string, string> = {
   "xfeeds": "X (Twitter) Feed",
 };
 
-export default function CompostionSettingsModal() {
-  const { setIsCompostionSettingsOpen, selectedAspectRatio, containerDimenions, fps } = useAppDetailsContext();
+export default function CompositionSettingsModal() {
+  const { setIsCompositionSettingsOpen, selectedAspectRatio, containerDimenions, fps } = useAppDetailsContext();
 
   return (
     <div className="fixed inset-0 z-[9000] bg-black/40 backdrop-blur-sm flex items-center justify-center"
-      onClick={() => setIsCompostionSettingsOpen(false)}>
+      onClick={() => setIsCompositionSettingsOpen(false)}>
       <div className="bg-studio-surface border border-studio-border rounded-2xl shadow-2xl p-7 w-[420px] max-w-[95vw]"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
@@ -39,7 +39,7 @@ export default function CompostionSettingsModal() {
             <div className="text-[16px] font-bold text-ink-primary">Composition</div>
             <div className="text-[12px] text-ink-secondary mt-0.5">Project settings for this composition</div>
           </div>
-          <button onClick={() => setIsCompostionSettingsOpen(false)}
+          <button onClick={() => setIsCompositionSettingsOpen(false)}
             className="w-8 h-8 rounded-lg border border-studio-border bg-studio-raised flex items-center justify-center cursor-pointer text-ink-secondary hover:bg-studio-hover transition-all">
             <X size={14} />
           </button>

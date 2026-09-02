@@ -1,6 +1,44 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — Phase 1 of the UI overhaul: project-structure cleanup (dead code removed, `src/components/` re-treed, filename typos fixed)
+
+Groundwork for the 4-phase UI/mobile overhaul (see
+`.claude/plans/eager-brewing-yeti.md`). No behavior changed — `npm run build`
+and `tsc --noEmit` both clean; every control reachable before is still reachable.
+
+**Deleted 14 dead source files** (verified zero imports / zero basename
+references anywhere): `animations/AnimationMainComposition`,
+`animations/AnimationsPlayer`, `blur/BlurComponent`, `sections/EffectsEditor`,
+`timeline/Seekbar`, `timeline/TimelineDuration`,
+`transitions/TransitionMainComposition`, `transitions/TransitionsPlayer`,
+`ui/ButtonBlackPrimary`, `hooks/useCanvasEngine`, `hooks/useDarkMode`,
+`utils/generateTransitionFrames`, `utils/getVideoFrameImage`,
+`utils/rescaleTemplateTexts`. Also deleted 3 unused assets (`react.svg`,
+`loading.gif`, `newBlurImage9.jpg`).
+
+**Stopped tracking gitignored build artifacts:** `tsconfig.tsbuildinfo`,
+`next-env.d.ts` (both already in `.gitignore`; files stay on disk). Added
+`.claude/settings.local.json` to `.gitignore`.
+
+**Fixed filename / identifier typos:**
+- `utils/spliteLayer.ts` → `utils/splitLayer.ts` (export `spliteLayer` → `splitLayer`)
+- `utils/transitionOtionsConstants.ts` → `utils/transitionOptionsConstants.ts`
+- `components/options/CompostionSettingsModal.tsx` → `components/modals/CompositionSettingsModal.tsx`
+  (context keys `isCompostionSettingsOpen` / `setIsCompostionSettingsOpen` →
+  `isCompositionSettingsOpen` / `setIsCompositionSettingsOpen`)
+
+**Re-treed `src/components/`** — the 12-file `sections/` grab-bag is gone. New
+layout: `app/` (ClipFlowApp), `editor/` (EditorShell, was `Editor.tsx`),
+`chrome/` (Header, IconSidebar, MediaRelinkBanner), `panels/` (Media,
+Properties, Templates, RecentProjects, Assets [was AssetsSection], BackgroundRemoval,
+ClipEffects), `editors/` (TextEditor, ColorAdjustPanel [was `color/`]),
+`preview/` (was `screen/`), `modals/` (was `options/` + `output/`), and the
+unchanged `timeline/ layers/ animations/ transitions/ auth/ startup/ ui/`.
+Imports to `context/ utils/ types/ hooks/` stayed valid (same depth); only
+cross-folder component imports and the `editor/`+`app/` files needed path
+updates.
+
 ## Session — background-removed clips: fixed BOTH the black-background bug and the "stuck after a few frames" bug (two separate real causes); Background Removal split into its own sidebar icon; transition picker redesigned with real two-clip preview tiles; npm audit assessed
 
 **Black background — real bug found:** the main preview canvas

@@ -32,7 +32,7 @@ const TRANSITION_DURATION = 0.5;
 // FFmpeg's `xfade` filter only accepts a fixed, specific set of transition
 // names (see https://ffmpeg.org/ffmpeg-filters.html#xfade) — none of which
 // match this app's internal camelCase transition keys (see
-// transitionOtionsConstants.ts). Passing an unmapped key straight through
+// transitionOptionsConstants.ts). Passing an unmapped key straight through
 // (e.g. "wipeLeftToRight", "dipToBlack") makes FFmpeg reject the filter,
 // so every transition except one coincidentally named "fade" would fail
 // silently or break the export. This maps every internal key to the

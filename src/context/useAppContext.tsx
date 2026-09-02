@@ -14,7 +14,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [primaryVideoDimensions, setPrimaryVideoDimensions] = useState({ width: 0, height: 0 });
   const [containerDimenions, setContainerDimenions] = useState({ width: 0, height: 0 });
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<AppContextType["selectedAspectRatio"]>("original");
-  const [isCompostionSettingsOpen, setIsCompostionSettingsOpen] = useState(false);
+  const [isCompositionSettingsOpen, setIsCompositionSettingsOpen] = useState(false);
   const [clipsDetails, setClipsDetails] = useState<ClipDetails[]>([]);
   const [clipEffects, setClipEffects] = useState<ClipEffectDetails[]>([]);
   const [textsDetails, setTextsDetails] = useState<TextDetails[]>([]);
@@ -60,7 +60,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
       primaryVideoDimensions, setPrimaryVideoDimensions,
       containerDimenions, setContainerDimenions,
       selectedAspectRatio, setSelectedAspectRatio,
-      isCompostionSettingsOpen, setIsCompostionSettingsOpen,
+      isCompositionSettingsOpen, setIsCompositionSettingsOpen,
       clipsDetails, setClipsDetails,
       clipEffects, setClipEffects,
       textsDetails, setTextsDetails,

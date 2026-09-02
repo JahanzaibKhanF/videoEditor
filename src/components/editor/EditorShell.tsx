@@ -1,26 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useAppDetailsContext } from "../context/useAppContext";
-import { useIsMobile } from "../hooks/useIsMobile";
-import { useBgRemovedRestore } from "../hooks/useBgRemovedRestore";
-import Header from "./sections/Header";
-import MediaPanel from "./sections/MediaPanel";
-import Screen from "./screen/Screen";
-import PlayerControls from "./screen/PlayerControls";
-import PreviewScale from "./screen/PreviewScale";
-import RenderButton from "./ui/RenderButton";
-import PropertiesPanel from "./sections/PropertiesPanel";
-import TimeLine from "./timeline/TimeLine";
-import VideoOutputModal from "./output/VideoOutputModal";
-import RenderingLoader from "./ui/RenderingLoader";
-import Importing from "./ui/Importing";
-import CompostionSettingsModal from "./options/CompostionSettingsModal";
-import IconSidebar from "./sections/IconSidebar";
-import MediaRelinkBanner from "./sections/MediaRelinkBanner";
-import AssetsSection from "./sections/AssetsSection";
-import TextEditor from "./sections/TextEditor";
-import { Template } from "../utils/templates";
+import { useAppDetailsContext } from "../../context/useAppContext";
+import { useIsMobile } from "../../hooks/useIsMobile";
+import { useBgRemovedRestore } from "../../hooks/useBgRemovedRestore";
+import Header from "../chrome/Header";
+import MediaPanel from "../panels/MediaPanel";
+import Screen from "../preview/Screen";
+import PlayerControls from "../preview/PlayerControls";
+import PreviewScale from "../preview/PreviewScale";
+import RenderButton from "../ui/RenderButton";
+import PropertiesPanel from "../panels/PropertiesPanel";
+import TimeLine from "../timeline/TimeLine";
+import VideoOutputModal from "../modals/VideoOutputModal";
+import RenderingLoader from "../ui/RenderingLoader";
+import Importing from "../ui/Importing";
+import CompositionSettingsModal from "../modals/CompositionSettingsModal";
+import IconSidebar from "../chrome/IconSidebar";
+import MediaRelinkBanner from "../chrome/MediaRelinkBanner";
+import AssetsPanel from "../panels/AssetsPanel";
+import TextEditor from "../editors/TextEditor";
+import { Template } from "../../utils/templates";
 import { Film, Type, ImageIcon, SlidersHorizontal, Clock, Sparkles, Shuffle, LayoutTemplate, Layers2, History, Scissors } from "@/utils/icons";
 
 const MIN_LEFT = 220, MIN_RIGHT = 230, MIN_TL = 140, MAX_TL = 340;
@@ -55,7 +55,7 @@ type MobileTab = typeof MOBILE_TABS[number]["key"];
 export default function Editor({ pendingTemplate }: { pendingTemplate?: Template }) {
   const {
     isMediaImporting, isShowProcessedVideo, setIsShowProcessedVideo,
-    isCompostionSettingsOpen, videos,
+    isCompositionSettingsOpen, videos,
   } = useAppDetailsContext();
 
   useBgRemovedRestore();
@@ -119,7 +119,7 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
       {isShowProcessedVideo && <VideoOutputModal setIsShowProcessedVideo={setIsShowProcessedVideo} />}
       <RenderingLoader />
       {isMediaImporting && <Importing />}
-      {isCompostionSettingsOpen && <CompostionSettingsModal />}
+      {isCompositionSettingsOpen && <CompositionSettingsModal />}
     </>
   );
 
@@ -188,7 +188,7 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
             {["media", "effects", "bgremove", "transitions", "templates", "layers", "recentproj"].includes(mobileTab)
               && <MediaPanel activeTab={activeTab} pendingTemplate={pendingTemplate} />}
             {mobileTab === "text"       && <TextEditor />}
-            {mobileTab === "assets"     && <AssetsSection />}
+            {mobileTab === "assets"     && <AssetsPanel />}
             {mobileTab === "properties" && <PropertiesPanel />}
             {mobileTab === "timeline"   && (
               <div className="h-full overflow-hidden">

@@ -233,8 +233,8 @@ export interface AppContextType {
   setContainerDimenions: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>;
   selectedAspectRatio: AspectRatio;
   setSelectedAspectRatio: (value: AspectRatio) => void;
-  isCompostionSettingsOpen: boolean;
-  setIsCompostionSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isCompositionSettingsOpen: boolean;
+  setIsCompositionSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   clipsDetails: ClipDetails[];
   setClipsDetails: React.Dispatch<React.SetStateAction<ClipDetails[]>>;
   clipEffects: ClipEffectDetails[];

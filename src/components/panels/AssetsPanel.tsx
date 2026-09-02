@@ -18,7 +18,7 @@ function SectionHeader({ icon: Icon, label, count, color }: { icon: LucideIcon; 
   );
 }
 
-export default function AssetsSection() {
+export default function AssetsPanel() {
   const {
     imagesDetails,
     selectedImageID,

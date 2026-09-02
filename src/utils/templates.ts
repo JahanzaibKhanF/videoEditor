@@ -22,7 +22,7 @@ export interface TemplateVideoSlot {
   // particles, gradientOverlay) baked into this slot.
   effects?: TemplateSlotEffect[];
   // Optional transition OUT of this slot's clip into the next one (e.g.
-  // "zoom" for a punchy TikTok-style cut). See transitionOtionsConstants.ts
+  // "zoom" for a punchy TikTok-style cut). See transitionOptionsConstants.ts
   // for valid keys. Omitted/"none" = hard cut.
   transition?: string;
 }

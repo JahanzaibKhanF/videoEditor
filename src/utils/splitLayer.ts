@@ -27,7 +27,7 @@ const MIN_SEGMENT = 0.05;
  *   playhead) — in that case we fall back to searching every track for
  *   whichever single clip the playhead is currently over.
  */
-export const spliteLayer = (
+export const splitLayer = (
   selectedClipId: string | null,
   clipsDetails: Array<ClipDetails>,
   setClipsDetails: React.Dispatch<React.SetStateAction<Array<ClipDetails>>>,

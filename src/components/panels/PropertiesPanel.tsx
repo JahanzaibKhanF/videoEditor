@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Sparkles, Shuffle, SlidersHorizontal, Wand2 } from "@/utils/icons";
-import TextEditor from "./TextEditor";
+import TextEditor from "../editors/TextEditor";
 import AnimationSelection from "../animations/AnimationSelection";
 import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import Slider from "../ui/Slider";
 import NumberInput from "../ui/NumberInput";
-import ColorAdjustPanel from "../color/ColorAdjustPanel";
+import ColorAdjustPanel from "../editors/ColorAdjustPanel";
 
 const TABS = [
   { key: "Edit", icon: SlidersHorizontal },

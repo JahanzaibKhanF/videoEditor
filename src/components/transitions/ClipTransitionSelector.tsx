@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
-import { transitionOptions } from "../../utils/transitionOtionsConstants";
+import { transitionOptions } from "../../utils/transitionOptionsConstants";
 import { DEFAULT_TRANSITION_PRESETS, buildMotionPresetFromRecord, MotionPreset, MotionPresetRecord } from "../../utils/motionPresets";
 import { toast } from "react-toastify";
 import { ChevronDown, ChevronUp } from "@/utils/icons";

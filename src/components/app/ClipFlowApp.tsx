@@ -6,7 +6,7 @@ import { AppContextProvider, EngineControlsProvider } from "@/context/useAppCont
 import { useAppDetailsContext } from "@/context/useAppContext";
 import { AuthProvider, useAuth } from "@/context/useAuthContext";
 import AuthScreen from "@/components/auth/AuthScreen";
-import Editor from "@/components/Editor";
+import Editor from "@/components/editor/EditorShell";
 import StartupScreen from "@/components/startup/StartupScreen";
 import { AspectRatio } from "@/types/types";
 import { Template } from "@/utils/templates";

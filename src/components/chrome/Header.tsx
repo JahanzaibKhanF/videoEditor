@@ -10,7 +10,7 @@ import { useProjectAutosave } from "../../hooks/useProjectAutosave";
 import { useTheme } from "../../hooks/useTheme";
 
 export default function Header() {
-  const { totalTime, videos, clipsDetails, setIsCompostionSettingsOpen, fps } = useAppDetailsContext();
+  const { totalTime, videos, clipsDetails, setIsCompositionSettingsOpen, fps } = useAppDetailsContext();
   const { user, logout, promptLogin } = useAuth();
   const { status: saveStatus, errorMessage: saveErrorMessage } = useProjectAutosave();
   const { theme, toggleTheme, mounted } = useTheme();
@@ -98,7 +98,7 @@ export default function Header() {
 
         <button
           disabled={videos.length === 0}
-          onClick={() => setIsCompostionSettingsOpen(true)}
+          onClick={() => setIsCompositionSettingsOpen(true)}
           title="Composition settings"
           className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary hover:bg-studio-hover hover:text-ink-primary text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
         >

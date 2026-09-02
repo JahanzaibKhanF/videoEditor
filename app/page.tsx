@@ -1,4 +1,4 @@
-import ClipFlowApp from "@/components/ClipFlowApp";
+import ClipFlowApp from "@/components/app/ClipFlowApp";
 
 // This page reads `?project=<id>` via useSearchParams() and depends on a
 // live session (auth cookie) — it's inherently per-request, not something
