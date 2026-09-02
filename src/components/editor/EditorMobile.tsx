@@ -7,7 +7,6 @@ import MediaRelinkBanner from "../chrome/MediaRelinkBanner";
 import Screen from "../preview/Screen";
 import PlayerControls from "../preview/PlayerControls";
 import PreviewScale from "../preview/PreviewScale";
-import RenderButton from "../ui/RenderButton";
 import TimeLine from "../timeline/TimeLine";
 import Sheet from "../ui/Sheet";
 import MobileToolRail, { MOBILE_TOOLS, type MobileTool } from "./mobile/MobileToolRail";
@@ -64,10 +63,7 @@ export default function EditorMobile({ pendingTemplate }: { pendingTemplate?: Te
         </div>
         <div className="flex items-center justify-between px-3 gap-2 flex-shrink-0 border-t border-white/5" style={{ height: 46 }}>
           <PlayerControls />
-          <div className="flex items-center gap-2">
-            <PreviewScale />
-            <RenderButton />
-          </div>
+          <PreviewScale />
         </div>
       </div>
 

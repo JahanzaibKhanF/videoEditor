@@ -1,6 +1,24 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — drop the duplicate export button; prompt guests to sign in when starting a project
+
+`npm run build` + `tsc --noEmit` clean.
+
+- **Removed the second Render/Export button** from the player-control bar on
+  both `EditorDesktop` and `EditorMobile` — the Header already has one, so it
+  was a duplicate. The control bar is now just transport + zoom.
+- **Guest sign-in nudge on the welcome screen.** When a signed-out person
+  starts a fresh project (the "+ New composition" flow or a template),
+  `StartupScreen` opens the auth modal first with a project-specific reason
+  ("Sign in to save …"). It's not a wall — the modal's "Continue as guest"
+  path still works, and either way (sign in *or* continue) we proceed into the
+  editor once the modal closes. Nags at most once per browser session
+  (`sessionStorage: clipflow-guest-start-ack`). Resuming a recent project is
+  unaffected (already sign-in-gated).
+- The welcome screen's top-right "Sign in" pill is now a filled violet
+  "Sign in / Sign up" button so it actually draws the eye.
+
 ## Session — Timeline layers: audio-lane name matches its video row + track/label restyle
 
 `npm run build` + `tsc --noEmit` clean. Follows Phase 4.

@@ -11,7 +11,7 @@
  * list — existing work vs. starting new — so it stays behind its own small
  * tab, shown only when signed in.
  */
-import { useEffect, useState, MouseEvent } from "react";
+import { useEffect, useRef, useState, MouseEvent } from "react";
 import { AspectRatio } from "../../types/types";
 import { TEMPLATES, Template } from "../../utils/templates";
 import { deleteBgRemovedForProject } from "../../utils/bgRemovedStore";
@@ -61,7 +61,7 @@ type Tab = "create" | "recent";
 type CreateStep = "grid" | "ratio";
 
 export default function StartupScreen({ onStart, onResumeProject, resuming, resumeError }: Props) {
-  const { user, promptLogin, logout } = useAuth();
+  const { user, promptLogin, logout, authModalOpen } = useAuth();
   const [tab, setTab] = useState<Tab>("create");
   const [step, setStep] = useState<CreateStep>("grid");
   const [selAspect, setSelAspect] = useState<AspectRatio | null>(null);
@@ -113,15 +113,47 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const goBlank = (ratio: AspectRatio) => {
+  // ── Guest → "sign in so your work is saved" prompt ──────────────────────
+  // Before a signed-out person enters a fresh project (blank or a template),
+  // ask them to sign in / create an account once — projects only autosave
+  // when signed in. It's not a wall: the auth modal has a "Continue as guest"
+  // button, and either way we proceed into the editor as soon as it closes.
+  // Only nags once per browser session.
+  const [pendingStart, setPendingStart] = useState<{ ratio: AspectRatio; tpl?: Template } | null>(null);
+  const sawAuthModal = useRef(false);
+
+  useEffect(() => {
+    if (authModalOpen) { sawAuthModal.current = true; return; }
+    if (sawAuthModal.current && pendingStart) {
+      sawAuthModal.current = false;
+      const p = pendingStart;
+      setPendingStart(null);
+      setClosing(true);
+      setTimeout(() => onStart(p.ratio, p.tpl), 250);
+    }
+  }, [authModalOpen, pendingStart, onStart]);
+
+  const beginStart = (ratio: AspectRatio, tpl?: Template) => {
+    let alreadyAsked = false;
+    try { alreadyAsked = sessionStorage.getItem("clipflow-guest-start-ack") === "1"; } catch {}
+
+    if (!user && !alreadyAsked) {
+      try { sessionStorage.setItem("clipflow-guest-start-ack", "1"); } catch {}
+      setPendingStart({ ratio, tpl });
+      promptLogin(
+        tpl
+          ? "Sign in to save “" + tpl.name + "” — your edits autosave as you work. Prefer not to? Continue as a guest, but this project won't be saved when you leave."
+          : "Sign in to save your project — your edits autosave as you work. Prefer not to? Continue as a guest, but this project won't be saved when you leave."
+      );
+      return;
+    }
+
     setClosing(true);
-    setTimeout(() => onStart(ratio), 250);
+    setTimeout(() => onStart(ratio, tpl), 250);
   };
 
-  const goTemplate = (tpl: Template) => {
-    setClosing(true);
-    setTimeout(() => onStart(tpl.aspectRatio, tpl), 250);
-  };
+  const goBlank = (ratio: AspectRatio) => beginStart(ratio);
+  const goTemplate = (tpl: Template) => beginStart(tpl.aspectRatio, tpl);
 
   const switchTab = (t: Tab) => {
     setUserPickedTab(true);
@@ -159,10 +191,13 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
         ) : (
           <button
             onClick={() => promptLogin()}
-            className="px-4 py-1.5 rounded-full text-[12px] font-semibold text-white/90 hover:text-white transition-colors"
-            style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", backdropFilter: "blur(8px)" }}
+            className="px-4 py-2 rounded-full text-[12.5px] font-bold text-white transition-transform hover:scale-[1.03] active:scale-95"
+            style={{
+              background: "linear-gradient(135deg,#8B5CFF 0%,#A47CFF 100%)",
+              boxShadow: "0 4px 18px rgba(139,92,255,.5)",
+            }}
           >
-            Sign in
+            Sign in / Sign up
           </button>
         )}
       </div>

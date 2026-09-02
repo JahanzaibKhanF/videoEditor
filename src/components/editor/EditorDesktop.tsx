@@ -6,7 +6,6 @@ import MediaPanel from "../panels/MediaPanel";
 import Screen from "../preview/Screen";
 import PlayerControls from "../preview/PlayerControls";
 import PreviewScale from "../preview/PreviewScale";
-import RenderButton from "../ui/RenderButton";
 import PropertiesPanel from "../panels/PropertiesPanel";
 import TimeLine from "../timeline/TimeLine";
 import IconSidebar from "../chrome/IconSidebar";
@@ -84,11 +83,7 @@ export default function EditorDesktop({
           </div>
           <div className="player-bar flex items-center justify-between px-4 gap-3 flex-shrink-0" style={{ height: 52 }}>
             <PlayerControls />
-            <div className="flex items-center gap-2.5">
-              <PreviewScale />
-              <div className="w-px h-3.5 bg-black/10 dark:bg-white/10" />
-              <RenderButton />
-            </div>
+            <PreviewScale />
           </div>
         </div>
 
