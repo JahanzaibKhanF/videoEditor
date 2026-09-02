@@ -19,7 +19,7 @@ export default function IconSidebar({ activeTab, onTabChange }: Props) {
   return (
     <div
       style={{ width: 72 }}
-      className="flex-shrink-0 flex flex-col items-center py-3 gap-0.5 overflow-y-auto bg-studio-surface border-r border-studio-border"
+      className="flex-shrink-0 flex flex-col items-center py-2.5 gap-1 overflow-y-auto scrollbar-thin bg-studio-surface border-r border-studio-border"
     >
       {tabs.map(t => {
         const active = activeTab === t.id;
@@ -28,19 +28,23 @@ export default function IconSidebar({ activeTab, onTabChange }: Props) {
             key={t.id}
             onClick={() => onTabChange(t.id)}
             title={t.label}
+            aria-pressed={active}
             className={`
-              flex flex-col items-center justify-center gap-1
-              w-[58px] h-[54px] rounded-xl border-none cursor-pointer
-              transition-colors duration-150 flex-shrink-0 relative
+              group flex flex-col items-center justify-center gap-1
+              w-[58px] h-[54px] rounded-xl border cursor-pointer
+              transition-[background,color,border-color,transform] duration-150 flex-shrink-0 relative
+              active:scale-95
               ${active
-                ? "bg-signal/10 text-signal"
-                : "bg-transparent text-ink-secondary hover:bg-studio-hover hover:text-ink-primary"
+                ? "bg-signal/12 text-signal border-signal/25"
+                : "bg-transparent text-ink-muted border-transparent hover:bg-studio-hover hover:text-ink-primary"
               }
             `}
           >
-            {active && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-[3px] bg-signal" />
-            )}
+            <span
+              className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full bg-signal transition-all duration-200 ${
+                active ? "h-6 opacity-100" : "h-2 opacity-0 group-hover:opacity-40"
+              }`}
+            />
             <span className="relative">
               {t.icon}
               {"badge" in t && t.badge && (

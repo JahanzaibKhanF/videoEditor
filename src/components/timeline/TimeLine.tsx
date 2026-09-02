@@ -149,16 +149,17 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
                   <div onPointerDown={onNeedleDown} style={{
                     position: "absolute", top: 0,
                     left: "50%", transform: "translateX(-50%)",
-                    width: 12, height: 16,
+                    width: 13, height: 17,
                     background: "linear-gradient(180deg,#8B5CFF,#A47CFF)",
-                    borderRadius: "0 0 4px 4px",
+                    borderRadius: "3px 3px 5px 5px",
+                    boxShadow: "0 2px 6px -1px rgba(139,92,255,.6)",
                     cursor: "ew-resize", pointerEvents: "all",
                     touchAction: "none",
                   }} />
                   <div style={{
                     position: "absolute", top: 0, bottom: 0,
                     left: "50%", transform: "translateX(-50%)",
-                    width: 1.5, background: "#8B5CFF", opacity: 0.85,
+                    width: 2, background: "#8B5CFF", opacity: 0.9,
                   }} />
                 </div>
               </div>

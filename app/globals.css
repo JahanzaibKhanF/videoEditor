@@ -57,6 +57,17 @@ html.light {
   ::selection {
     @apply bg-signal/30 text-ink-primary;
   }
+  /* Keyboard focus — visible ring on any interactive element, but only for
+     keyboard users (":focus-visible", not ":focus"), so mouse clicks don't
+     leave a lingering outline. Was entirely absent before. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(var(--studio-surface)), 0 0 0 4px rgba(139, 92, 255, 0.6);
+    border-radius: 6px;
+  }
+  button, [role="button"], a, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* ── Legacy component classes, ported & restyled to studio palette ──
@@ -73,44 +84,86 @@ html, body, #root {
   overflow: hidden;
 }
 
-.scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,.12);
-  border-radius: 4px;
+  background: rgb(var(--studio-border-light));
+  border-radius: 99px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgb(var(--ink-faint)); }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgb(var(--studio-border-light)) transparent; }
 
-.resizer-h {
-  width: 4px; flex-shrink: 0; cursor: col-resize;
-  transition: background .12s; z-index: 10;
-  background: rgba(255,255,255,.05);
-  touch-action: none;
+/* ── Panel resizers ──────────────────────────────────────────────────────
+   The grab surface is 10px wide for a comfortable hit target; the visible
+   divider is a 1px hairline drawn by ::before and centred in that surface,
+   so panels only lose ~5px of width vs. the old 4px bar. A 3-dot grip
+   fades in on hover so the handle reads as draggable. */
+.resizer-h, .resizer-v {
+  position: relative; flex-shrink: 0; z-index: 10;
+  touch-action: none; background: transparent;
+  --resizer-line: rgb(var(--studio-border));
 }
-.resizer-h:hover, .resizer-h:active { background: #8B5CFF; }
-
-.resizer-v {
-  height: 4px; flex-shrink: 0; cursor: row-resize;
-  transition: background .12s; z-index: 10;
-  background: rgba(255,255,255,.05);
-  touch-action: none;
+.resizer-h { width: 10px; cursor: col-resize; }
+.resizer-v { height: 10px; cursor: row-resize; }
+.resizer-h::before, .resizer-v::before {
+  content: ""; position: absolute; background: var(--resizer-line);
+  transition: background .12s;
 }
-.resizer-v:hover, .resizer-v:active { background: #8B5CFF; }
+.resizer-h::before { top: 0; bottom: 0; left: 50%; width: 1px; transform: translateX(-50%); }
+.resizer-v::before { left: 0; right: 0; top: 50%; height: 1px; transform: translateY(-50%); }
+.resizer-h::after, .resizer-v::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 3px; height: 22px; border-radius: 99px;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, currentColor 40%, transparent 45%) center/3px 3px repeat-y;
+  color: rgb(var(--ink-faint));
+  opacity: 0; transition: opacity .12s;
+}
+.resizer-v::after { width: 22px; height: 3px; background-repeat: repeat-x; }
+.resizer-h:hover::before, .resizer-h:active::before,
+.resizer-v:hover::before, .resizer-v:active::before { background: #8B5CFF; }
+.resizer-h:hover::after, .resizer-v:hover::after { opacity: 1; }
 
 .player-bar {
   background: rgb(var(--studio-surface));
   border-top: 1px solid rgb(var(--studio-border));
 }
 
+/* ── Preview stage — the area the canvas floats in. Soft checkerboard so a
+   transparent composition reads as transparent, tuned per theme (the old
+   values were a hard-coded dark slate that clashed in light mode). ── */
+.preview-stage {
+  --sq: rgba(255, 255, 255, 0.028);
+  background-color: rgb(var(--studio-void));
+  background-image:
+    linear-gradient(45deg, var(--sq) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--sq) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--sq) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--sq) 75%);
+  background-size: 22px 22px;
+  background-position: 0 0, 0 11px, 11px -11px, -11px 0;
+}
+html.light .preview-stage {
+  --sq: rgba(15, 15, 30, 0.045);
+  background-color: #ececef;
+}
+
 .player-tbtn {
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all .12s; flex-shrink: 0;
-  background: rgba(255,255,255,.05);
+  cursor: pointer; transition: background .12s, border-color .12s, transform .08s;
+  flex-shrink: 0;
+  background: rgb(var(--studio-raised));
   border: 1px solid rgb(var(--studio-border));
   color: rgb(var(--ink-primary) / .85);
   border-radius: 8px;
 }
-.player-tbtn:hover { background: rgba(255,255,255,.1); border-color: rgb(var(--studio-border-light)); }
+.player-tbtn:hover { background: rgb(var(--studio-hover)); border-color: rgb(var(--studio-border-light)); color: rgb(var(--ink-primary)); }
+.player-tbtn:active { transform: scale(.92); }
+.player-tbtn:disabled { opacity: .4; cursor: not-allowed; }
+.player-tbtn:disabled:active { transform: none; }
 
 .player-tbtn-large {
   background: linear-gradient(135deg, #8B5CFF 0%, #A47CFF 100%) !important;
@@ -119,12 +172,14 @@ html, body, #root {
   box-shadow: 0 2px 16px rgba(139,92,255,.45);
 }
 .player-tbtn-large:hover { opacity: .92; }
+.player-tbtn-large:active { transform: scale(.94); }
 
 .player-time-display {
-  padding: 3px 9px; border-radius: 6px;
+  padding: 4px 10px; border-radius: 7px;
   font-family: var(--font-mono);
-  font-size: 11px; letter-spacing: .5px; white-space: nowrap;
-  background: rgba(255,255,255,.05);
+  font-size: 11px; font-weight: 500; letter-spacing: .5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: rgb(var(--studio-void));
   border: 1px solid rgb(var(--studio-border));
   color: rgb(var(--ink-secondary));
 }
@@ -132,12 +187,13 @@ html, body, #root {
 .ctrl-btn {
   width: 24px; height: 24px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; flex-shrink: 0; transition: background .1s;
-  background: rgba(255,255,255,.05);
+  cursor: pointer; flex-shrink: 0; transition: background .1s, color .1s, transform .08s;
+  background: rgb(var(--studio-raised));
   border: 1px solid rgb(var(--studio-border));
   color: rgb(var(--ink-secondary));
 }
-.ctrl-btn:hover { background: rgba(255,255,255,.1); color: rgb(var(--ink-primary)); }
+.ctrl-btn:hover { background: rgb(var(--studio-hover)); color: rgb(var(--ink-primary)); }
+.ctrl-btn:active { transform: scale(.9); }
 
 .ctrl-label {
   font-size: 11px; font-weight: 600;

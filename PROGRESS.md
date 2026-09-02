@@ -1,6 +1,37 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — Phase 2 of the UI overhaul: shared UI primitives + desktop polish pass
+
+Builds on Phase 1. `npm run build` + `tsc --noEmit` clean; dev server serves
+`/` 200. No functionality touched — pure presentation.
+
+**New primitives (`src/components/ui/`)** + `src/utils/cn.ts` (tiny
+tailwind-merge wrapper):
+- `Button.tsx` — `primary | secondary | ghost | danger` × `sm | md`, loading
+  state, icon slot. Used in Header (Composition button).
+- `IconButton.tsx` — square icon-only button, `secondary | ghost | danger |
+  active`. Used in Header (theme toggle).
+- `SectionLabel.tsx`, `EmptyState.tsx` — unify the copy-pasted panel captions
+  and "nothing here" blocks. `EmptyState` now backs PropertiesPanel's empty
+  state.
+
+**`app/globals.css`:**
+- Global `:focus-visible` ring (keyboard a11y — was entirely missing).
+- Panel resizers reworked: 10px grab target, 1px hairline divider via
+  `::before`, 3-dot grip that fades in on hover (`.resizer-h/.resizer-v`).
+- `.player-tbtn` / `.ctrl-btn` / `.player-time-display` now use studio tokens
+  instead of `rgba(255,255,255,.05)` (which was invisible in light mode) +
+  `:active` press states + tabular-nums timecode.
+- New `.preview-stage` class — theme-aware soft checkerboard for the canvas
+  area (was a hard-coded dark slate that clashed in light mode). `Screen.tsx`
+  switched to it.
+- Slimmer, token-coloured `.scrollbar-thin` (+ Firefox `scrollbar-*`).
+
+**Component polish:** `IconSidebar` active pill + hover accent bar + press
+scale; `TimeLine` playhead head enlarged with a glow; `MediaPanel` section
+labels / empty text de-italicised and re-toned.
+
 ## Session — Phase 1 of the UI overhaul: project-structure cleanup (dead code removed, `src/components/` re-treed, filename typos fixed)
 
 Groundwork for the 4-phase UI/mobile overhaul (see

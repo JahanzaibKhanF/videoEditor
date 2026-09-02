@@ -8,6 +8,7 @@ import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import Slider from "../ui/Slider";
 import NumberInput from "../ui/NumberInput";
+import EmptyState from "../ui/EmptyState";
 import ColorAdjustPanel from "../editors/ColorAdjustPanel";
 
 const TABS = [
@@ -202,12 +203,11 @@ export default function PropertiesPanel() {
 
           {/* ── Empty state ──────────────────────────────────── */}
           {!hasSelection && (
-            <div className="flex flex-col items-center justify-center py-14 gap-3 text-ink-faint">
-              <div className="w-12 h-12 rounded-full bg-studio-hover flex items-center justify-center">
-                <MousePointerClick size={20} strokeWidth={1.6} />
-              </div>
-              <p className="text-[12px] text-center font-medium text-ink-muted">Select an element<br />to edit its properties</p>
-            </div>
+            <EmptyState
+              icon={<MousePointerClick size={19} strokeWidth={1.7} />}
+              title="Nothing selected"
+              hint="Pick a clip, text, image or blur on the canvas or timeline to edit it here."
+            />
           )}
         </>}
 

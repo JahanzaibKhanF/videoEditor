@@ -190,9 +190,9 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     setSelectedBlurId(b.id);
   };
 
-  const sectionLabel = "text-[10px] font-bold uppercase tracking-[.7px] text-ink-secondary px-3 pt-3 pb-1.5";
-  const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-all border-l-2";
-  const emptyMsg = "flex items-center justify-center h-20 text-ink-secondary text-xs italic text-center px-4";
+  const sectionLabel = "text-[10px] font-bold uppercase tracking-[.7px] text-ink-muted px-3 pt-3 pb-1.5";
+  const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors border-l-2";
+  const emptyMsg = "flex flex-col items-center justify-center gap-1 py-8 text-ink-faint text-[11.5px] text-center px-4 leading-relaxed";
 
   const addGradBtn = (onClick: () => void, disabled = false, grad = "linear-gradient(135deg,#8B5CFF,#A47CFF)") => (
     <button onClick={onClick} disabled={disabled}

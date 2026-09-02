@@ -5,6 +5,8 @@ import { useAuth } from "../../context/useAuthContext";
 import { formatVideoSize } from "../../utils/formatVideoSize";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import RenderButton from "../ui/RenderButton";
+import Button from "../ui/Button";
+import IconButton from "../ui/IconButton";
 import { SlidersHorizontal, Cloud, CloudOff, Loader2, Sun, Moon } from "@/utils/icons";
 import { useProjectAutosave } from "../../hooks/useProjectAutosave";
 import { useTheme } from "../../hooks/useTheme";
@@ -87,24 +89,24 @@ export default function Header() {
         )}
 
         {mounted && (
-          <button
+          <IconButton
+            label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-studio-border bg-studio-raised text-ink-secondary hover:bg-studio-hover hover:text-ink-primary transition-colors cursor-pointer flex-shrink-0"
           >
             {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
-          </button>
+          </IconButton>
         )}
 
-        <button
+        <Button
+          size="sm"
+          variant="secondary"
           disabled={videos.length === 0}
           onClick={() => setIsCompositionSettingsOpen(true)}
           title="Composition settings"
-          className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary hover:bg-studio-hover hover:text-ink-primary text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
+          icon={<SlidersHorizontal size={12} strokeWidth={2.2} />}
         >
-          <SlidersHorizontal size={12} strokeWidth={2.2} />
           <span className="hidden sm:inline">Composition</span>
-        </button>
+        </Button>
 
         <RenderButton />
 

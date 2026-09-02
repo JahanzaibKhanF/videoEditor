@@ -144,17 +144,7 @@ export default function Screen() {
   return (
     <div
       ref={parentRef}
-      className="w-full h-full flex items-center justify-center overflow-hidden relative"
-      style={{
-        backgroundColor: "#161a1f",
-        backgroundImage:
-          "linear-gradient(45deg, #1d2229 25%, transparent 25%), " +
-          "linear-gradient(-45deg, #1d2229 25%, transparent 25%), " +
-          "linear-gradient(45deg, transparent 75%, #1d2229 75%), " +
-          "linear-gradient(-45deg, transparent 75%, #1d2229 75%)",
-        backgroundSize: "20px 20px",
-        backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-      }}
+      className="preview-stage w-full h-full flex items-center justify-center overflow-hidden relative"
     >
       <div
         style={{
