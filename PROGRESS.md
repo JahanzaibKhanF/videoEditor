@@ -1,6 +1,37 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — Phase 4 of the UI overhaul: dedicated mobile editor
+
+Builds on Phase 2. `npm run build` + `tsc --noEmit` clean; dev serves `/` 200.
+Desktop editor extracted verbatim — unchanged behavior.
+
+**`editor/EditorShell.tsx` is now a thin switch.** It picks the surface
+(`useIsMobile(768) && useIsTouch()` — a *narrow desktop window* keeps the
+full desktop editor, only a real phone/tablet gets the touch tree) and mounts
+the shared modal/overlay layer once. New `hooks/useIsTouch.ts` (coarse
+pointer / no hover).
+
+- **`editor/EditorDesktop.tsx`** — the old desktop branch lifted out
+  unchanged (icon rail + resizable L/R panels + resizable timeline dock).
+- **`editor/EditorMobile.tsx`** — purpose-built: `<Header>` on top, preview
+  pinned at 42dvh with a compact transport row, a mini `<TimeLine compact>`
+  filling the middle (expand button → full timeline in a sheet), and a
+  horizontally-scrolling **tool rail** pinned to the bottom.
+- **`editor/mobile/MobileToolRail.tsx`** — the bottom icon rail; tools mirror
+  the desktop `IconSidebar` set + Assets/Edit.
+- **`editor/mobile/MobileToolSheet.tsx`** — opens the picked tool as a bottom
+  sheet hosting the **same** panel component desktop uses
+  (`MediaPanel activeTab=…`, `PropertiesPanel`, `AssetsPanel`). No editing
+  logic duplicated — panels read from context.
+- **`ui/Sheet.tsx`** — new bottom-sheet primitive: slide-in, backdrop tap /
+  Esc / drag-handle-down to dismiss, `dvh` height, `z-[400]` (above chrome,
+  below every full-screen modal).
+- Selecting a layer on the canvas while no sheet is open auto-opens the Edit
+  sheet, mirroring how desktop reveals the properties panel.
+- The old `MOBILE_TABS` stopgap (desktop panels stuffed in a horizontal tab
+  scroller) is gone.
+
 ## Session — Phase 2 of the UI overhaul: shared UI primitives + desktop polish pass
 
 Builds on Phase 1. `npm run build` + `tsc --noEmit` clean; dev server serves
