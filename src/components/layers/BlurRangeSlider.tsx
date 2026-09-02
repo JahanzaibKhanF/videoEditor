@@ -9,10 +9,21 @@ import { computeAdjacentZ } from "../../utils/zStack";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
-  const { totalTime, blursDetails, setBlursDetails, imagesDetails, clipsDetails, textsDetails } = useAppDetailsContext();
+  const {
+    totalTime, blursDetails, setBlursDetails, imagesDetails, clipsDetails, textsDetails,
+    setSelectedBlurId: setCtxBlurSel, setSelectedTextId: setCtxTextSel,
+    setSelectedImageID: setCtxImageSel, setSelectedClipId: setCtxClipSel,
+  } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localBlurs, setLocalBlurs] = useState(blursDetails);
   const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
+
+  // Selecting a blur on the timeline also makes it the active object in the
+  // preview so it can be moved / resized there; clears other selections.
+  const selectInScreen = (id: string) => {
+    setSelectedBlurId(id);
+    setCtxBlurSel(id); setCtxTextSel(null); setCtxImageSel(null); setCtxClipSel(null);
+  };
 
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -28,7 +39,8 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Delete" && selectedBlurId !== null) {
         const updated = localBlurs.filter(b => b.id !== selectedBlurId);
-        setLocalBlurs(updated); setBlursDetails(updated); setSelectedBlurId(null);
+        setLocalBlurs(updated); setBlursDetails(updated);
+        setSelectedBlurId(null); setCtxBlurSel(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -62,7 +74,7 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
     e.preventDefault();
     const startX = e.clientX;
     let startY = e.clientY;
-    setSelectedBlurId(blurId);
+    selectInScreen(blurId);
     const idx = localBlurs.findIndex(b => b.id === blurId);
     if (idx === -1 || !timelineRef.current || totalTime === 0) return;
     const timelineWidth = timelineRef.current.offsetWidth;
@@ -124,7 +136,7 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
                 cursor: "move", gap: 4, overflow: "hidden",
               }}
               onMouseDown={e => handleDrag(e, blur.id, "move")}
-              onClick={() => setSelectedBlurId(blur.id)}
+              onClick={() => selectInScreen(blur.id)}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
                 <circle cx="5" cy="5" r="3" stroke="white" strokeWidth="1" strokeDasharray="1.5 1"/>

@@ -90,6 +90,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
     setClipEffects,
     selectedClipId,
     setSelectedClipId: setCtxSel,
+    setSelectedTextId: setCtxTextSel, setSelectedImageID: setCtxImageSel, setSelectedBlurId: setCtxBlurSel,
     imagesDetails, textsDetails, blursDetails,
   } = useAppDetailsContext();
 
@@ -104,6 +105,14 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
 
   const ref = useRef<HTMLDivElement>(null);
   const [selId, setSelId] = useState<string | null>(null);
+
+  // Select this clip everywhere (timeline chip + preview overlay) and clear
+  // any other kind of selection so exactly one object is ever active.
+  const selectInScreen = (id: string | null) => {
+    setSelId(id);
+    setCtxSel(id);
+    if (id) { setCtxTextSel(null); setCtxImageSel(null); setCtxBlurSel(null); }
+  };
 
   // Deselect on outside click
   useEffect(() => {
@@ -143,7 +152,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
 
   const drag = (e: React.MouseEvent, id: string, type: "move" | "resize-left" | "resize-right") => {
     e.preventDefault(); e.stopPropagation();
-    setSelId(id); setCtxSel(id);
+    selectInScreen(id);
     const el = ref.current;
     if (!el || !totalTime) return;
     const tw = el.offsetWidth;
@@ -374,7 +383,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                 return (
                   <div key={clip.id} className="vc-chip"
                     onMouseDown={e => drag(e, clip.id, "move")}
-                    onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
+                    onClick={e => { e.stopPropagation(); selectInScreen(clip.id); }}
                     style={{
                       position: "absolute", top: 0, left, width, height: "100%",
                       background: "linear-gradient(180deg, #FFC061 0%, #E8952B 100%)",

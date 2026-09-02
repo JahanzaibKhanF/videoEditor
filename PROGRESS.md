@@ -1,6 +1,28 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — preview interaction: pick background layers + activate timeline selection on canvas
+
+Two real bugs in how the preview's `InteractionOverlay` let you select/move
+objects. `npm run build` + `tsc --noEmit` clean.
+
+**1. Couldn't grab a background layer in the preview.** The overlay rendered
+its hit boxes in a fixed kind order (clip → image → blur → text). A wide,
+transparent text/image box on top swallowed every pointer event meant for a
+layer visually behind it, so lower layers were un-selectable. Fixed by
+building all boxes into one list and **ordering them by the layer's real
+`zIndex`** (matching what CompositorCanvas actually draws), with the selected
+box lifted to the very top so it can always be dragged/scaled.
+
+**2. Selecting a text / image / blur on the timeline didn't activate it in
+the preview.** `TextRangeSlider` / `ImagesRangeSlider` / `BlurRangeSlider`
+tracked selection in *local* `useState`, never touching the shared context —
+so the overlay never knew. (Only `VideoClipsRangeSlider` wrote to context.)
+Added a `selectInScreen(id)` to each of the four slider components that writes
+the context selection and clears the other three kinds, so exactly one object
+is active and picking a layer row now shows its move/resize handles on the
+canvas. Delete on a timeline chip now also clears the context selection.
+
 ## Session — drop the duplicate export button; prompt guests to sign in when starting a project
 
 `npm run build` + `tsc --noEmit` clean.

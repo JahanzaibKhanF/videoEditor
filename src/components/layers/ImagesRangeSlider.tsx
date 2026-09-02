@@ -9,10 +9,21 @@ import { computeAdjacentZ } from "../../utils/zStack";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
-  const { totalTime, imagesDetails, setImagesDetails, clipsDetails, textsDetails, blursDetails } = useAppDetailsContext();
+  const {
+    totalTime, imagesDetails, setImagesDetails, clipsDetails, textsDetails, blursDetails,
+    setSelectedImageID: setCtxImageSel, setSelectedTextId: setCtxTextSel,
+    setSelectedBlurId: setCtxBlurSel, setSelectedClipId: setCtxClipSel,
+  } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localImages, setLocalImages] = useState(imagesDetails);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+
+  // Selecting an image on the timeline also makes it the active object in
+  // the preview so it can be moved / scaled there; clears other selections.
+  const selectInScreen = (id: string) => {
+    setSelectedImageId(id);
+    setCtxImageSel(id); setCtxTextSel(null); setCtxBlurSel(null); setCtxClipSel(null);
+  };
 
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -28,7 +39,8 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Delete" && selectedImageId !== null) {
         const updated = localImages.filter(i => i.id !== selectedImageId);
-        setLocalImages(updated); setImagesDetails(updated); setSelectedImageId(null);
+        setLocalImages(updated); setImagesDetails(updated);
+        setSelectedImageId(null); setCtxImageSel(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -82,7 +94,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
     e.preventDefault();
     const startX = e.clientX;
     let startY = e.clientY;
-    setSelectedImageId(imageId);
+    selectInScreen(imageId);
     const idx = localImages.findIndex(i => i.id === imageId);
     if (idx === -1 || !timelineRef.current || totalTime === 0) return;
     const timelineWidth = timelineRef.current.offsetWidth;
@@ -164,7 +176,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
                 border: img.animation !== "none" ? "1.5px solid rgba(255,255,255,.4)" : "none",
               }}
               onMouseDown={e => handleDrag(e, img.id, "move")}
-              onClick={() => { setSelectedImageId(img.id); }}
+              onClick={() => { selectInScreen(img.id); }}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
                 <rect x="0.5" y="1.5" width="9" height="7" rx="1" stroke="white" strokeWidth="1"/>

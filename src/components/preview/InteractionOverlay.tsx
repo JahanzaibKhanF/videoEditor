@@ -283,58 +283,88 @@ export default function InteractionOverlay({ width, height }: Props) {
     touchAction: "none",
   });
 
-  return (
-    <div
-      ref={rootRef}
-      onPointerDown={(e) => { if (e.target === rootRef.current) selectNone(); }}
-      style={{ position: "absolute", inset: 0, zIndex: 50, pointerEvents: "auto" }}
-    >
-      {/* Video clip handles — uniform-scale only (matches ClipDetails.scale being a single number) */}
-      {clipsDetails.filter(c => currentTime >= c.startPosition && currentTime <= c.endPosition).map(c => {
-        const rect = getClipRect(c);
-        const selected = selectedClipId === c.id;
-        return (
-          <div key={c.id}
+  // ── Build every interaction box, then order them so the DOM stacking
+  // matches what's actually drawn on the canvas ────────────────────────────
+  // Two rules, in order:
+  //   1. The SELECTED object's box is always last (on top) — so once
+  //      something is selected (by clicking it OR by selecting its layer in
+  //      the timeline) you can always drag/scale it, even when a bigger,
+  //      transparent box for another layer sits over it.
+  //   2. Otherwise, match compositeFrame.ts's draw order — HIGHEST zIndex
+  //      first (furthest back), LOWEST zIndex last (frontmost) — so the box
+  //      painted last in the DOM is the one visually in front, and a click
+  //      lands on whatever you actually see at that point. Previously the
+  //      boxes were in a fixed kind order (clip → image → blur → text), so a
+  //      wide transparent text box swallowed every click meant for a
+  //      clip/image in front of it, and background layers couldn't be
+  //      grabbed at all.
+  type OverlayItem = { key: string; z: number; sel: boolean; node: React.ReactNode };
+  const items: OverlayItem[] = [];
+
+  clipsDetails
+    .filter(c => currentTime >= c.startPosition && currentTime <= c.endPosition)
+    .forEach(c => {
+      const rect = getClipRect(c);
+      const selected = selectedClipId === c.id;
+      items.push({
+        key: `clip-${c.id}`, z: c.zIndex ?? 0, sel: selected,
+        node: (
+          <div key={`clip-${c.id}`}
             onPointerDown={(e) => beginDrag("clip", c.id, "move", undefined, rect, e)}
             style={boxStyle(rect, ACCENT.clip, selected)}
           >
             {selected && renderHandles("clip", c.id, rect, ACCENT.clip, true)}
           </div>
-        );
-      })}
+        ),
+      });
+    });
 
-      {imagesDetails.filter(i => currentTime >= i.startTime && currentTime <= i.endTime).map(img => {
-        const rect = getImageRect(img);
-        const selected = selectedImageID === img.id;
-        return (
-          <div key={img.id}
+  imagesDetails
+    .filter(i => currentTime >= i.startTime && currentTime <= i.endTime)
+    .forEach(img => {
+      const rect = getImageRect(img);
+      const selected = selectedImageID === img.id;
+      items.push({
+        key: `image-${img.id}`, z: img.zIndex ?? 0, sel: selected,
+        node: (
+          <div key={`image-${img.id}`}
             onPointerDown={(e) => beginDrag("image", img.id, "move", undefined, rect, e)}
             style={boxStyle(rect, ACCENT.image, selected)}
           >
             {selected && renderHandles("image", img.id, rect, ACCENT.image, false)}
           </div>
-        );
-      })}
+        ),
+      });
+    });
 
-      {blursDetails.filter(b => currentTime >= b.startTime && currentTime <= b.endTime).map(b => {
-        const rect = getBlurRect(b);
-        const selected = selectedBlurId === b.id;
-        return (
-          <div key={b.id}
+  blursDetails
+    .filter(b => currentTime >= b.startTime && currentTime <= b.endTime)
+    .forEach(b => {
+      const rect = getBlurRect(b);
+      const selected = selectedBlurId === b.id;
+      items.push({
+        key: `blur-${b.id}`, z: b.zIndex ?? 0, sel: selected,
+        node: (
+          <div key={`blur-${b.id}`}
             onPointerDown={(e) => beginDrag("blur", b.id, "move", undefined, rect, e)}
             style={{ ...boxStyle(rect, ACCENT.blur, selected, true), background: selected ? `${ACCENT.blur}0d` : "transparent" }}
           >
             {selected && renderHandles("blur", b.id, rect, ACCENT.blur, false)}
           </div>
-        );
-      })}
+        ),
+      });
+    });
 
-      {textsDetails.filter(t => currentTime >= t.startTime && currentTime <= t.endTime).map(t => {
-        const rect = getTextRect(t);
-        const selected = selectedTextId === t.id;
-        const editing = editingTextId === t.id;
-        return (
-          <div key={t.id}
+  textsDetails
+    .filter(t => currentTime >= t.startTime && currentTime <= t.endTime)
+    .forEach(t => {
+      const rect = getTextRect(t);
+      const selected = selectedTextId === t.id;
+      const editing = editingTextId === t.id;
+      items.push({
+        key: `text-${t.id}`, z: t.zIndex ?? 0, sel: selected || editing,
+        node: (
+          <div key={`text-${t.id}`}
             onPointerDown={(e) => { if (!editing) beginDrag("text", t.id, "move", undefined, rect, e); }}
             onClick={(e) => {
               e.stopPropagation();
@@ -402,8 +432,21 @@ export default function InteractionOverlay({ width, height }: Props) {
             )}
             {selected && !editing && renderHandles("text", t.id, rect, ACCENT.text, false)}
           </div>
-        );
-      })}
+        ),
+      });
+    });
+
+  // Non-selected boxes first — back-to-front (high z → low z), matching the
+  // canvas draw order — then the selected/editing box on top of everything.
+  items.sort((a, b) => (a.sel ? 1 : 0) - (b.sel ? 1 : 0) || b.z - a.z);
+
+  return (
+    <div
+      ref={rootRef}
+      onPointerDown={(e) => { if (e.target === rootRef.current) selectNone(); }}
+      style={{ position: "absolute", inset: 0, zIndex: 50, pointerEvents: "auto" }}
+    >
+      {items.map(it => it.node)}
 
       {/* Snapping guides */}
       {guides.x && <div style={{ position: "absolute", left: width / 2, top: 0, bottom: 0, width: 1.5, background: "#FFB648", pointerEvents: "none" }} />}

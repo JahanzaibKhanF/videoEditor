@@ -9,10 +9,22 @@ import { computeAdjacentZ } from "../../utils/zStack";
 const MIN_WIDTH_PERCENT = 1;
 
 export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
-  const { totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails, blursDetails } = useAppDetailsContext();
+  const {
+    totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails, blursDetails,
+    setSelectedTextId: setCtxTextSel, setSelectedImageID: setCtxImageSel,
+    setSelectedBlurId: setCtxBlurSel, setSelectedClipId: setCtxClipSel,
+  } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null); // on the outer container for correct width
   const [localTexts, setLocalTexts] = useState(textsDetails);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+
+  // Selecting a text on the timeline also makes it the active object in the
+  // preview (InteractionOverlay), so it can be moved / scaled there — and
+  // clears any other kind of selection so only one thing is ever active.
+  const selectInScreen = (id: string) => {
+    setSelectedTextId(id);
+    setCtxTextSel(id); setCtxImageSel(null); setCtxBlurSel(null); setCtxClipSel(null);
+  };
 
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
@@ -28,7 +40,8 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Delete" && selectedTextId !== null) {
         const updated = localTexts.filter(t => t.id !== selectedTextId);
-        setLocalTexts(updated); setTextsDetails(updated); setSelectedTextId(null);
+        setLocalTexts(updated); setTextsDetails(updated);
+        setSelectedTextId(null); setCtxTextSel(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -64,7 +77,7 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
     e.preventDefault();
     const startX = e.clientX;
     let startY = e.clientY;
-    setSelectedTextId(textId);
+    selectInScreen(textId);
     const textIndex = localTexts.findIndex(t => t.id === textId);
     if (textIndex === -1 || !timelineRef.current || totalTime === 0) return;
     const timelineWidth = timelineRef.current.offsetWidth;
@@ -130,7 +143,7 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
                 border: text.animation !== "none" ? "1.5px solid rgba(255,255,255,.4)" : "none",
               }}
               onMouseDown={e => handleDrag(e, text.id, "move")}
-              onClick={() => { setSelectedTextId(text.id); }}
+              onClick={() => { selectInScreen(text.id); }}
             >
               <span style={{ fontSize: 9, fontWeight: 900, color: "white", flexShrink: 0, fontFamily: "serif" }}>T</span>
               {text.animation !== "none" && <MdOutlineAnimation size={10} style={{ color: "white", flexShrink: 0 }} />}
