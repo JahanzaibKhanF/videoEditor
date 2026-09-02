@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import ClipFlowApp from "@/components/ClipFlowApp";
 
 // This page reads `?project=<id>` via useSearchParams() and depends on a
@@ -13,9 +12,5 @@ import ClipFlowApp from "@/components/ClipFlowApp";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  return (
-    <Suspense fallback={null}>
-      <ClipFlowApp />
-    </Suspense>
-  );
+  return <ClipFlowApp />;
 }
