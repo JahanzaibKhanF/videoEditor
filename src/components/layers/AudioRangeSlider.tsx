@@ -26,8 +26,17 @@ import { AudioDetails } from "../../types/types";
 const MIN_W_PCT = 0.5;
 
 export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; containerRef: React.RefObject<HTMLDivElement | null> }) {
-  const { totalTime, audioDetails, setAudioDetails } = useAppDetailsContext();
+  const { totalTime, audioDetails, setAudioDetails, clipsDetails } = useAppDetailsContext();
   const [selId, setSelId] = useState<string | null>(null);
+
+  // Show the SAME label as the paired video row — the real source filename
+  // off the clip this audio belongs to (via clipId). Falls back to the
+  // stored `track.name` for older projects whose clip is gone. Fixes the
+  // "audio lane shows a different name than its video" mismatch, where
+  // `track.name` was a synthetic internal id and the clip row shows
+  // `sourceFileName`.
+  const pairedClip = clipsDetails.find(c => c.id === track.clipId);
+  const displayName = pairedClip?.sourceFileName ?? pairedClip?.name ?? track.name;
 
   const audioRef = useRef(audioDetails);
   useEffect(() => { audioRef.current = audioDetails; }, [audioDetails]);
@@ -107,29 +116,34 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
       style={{
         position: "absolute", top: 0, left, width, height: "100%",
         background: track.muted
-          ? "rgba(107,114,128,.35)"
-          : isSel ? "#6EA8FF" : "#3D6FE0",
-        outline: isSel ? "2px solid #4C8CFF" : "none",
-        borderRadius: 6, cursor: "move",
+          ? "linear-gradient(180deg, #6B7280 0%, #565E6B 100%)"
+          : "linear-gradient(180deg, #5E8BF0 0%, #3457C7 100%)",
+        boxShadow: isSel
+          ? "0 0 0 2px #8B5CFF, 0 4px 14px -4px rgba(139,92,255,.55)"
+          : "inset 0 1px 0 rgba(255,255,255,.25), 0 1px 3px rgba(0,0,0,.28)",
+        borderRadius: 7, cursor: "move",
         display: "flex", alignItems: "center",
         overflow: "hidden", userSelect: "none",
-        opacity: track.muted ? 0.5 : 1,
+        opacity: track.muted ? 0.55 : 1,
+        transition: "box-shadow .12s",
       }}
     >
       {/* Left resize */}
       <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-left"); }}
-        style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
+        style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.1)", borderRadius: "7px 0 0 7px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.7)" }} />
+      </div>
 
       {/* Content */}
       <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%" }}>
         {/* Waveform decoration */}
-        <div style={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
-          {[3, 7, 4, 9, 5, 8, 3, 7, 4].map((h, i) => (
-            <div key={i} style={{ width: 2, height: h, background: "rgba(255,255,255,.6)", borderRadius: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0, opacity: .85 }}>
+          {[3, 7, 4, 9, 5, 8, 3, 7, 4, 6, 3].map((h, i) => (
+            <div key={i} style={{ width: 2, height: h, background: "rgba(255,255,255,.7)", borderRadius: 1 }} />
           ))}
         </div>
         <span style={{ color: "white", fontSize: 10, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {track.name}
+          {displayName}
         </span>
         <span style={{ color: "rgba(255,255,255,.65)", fontSize: 9.5, fontFamily: "monospace", flexShrink: 0 }}>
           {dur < 60 ? dur.toFixed(1) + "s" : formatVideoDuration(dur)}
@@ -152,7 +166,9 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
 
       {/* Right resize */}
       <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-right"); }}
-        style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.25)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
+        style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.1)", borderRadius: "0 7px 7px 0", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.7)" }} />
+      </div>
     </div>
   );
 }

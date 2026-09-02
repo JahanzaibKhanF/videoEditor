@@ -315,19 +315,23 @@ function LabelColumn() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: ROW_GAP, paddingBottom: 4 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: ROW_GAP, paddingBottom: 4, paddingRight: 4 }}>
       {rows.map((row) => (
         <div key={row.key} style={{
           height: ROW_H, flexShrink: 0,
-          display: "flex", alignItems: "center",
-          background: `${row.color}18`,
+          display: "flex", alignItems: "center", gap: 6,
+          background: `${row.color}14`,
           borderLeft: `3px solid ${row.color}`,
-          paddingLeft: 6, paddingRight: 4,
-          gap: 4,
+          borderRadius: "0 6px 6px 0",
+          paddingLeft: 7, paddingRight: 5,
         }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+            background: row.color, boxShadow: `0 0 0 2px ${row.color}22`,
+          }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: row.color, lineHeight: 1.1 }}>{row.label}</div>
-            {row.sub && <div style={{ fontSize: 8.5, color: "rgba(100,100,100,.8)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".02em", color: row.color, lineHeight: 1.15, textTransform: "uppercase" }}>{row.label}</div>
+            {row.sub && <div className="text-ink-muted" style={{ fontSize: 8.5, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
           </div>
         </div>
       ))}

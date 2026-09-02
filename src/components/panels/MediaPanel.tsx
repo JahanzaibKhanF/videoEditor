@@ -415,7 +415,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
                   <Film size={13} className="text-ink-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] font-semibold text-ink-primary truncate">{c.name}</div>
+                  <div className="text-[12px] font-semibold text-ink-primary truncate">{c.sourceFileName ?? c.name}</div>
                   <div className="text-[10.5px] text-ink-secondary">{(c.endPosition - c.startPosition).toFixed(1)}s</div>
                 </div>
               </div>

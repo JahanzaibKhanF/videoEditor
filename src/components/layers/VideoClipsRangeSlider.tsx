@@ -377,16 +377,21 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                     onClick={e => { e.stopPropagation(); setSelId(clip.id); setCtxSel(clip.id); }}
                     style={{
                       position: "absolute", top: 0, left, width, height: "100%",
-                      background: isSel ? "#FFC670" : "#E09A2F",
-                      outline: isSel ? "2px solid #1D4ED8" : "none",
-                      borderRadius: 6, cursor: "move",
+                      background: "linear-gradient(180deg, #FFC061 0%, #E8952B 100%)",
+                      boxShadow: isSel
+                        ? "0 0 0 2px #8B5CFF, 0 4px 14px -4px rgba(139,92,255,.55)"
+                        : "inset 0 1px 0 rgba(255,255,255,.28), 0 1px 3px rgba(0,0,0,.28)",
+                      borderRadius: 7, cursor: "move",
                       display: "flex", alignItems: "center",
                       overflow: "visible", userSelect: "none",
+                      transition: "box-shadow .12s",
                     }}>
-                    <div style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ position: "absolute", inset: 0, borderRadius: 7, overflow: "hidden" }}>
                       {/* Left trim */}
                       <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
-                        style={{ position: "absolute", left: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "6px 0 0 6px", zIndex: 10 }} />
+                        style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.16)" : "rgba(0,0,0,.08)", borderRadius: "7px 0 0 7px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.75)" }} />
+                      </div>
                       {/* Content */}
                       <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", overflow: "hidden", width: "100%", height: "100%" }}>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: .9 }}>
@@ -402,7 +407,9 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                       </div>
                       {/* Right trim */}
                       <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
-                        style={{ position: "absolute", right: 0, top: 0, width: 7, height: "100%", cursor: "ew-resize", background: "rgba(255,255,255,.3)", borderRadius: "0 6px 6px 0", zIndex: 10 }} />
+                        style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.16)" : "rgba(0,0,0,.08)", borderRadius: "0 7px 7px 0", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.75)" }} />
+                      </div>
                     </div>
                     {/* Move-to-track chevrons — only shown on the selected
                         chip, so idle rows stay clean. Click (not drag) way

@@ -1,6 +1,34 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — Timeline layers: audio-lane name matches its video row + track/label restyle
+
+`npm run build` + `tsc --noEmit` clean. Follows Phase 4.
+
+**Name mismatch fixed.** A video row shows `clip.sourceFileName` (the real
+file, e.g. `beach.mp4`) but the paired audio lane showed `audio.name`, which
+`addClipToTimeline` set to the synthetic internal id (`video1699…_0`) — so the
+two rows for one imported video read as different names.
+- `addClipToTimeline.ts` now sets the audio entry's `name` to
+  `video.video.name` (the real filename), matching the clip.
+- `AudioRangeSlider.tsx` (`AudioTrackRow`) derives its label from the paired
+  clip via `track.clipId` (`sourceFileName ?? name`), with `track.name` as a
+  fallback — so **existing saved projects and split clips display correctly
+  too**, from one source of truth.
+- `MediaPanel` Layers tab: clip rows show `sourceFileName ?? name` instead of
+  the synthetic `name`.
+
+**Style only (no behavior change):**
+- Video clip chips: vertical amber gradient + inner top highlight; selection is
+  now a violet ring (`0 0 0 2px #8B5CFF` + glow) instead of a flat colour
+  swap + harsh blue outline. Trim handles widened to 8px with a centred grip
+  bar, darker/tinted rather than translucent-white.
+- Audio chips: blue gradient, matching grip handles, slightly denser waveform,
+  same violet selection ring; muted state is a grey gradient.
+- `TimeLine` `LabelColumn`: rounded row cards, a colour dot per layer type,
+  uppercase type label, theme-token sub-text (was a near-invisible hard-coded
+  grey in dark mode).
+
 ## Session — Phase 4 of the UI overhaul: dedicated mobile editor
 
 Builds on Phase 2. `npm run build` + `tsc --noEmit` clean; dev serves `/` 200.

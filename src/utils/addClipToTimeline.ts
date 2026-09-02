@@ -87,7 +87,10 @@ export const addClipToTimeline = ({
         const audioEntry: AudioDetails = {
           id: uuidv4(),
           clipId,
-          name: video.name,
+          // Real source filename (e.g. "beach.mp4"), matching the clip's
+          // `sourceFileName` — NOT the synthetic internal `video.name` id,
+          // so the audio lane label reads the same as its video row.
+          name: video.video.name,
           startTime: maxEnd,
           endTime: maxEnd + duration,
           volume: 1,
