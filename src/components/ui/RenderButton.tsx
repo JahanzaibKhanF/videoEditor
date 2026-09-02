@@ -6,7 +6,7 @@
  * - "See Later" sends to background (no floating pill — handled elsewhere)
  * - X always cancels AND closes
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { CheckCircle2, XCircle, Ban, Film, X, Download } from "@/utils/icons";
 import { renderVideo } from "../../utils/renderVideo";
@@ -23,6 +23,23 @@ export default function RenderButton() {
 
   const [showModal, setShowModal] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  // Jobs we've already auto-downloaded, so a re-render of the progress
+  // callback for the same finished job doesn't download it twice.
+  const downloadedJobs = useRef<Set<string>>(new Set());
+
+  // Auto-save the finished export straight to the browser's downloads with
+  // a unique name — no save dialog. (User choice: "Auto-download to
+  // Downloads".)
+  const autoDownload = (url: string, sourceName?: string) => {
+    const base = (sourceName ?? videos[0]?.video.name ?? "export").replace(/\.[^.]+$/, "") || "export";
+    const stamp = new Date().toISOString().replace(/[:T]/g, "-").replace(/\..+$/, "");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${base}-${stamp}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const disabled = videos.length < 1;
   const activeJob = activeJobId ? renderJobs.find(j => j.jobId === activeJobId) : null;
@@ -35,39 +52,6 @@ export default function RenderButton() {
 
   const handleRender = async () => {
     setShowModal(true);
-
-    // DISK STREAMING (2026-08-21): ask up front, before any other work,
-    // where to save the file — this MUST happen synchronously-ish within
-    // the click handler (a user gesture) or Chrome refuses to show the
-    // picker. Only available in Chromium browsers; anywhere else (or if the
-    // user cancels the dialog) this silently falls through to the previous
-    // in-memory export, exactly as before — this is a pure improvement for
-    // supported browsers, never a requirement.
-    //
-    // Why bother: without it, the whole encoded output has to be held in
-    // memory for the entire export. For a long/heavy timeline (multiple
-    // video layers, effects, background-removed alpha video) that can
-    // exceed what the browser will allow a worker to hold, and the browser
-    // hard-kills the worker with zero catchable JS error — that's the
-    // "Encode worker crashed" with no detail. Streaming straight to disk as
-    // it encodes keeps memory usage flat no matter how long the export
-    // runs, because the growing file never exists in memory at all.
-    let saveHandle: FileSystemFileHandle | undefined;
-    if (typeof window !== "undefined" && window.showSaveFilePicker) {
-      try {
-        saveHandle = await window.showSaveFilePicker({
-          suggestedName: `${(videos[0]?.video.name ?? "export").replace(/\.[^.]+$/, "")}.mp4`,
-          types: [{ description: "MP4 Video", accept: { "video/mp4": [".mp4"] } }],
-        });
-      } catch (err) {
-        // AbortError = user cancelled the dialog — treat exactly like the
-        // API not being available at all, just proceed without it.
-        if ((err as Error)?.name !== "AbortError") {
-          console.error("[RenderButton] save picker failed, falling back to in-memory export:", err);
-        }
-        saveHandle = undefined;
-      }
-    }
 
     try {
       await renderVideo(
@@ -86,6 +70,15 @@ export default function RenderButton() {
           const isNewJob = !renderJobs.some(j => j.jobId === update.jobId);
           if (isNewJob) {
             setActiveJobId(update.jobId);
+          }
+
+          if (
+            update.processName === "Completed" &&
+            update.videoUrl &&
+            !downloadedJobs.current.has(update.jobId)
+          ) {
+            downloadedJobs.current.add(update.jobId);
+            autoDownload(update.videoUrl, update.name);
           }
 
           setRenderJobs(prev => {
@@ -108,7 +101,6 @@ export default function RenderButton() {
         },
         imageRefs, layerOrder,
         clipEffects,
-        saveHandle,
       );
     } catch (err) {
       console.error("Render failed:", err);

@@ -16,6 +16,7 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { useAuth } from "../../context/useAuthContext";
+import { deleteBgRemovedForProject } from "../../utils/bgRemovedStore";
 import { Clock, Trash2, RefreshCw, FolderOpen, LogIn } from "@/utils/icons";
 
 interface RecentProject {
@@ -65,6 +66,7 @@ export default function RecentProjectsPanel() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Could not delete that project.");
       }
+      void deleteBgRemovedForProject(id);
       setProjects((prev) => prev.filter((p) => p.id !== id));
       // Deleted the project we're currently sitting in — nothing left to
       // show here, so go back to a clean start instead of a dead editor.

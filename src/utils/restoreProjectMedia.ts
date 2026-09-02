@@ -28,6 +28,14 @@ export function restoreProjectMedia(
   const videosByName = new Map<string, { video: File; name: string }>();
 
   const clips: ClipDetails[] = savedClips.map((c) => {
+    // A clip with AI background removal applied doesn't play from its
+    // original file — it plays from a transparent WebM that
+    // useBgRemovedRestore rehydrates separately (local cache / Cloudinary).
+    // Leave src empty for it to fill, and never list its source file as
+    // "missing" — relinking the original wouldn't help.
+    if ((c as ClipDetails).bgRemoved?.assetId) {
+      return { ...c, src: "" } as ClipDetails;
+    }
     // sourceFileName is the real filename on disk and what a relinked file
     // can actually match — `video` is only ever an internal synthetic id
     // ("video{timestamp}_{index}") and can never equal a real file's name.

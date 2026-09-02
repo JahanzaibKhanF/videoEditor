@@ -2,20 +2,23 @@
 
 /**
  * MediaRelinkBanner — shown when a resumed project has clips/images whose
- * source files aren't found in the currently-linked local media folder
- * (see restoreProjectMedia.ts and useProjectAutosave.ts for why: media is
- * never uploaded, only filenames are saved, so reopening a project on a
- * fresh session needs the same folder relinked before playback works).
+ * source files aren't linked yet (see restoreProjectMedia.ts and
+ * useProjectAutosave.ts: media is never uploaded, only the file names are
+ * saved, so a project reopened on a fresh session has to re-link the real
+ * files before playback works).
  *
- * Re-attempts the match automatically whenever the linked folder's file
- * list changes — link once, everything that matches by name snaps back
- * into place without any per-clip manual picking.
+ * Most of the time there's nothing to do here: useProjectMedia
+ * auto-relinks every file whose handle the browser still has permission
+ * for, and this banner never even shows. It only appears when the browser
+ * dropped the permission grant (one "Reconnect media" click re-grants all)
+ * or a file was moved/renamed/deleted ("Locate files" to re-pick).
  */
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
-import { useLocalMediaFolder } from "../../hooks/useLocalMediaFolder";
+import { useProjectMedia } from "../../hooks/useProjectMedia";
+import { pickMediaFiles } from "../../utils/pickMediaFiles";
 import { restoreProjectMedia } from "../../utils/restoreProjectMedia";
-import { FolderInput, TriangleAlert, X, Files } from "@/utils/icons";
+import { FolderInput, TriangleAlert } from "@/utils/icons";
 
 export default function MediaRelinkBanner() {
   const {
@@ -24,50 +27,50 @@ export default function MediaRelinkBanner() {
     imagesDetails, setImagesDetails,
     setVideos,
   } = useAppDetailsContext();
-  const localFolder = useLocalMediaFolder();
-  const [dismissed, setDismissed] = useState(false);
-  const [matching, setMatching] = useState(false);
+  const media = useProjectMedia();
 
-  // Whenever the linked folder's contents change, try to re-match
-  // whatever's still missing against it by filename.
+  // Whenever the set of linked files changes, re-match anything still
+  // missing against it by filename. Idempotent, and the ref-stable
+  // setMissingMediaNames below keeps it from looping.
   useEffect(() => {
     if (missingMediaNames.length === 0) return;
-    if (localFolder.permissionState !== "granted" || localFolder.files.length === 0) return;
+    const canResolveSome = missingMediaNames.some((n) => media.files.has(n));
+    if (!canResolveSome) return;
 
-    let cancelled = false;
-    (async () => {
-      setMatching(true);
-      try {
-        const filesByName = new Map<string, File>();
-        for (const f of localFolder.files) {
-          if (f.kind === "other") continue;
-          filesByName.set(f.name, await f.getFile());
-        }
-        if (cancelled) return;
+    const savedClips = clipsDetails.map(({ src: _s, ...rest }) => rest);
+    const savedImages = imagesDetails.map(({ src: _s, image: _i, ...rest }) => rest);
+    const result = restoreProjectMedia(savedClips, savedImages, media.files);
 
-        const savedClips = clipsDetails.map(({ src: _s, ...rest }) => rest);
-        const savedImages = imagesDetails.map(({ src: _s, image: _i, ...rest }) => rest);
-        const result = restoreProjectMedia(savedClips, savedImages, filesByName);
-
-        setClipsDetails(result.clips);
-        setImagesDetails(result.images);
-        if (result.videos.length > 0) {
-          setVideos((prev) => {
-            const byName = new Map(prev.map((v) => [v.name, v]));
-            result.videos.forEach((v) => byName.set(v.name, v));
-            return Array.from(byName.values());
-          });
-        }
-        setMissingMediaNames(result.missingNames);
-      } finally {
-        if (!cancelled) setMatching(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    // A bg-removed clip's src comes from useBgRemovedRestore, not from
+    // re-matching its original file — don't let this re-match blank it.
+    setClipsDetails(result.clips.map((rc) => {
+      if (!rc.bgRemoved?.assetId) return rc;
+      const prev = clipsDetails.find((c) => c.id === rc.id);
+      return prev?.src ? { ...rc, src: prev.src } : rc;
+    }));
+    setImagesDetails(result.images);
+    if (result.videos.length > 0) {
+      setVideos((prev) => {
+        const byName = new Map(prev.map((v) => [v.name, v]));
+        result.videos.forEach((v) => byName.set(v.name, v));
+        return Array.from(byName.values());
+      });
+    }
+    setMissingMediaNames((prev) =>
+      prev.length === result.missingNames.length && prev.every((n, i) => n === result.missingNames[i])
+        ? prev
+        : result.missingNames,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localFolder.files, localFolder.permissionState]);
+  }, [media.files, missingMediaNames]);
 
-  if (missingMediaNames.length === 0 || dismissed) return null;
+  if (missingMediaNames.length === 0) return null;
+
+  const needsReconnect = media.needsPermission.length > 0;
+  const locateFiles = async () => {
+    const picked = await pickMediaFiles();
+    if (picked.length > 0) await media.registerFiles(picked);
+  };
 
   return (
     <div className="flex flex-col gap-1.5 px-4 py-2 bg-warning/10 border-b border-warning/25 flex-shrink-0">
@@ -78,43 +81,31 @@ export default function MediaRelinkBanner() {
             <strong className="text-ink-primary">{missingMediaNames.length}</strong> media file
             {missingMediaNames.length !== 1 ? "s" : ""} from this project{" "}
             {missingMediaNames.length !== 1 ? "aren't" : "isn't"} linked yet — timing and layout are intact,
-            but video won't play until you relink the original folder.
+            but video won't play until {missingMediaNames.length !== 1 ? "they're" : "it's"} relinked.
           </p>
           <p className="text-[11px] text-ink-faint mt-0.5 truncate" title={missingMediaNames.join(", ")}>
             Looking for: <span className="font-mono">{missingMediaNames.join(", ")}</span>
           </p>
         </div>
-        {localFolder.supported && (
+        {needsReconnect ? (
           <button
-            onClick={localFolder.folderName ? localFolder.reconnectFolder : localFolder.linkFolder}
-            disabled={localFolder.linking || matching}
+            onClick={media.reconnect}
+            disabled={media.reconnecting}
             className="flex items-center gap-1.5 text-[11.5px] font-semibold px-2.5 py-1 rounded-lg bg-warning/20 text-warning hover:bg-warning/30 transition-colors flex-shrink-0 disabled:opacity-60"
           >
             <FolderInput size={12} />
-            {localFolder.linking ? "Linking…" : matching ? "Matching…" : localFolder.folderName ? "Reconnect folder" : "Link media folder"}
+            {media.reconnecting ? "Reconnecting…" : "Reconnect media"}
           </button>
-        )}
-        {localFolder.supported && (
+        ) : (
           <button
-            onClick={localFolder.linkIndividualFiles}
-            disabled={localFolder.linking || matching}
-            title="Pick the specific missing files directly — works even for folders Chrome won't let you link whole (Downloads, Desktop, Documents, home)"
-            className="flex items-center gap-1.5 text-[11.5px] font-semibold px-2.5 py-1 rounded-lg border border-warning/30 text-warning hover:bg-warning/20 transition-colors flex-shrink-0 disabled:opacity-60"
+            onClick={locateFiles}
+            className="flex items-center gap-1.5 text-[11.5px] font-semibold px-2.5 py-1 rounded-lg bg-warning/20 text-warning hover:bg-warning/30 transition-colors flex-shrink-0"
           >
-            <Files size={12} />
-            Pick files directly
+            <FolderInput size={12} />
+            Locate files
           </button>
         )}
-        <button
-          onClick={() => setDismissed(true)}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-ink-faint hover:bg-studio-hover transition-colors flex-shrink-0"
-        >
-          <X size={12} />
-        </button>
       </div>
-      {localFolder.error && (
-        <p className="text-[11px] text-warning/90 pl-[22px]">{localFolder.error}</p>
-      )}
     </div>
   );
 }

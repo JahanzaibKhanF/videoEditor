@@ -9,14 +9,21 @@ interface SaveFilePickerOptions {
   excludeAcceptAllOption?: boolean;
 }
 
+interface OpenFilePickerOptions {
+  multiple?: boolean;
+  excludeAcceptAllOption?: boolean;
+  types?: { description?: string; accept: Record<string, string[]> }[];
+}
+
 interface Window {
   showSaveFilePicker?: (options?: SaveFilePickerOptions) => Promise<FileSystemFileHandle>;
+  showOpenFilePicker?: (options?: OpenFilePickerOptions) => Promise<FileSystemFileHandle[]>;
 }
 
 // TypeScript's bundled DOM lib also doesn't include the File System Access
 // permissions API (queryPermission/requestPermission) on handle types, even
 // though every browser that implements showDirectoryPicker/showOpenFilePicker
-// also implements these. Declared here so useLocalMediaFolder.ts can call
+// also implements these. Declared here so mediaHandleStore.ts can call
 // them directly instead of needing a `@ts-expect-error` at every call site.
 type FileSystemPermissionMode = "read" | "readwrite";
 

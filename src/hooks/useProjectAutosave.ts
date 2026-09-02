@@ -6,11 +6,12 @@
  * sessions.
  *
  * Scope decision: media itself is never uploaded (ClipFlow reads local
- * video files straight from disk via the File System Access API — see
- * useLocalMediaFolder.ts). So this only persists metadata: clip positions/
- * timing/transitions, text/image/blur layers, layer order, and aspect
- * ratio — plus the *names* of the media files each clip/image referenced,
- * so a resumed project knows what to ask the user to relink. Blob URLs
+ * video files straight from disk via the File System Access API — the
+ * per-file handles are persisted separately in mediaHandleStore.ts). So
+ * this only persists metadata: clip positions/timing/transitions,
+ * text/image/blur layers, layer order, and aspect ratio — plus the *names*
+ * of the media files each clip/image referenced, so a resumed project
+ * knows which files to relink. Blob URLs
  * (`src` on clips/images) and raw `File` objects are stripped before
  * saving since neither survives a page reload.
  *
@@ -22,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAppDetailsContext } from "../context/useAppContext";
 import { useAuth } from "../context/useAuthContext";
-import { migrateLocalMediaHandleToProject } from "./useLocalMediaFolder";
+import { migrateUntitledHandles } from "../utils/mediaHandleStore";
 
 export type AutosaveStatus = "signed-out" | "idle" | "saving" | "saved" | "error";
 
@@ -94,7 +95,7 @@ export function useProjectAutosave() {
         }
         const data = await res.json();
         setProjectId(data.project.id);
-        migrateLocalMediaHandleToProject(data.project.id);
+        migrateUntitledHandles(data.project.id);
         if (searchParams.get("project") !== data.project.id) {
           router.replace(`/?project=${data.project.id}`, { scroll: false });
         }

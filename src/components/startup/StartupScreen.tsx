@@ -14,6 +14,7 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { AspectRatio } from "../../types/types";
 import { TEMPLATES, Template } from "../../utils/templates";
+import { deleteBgRemovedForProject } from "../../utils/bgRemovedStore";
 import { useAuth } from "../../context/useAuthContext";
 import {
   Plus, Film, Clapperboard, Square, RectangleVertical, RectangleHorizontal,
@@ -82,6 +83,7 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Could not delete that project.");
       }
+      void deleteBgRemovedForProject(projectId);
       setRecentProjects((prev) => prev.filter((p) => p.id !== projectId));
     } catch (err) {
       setRecentError((err as Error).message);

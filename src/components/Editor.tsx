@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../context/useAppContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useBgRemovedRestore } from "../hooks/useBgRemovedRestore";
 import Header from "./sections/Header";
 import MediaPanel from "./sections/MediaPanel";
 import Screen from "./screen/Screen";
@@ -56,6 +57,8 @@ export default function Editor({ pendingTemplate }: { pendingTemplate?: Template
     isMediaImporting, isShowProcessedVideo, setIsShowProcessedVideo,
     isCompostionSettingsOpen, videos,
   } = useAppDetailsContext();
+
+  useBgRemovedRestore();
 
   const isMobile = useIsMobile(768);
   const [leftW, setLeftW] = useState(260);

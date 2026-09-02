@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { ClipDetails } from "../../types/types";
 import { removeClipBackground, checkAlphaCapability, AlphaCapabilityResult } from "../../utils/backgroundRemoval";
+import { saveBgRemoved } from "../../utils/bgRemovedStore";
 import { Scissors, Loader2, CheckCircle2, RotateCcw, Zap, Gem, AlertTriangle, Eye, Ban } from "@/utils/icons";
 
 /**
@@ -14,7 +15,7 @@ import { Scissors, Loader2, CheckCircle2, RotateCcw, Zap, Gem, AlertTriangle, Ey
  * no overlay, no separate dialog to manage.
  */
 export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) {
-  const { setClipsDetails } = useAppDetailsContext();
+  const { setClipsDetails, resumedProjectId } = useAppDetailsContext();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [quality, setQuality] = useState<"fast" | "quality">("fast");
@@ -23,6 +24,7 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
   const [label, setLabel] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
 
   // Checked once up front, not just discovered after the user hits Start —
   // "no alpha-capable VideoEncoder" is a real browser/device limitation
@@ -45,6 +47,7 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
     setStatus("choosing");
     setProgress(0);
     setResultUrl(null);
+    setResultBlob(null);
     setErrorMsg("");
   }, [clip.id]);
 
@@ -57,7 +60,7 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
     abortRef.current = controller;
 
     try {
-      const { blobUrl } = await removeClipBackground({
+      const { blobUrl, blob } = await removeClipBackground({
         clip, quality, signal: controller.signal,
         onProgress: (p) => { setProgress(p.fraction); setLabel(p.label); },
         onFramePreview: (canvas) => {
@@ -76,6 +79,7 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
         },
       });
       setResultUrl(blobUrl);
+      setResultBlob(blob);
       setStatus("done");
     } catch (err) {
       if ((err as any)?.name === "AbortError") {
@@ -93,8 +97,8 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
     setStatus("cancelled");
   };
 
-  const applyResult = () => {
-    if (!resultUrl) return;
+  const applyResult = async () => {
+    if (!resultUrl || !resultBlob) return;
 
     // The processed output only ever covers this clip's OWN trimmed/split
     // span (removeClipBackground reads clip.startTime..clip.endTime, which
@@ -115,16 +119,72 @@ export default function BackgroundRemovalPanel({ clip }: { clip: ClipDetails }) 
     const oldEnd = clip.endTime ?? clip.duration ?? oldStart;
     const span = Math.max(0.1, oldEnd - oldStart);
 
+    // Stable id tying together this clip, the local IndexedDB blob, and the
+    // Cloudinary copy — so the result survives refresh (local) and other
+    // devices (cloud). See useBgRemovedRestore + bgRemovedStore.
+    const assetId = crypto.randomUUID();
+    const blob = resultBlob;
+
+    await saveBgRemoved({ assetId, projectId: resumedProjectId, blob });
+
     setClipsDetails(prev => prev.map(c => c.id === clip.id
-      ? { ...c, src: resultUrl, startTime: 0, endTime: span, duration: span, sourceDuration: span }
+      ? { ...c, src: resultUrl, startTime: 0, endTime: span, duration: span, sourceDuration: span, bgRemoved: { assetId } }
       : c));
     setStatus("choosing");
     setResultUrl(null);
+    setResultBlob(null);
+
+    // Upload a durable copy in the background (browser → Cloudinary direct,
+    // using a signed ticket from our API). Autosave persists the returned
+    // url/publicId; failure just means local-only (still works on this
+    // browser).
+    void (async () => {
+      try {
+        const ticketRes = await fetch("/api/bg-removed", { method: "POST" });
+        if (!ticketRes.ok) return; // 401 (guest) / 503 (not configured) — fine
+        const t = await ticketRes.json();
+
+        const form = new FormData();
+        form.append("file", new File([blob], `${assetId}.webm`, { type: "video/webm" }));
+        form.append("api_key", t.apiKey);
+        form.append("timestamp", String(t.timestamp));
+        form.append("folder", t.folder);
+        form.append("signature", t.signature);
+        const up = await fetch(`https://api.cloudinary.com/v1_1/${t.cloudName}/video/upload`, {
+          method: "POST",
+          body: form,
+        });
+        const data = await up.json().catch(() => ({}));
+        const url: string | undefined = data.secure_url;
+        const publicId: string | undefined = data.public_id;
+        if (!up.ok || !url || !publicId) return;
+
+        setClipsDetails(prev => {
+          const stillThere = prev.some(c => c.bgRemoved?.assetId === assetId);
+          if (!stillThere) {
+            // Clip was deleted before the upload finished — don't leave the
+            // asset orphaned in Cloudinary.
+            void fetch("/api/bg-removed", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ publicIds: [publicId] }),
+            });
+            return prev;
+          }
+          return prev.map(c => c.bgRemoved?.assetId === assetId
+            ? { ...c, bgRemoved: { assetId, url, publicId } }
+            : c);
+        });
+      } catch (err) {
+        console.warn("[BackgroundRemovalPanel] cloud sync failed, keeping local copy:", err);
+      }
+    })();
   };
 
   const discard = () => {
     setStatus("choosing");
     setResultUrl(null);
+    setResultBlob(null);
   };
 
   const chip = (Icon: any, text: string) => (

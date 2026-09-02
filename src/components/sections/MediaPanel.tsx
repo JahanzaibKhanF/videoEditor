@@ -1,7 +1,6 @@
 "use client";
 
-import { X, Plus, Droplets, Type, SplitSquareHorizontal, FolderOpen, Film, ImageIcon, Upload, FolderInput, Wand2, Scissors, Sparkles } from "@/utils/icons";
-import { useState } from "react";
+import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles } from "@/utils/icons";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -15,7 +14,8 @@ import TemplatesPanel from "./TemplatesPanel";
 import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
 import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
-import { useLocalMediaFolder, LocalMediaFile } from "../../hooks/useLocalMediaFolder";
+import { useProjectMedia } from "../../hooks/useProjectMedia";
+import { pickMediaFiles } from "../../utils/pickMediaFiles";
 import type { Template } from "../../utils/templates";
 
 export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: string; pendingTemplate?: Template }) {
@@ -27,8 +27,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     setMediaImportError, activeTemplate, selectedClipId,
   } = useAppDetailsContext();
 
-  const localFolder = useLocalMediaFolder();
-  const [showLocalFolder, setShowLocalFolder] = useState(false);
+  const { registerFiles } = useProjectMedia();
 
   // Route templates tab directly to TemplatesPanel
   if (activeTab === "templates") return <TemplatesPanel initialTemplate={pendingTemplate} />;
@@ -139,22 +138,13 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     }
   };
 
-  const handleImport = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = clipsDetails.length > 0 ? "image/*,video/mp4" : "video/mp4";
-    input.multiple = true;
-    input.click();
-    input.onchange = (event) => {
-      const files = (event.target as HTMLInputElement).files;
-      if (!files) return;
-      ingestFiles(Array.from(files));
-    };
-  };
-
-  const handleImportFromLocalFolder = async (entry: LocalMediaFile) => {
-    const file = await entry.getFile();
-    ingestFiles([file]);
+  const handleImport = async () => {
+    const picked = await pickMediaFiles();
+    if (picked.length === 0) return;
+    // Persist the picked files' handles so a reopened project can
+    // auto-relink them later without re-prompting (see useProjectMedia).
+    await registerFiles(picked);
+    ingestFiles(picked.map((p) => p.file));
   };
 
   const addText = () => {
@@ -221,93 +211,9 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
           <div className="text-[11px] text-ink-secondary mt-0.5">{videos.length} video{videos.length !== 1 ? "s" : ""} · {imagesDetails.length} image{imagesDetails.length !== 1 ? "s" : ""}</div>
         </div>
         <div className="flex items-center gap-1.5">
-          {localFolder.supported && (
-            <button
-              title={localFolder.folderName ? `Linked: ${localFolder.folderName}` : "Link a local media folder"}
-              onClick={() => setShowLocalFolder(s => !s)}
-              className={`w-[30px] h-[30px] rounded-[9px] flex items-center justify-center flex-shrink-0 border transition-colors ${
-                showLocalFolder ? "border-signal bg-signal/10 text-signal" : "border-studio-border bg-studio-raised text-ink-secondary hover:text-ink-primary"
-              }`}
-            >
-              <FolderInput size={13} />
-            </button>
-          )}
           {addGradBtn(handleImport, !!activeTemplate)}
         </div>
       </div>
-
-      {showLocalFolder && localFolder.supported && (
-        <div className="border-b border-studio-border bg-studio-void/40 flex-shrink-0">
-          {!localFolder.folderName ? (
-            <div className="p-3">
-              <button
-                onClick={localFolder.linkFolder}
-                disabled={localFolder.linking}
-                className="w-full text-[12px] font-semibold py-2 rounded-lg border border-dashed border-studio-borderLight text-ink-secondary hover:border-signal hover:text-signal transition-colors disabled:opacity-50"
-              >
-                {localFolder.linking ? "Linking…" : "Link a local media folder"}
-              </button>
-              <p className="text-[10.5px] text-ink-faint mt-1.5 px-0.5">
-                Browse and import clips directly from your disk — nothing is uploaded.
-              </p>
-              {localFolder.error && (
-                <div className="text-[10.5px] text-danger bg-danger/10 border border-danger/25 rounded-md px-2 py-1.5 mt-2">
-                  {localFolder.error}
-                </div>
-              )}
-              <button
-                onClick={localFolder.linkIndividualFiles}
-                disabled={localFolder.linking}
-                className="w-full text-[11px] font-medium py-1.5 mt-1.5 rounded-lg text-ink-faint hover:text-signal transition-colors disabled:opacity-50"
-              >
-                Or pick specific files instead (works for Downloads/Desktop/Documents too)
-              </button>
-            </div>
-          ) : (
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11.5px] font-semibold text-ink-primary truncate">
-                  <span className="inline-flex items-center gap-1.5"><FolderOpen size={12} className="text-signal" />{localFolder.folderName}</span>
-                </span>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {localFolder.permissionState !== "granted" && (
-                    <button onClick={localFolder.reconnectFolder} className="text-[10.5px] font-semibold text-signal hover:underline">
-                      Reconnect
-                    </button>
-                  )}
-                  <button onClick={localFolder.forgetFolder} className="text-[10.5px] font-semibold text-ink-faint hover:text-danger">
-                    Unlink
-                  </button>
-                </div>
-              </div>
-              {localFolder.error && (
-                <div className="text-[10.5px] text-danger bg-danger/10 border border-danger/25 rounded-md px-2 py-1 mb-2">
-                  {localFolder.error}
-                </div>
-              )}
-              {localFolder.permissionState === "granted" && (
-                localFolder.files.filter(f => f.kind !== "other").length === 0 ? (
-                  <div className="text-[11px] text-ink-faint italic py-2 text-center">No video or image files found in this folder.</div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-1.5 max-h-[140px] overflow-y-auto scrollbar-thin">
-                    {localFolder.files.filter(f => f.kind !== "other").map(f => (
-                      <button
-                        key={f.name}
-                        onClick={() => handleImportFromLocalFolder(f)}
-                        title={f.name}
-                        className="flex flex-col items-center gap-1 p-1.5 rounded-lg bg-studio-raised border border-studio-border hover:border-signal transition-colors"
-                      >
-                        {f.kind === "video" ? <Film size={16} className="text-ink-muted" /> : <ImageIcon size={16} className="text-ink-muted" />}
-                        <span className="text-[9.5px] text-ink-secondary truncate w-full text-center">{f.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {videos.length === 0 && imagesDetails.length === 0 ? (

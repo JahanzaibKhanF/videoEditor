@@ -104,6 +104,15 @@ export interface ClipDetails {
   // matching against `video` (which earlier code did) meant relinking
   // never actually worked for any project, ever.
   sourceFileName?: string;
+  // Set once AI background removal has been applied to this clip. `src` then
+  // points at the transparent WebM (cached locally in bgRemovedStore.ts,
+  // synced to Cloudinary at `url`). On reopen, useBgRemovedRestore rebuilds
+  // `src` from the local blob (or `url`) instead of the original file.
+  bgRemoved?: {
+    assetId: string;
+    url?: string;      // Cloudinary secure_url (cross-device copy)
+    publicId?: string; // Cloudinary public_id — needed to delete the asset
+  };
 }
 
 // A single control point in a speed ramp: at `atFraction` (0..1 through the
