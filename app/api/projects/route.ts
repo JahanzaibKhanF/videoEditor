@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 
+// Free-tier project cap. Raise (or make per-plan) once there's an actual
+// paid tier — for now this is just a soft, clearly-explained limit rather
+// than a real billing gate. Also surfaced to the UI via the GET below so the
+// profile menu can show "2 / 3 projects".
+const FREE_PROJECT_LIMIT = 3;
+
 // GET /api/projects — list the current user's saved projects, most
 // recently updated first. Used to populate a "Recent projects" list.
 export async function GET(req: NextRequest) {
@@ -16,17 +22,12 @@ export async function GET(req: NextRequest) {
       ORDER BY updated_at DESC
       LIMIT 50
     `;
-    return NextResponse.json({ projects: rows });
+    return NextResponse.json({ projects: rows, limit: FREE_PROJECT_LIMIT });
   } catch (err) {
     console.error("[api/projects GET]", err);
     return NextResponse.json({ error: "Could not load projects." }, { status: 500 });
   }
 }
-
-// Free-tier project cap. Raise (or make per-plan) once there's an actual
-// paid tier — for now this is just a soft, clearly-explained limit rather
-// than a real billing gate.
-const FREE_PROJECT_LIMIT = 3;
 
 // POST /api/projects — create a new project row and return its id.
 // The editor calls this once, then PUTs to /api/projects/[id] for

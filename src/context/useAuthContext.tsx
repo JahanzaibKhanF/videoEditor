@@ -6,6 +6,8 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string | null;
+  /** ISO timestamp — present from /api/auth/me, login and signup. */
+  createdAt?: string;
 }
 
 interface AuthContextValue {

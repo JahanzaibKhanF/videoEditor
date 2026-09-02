@@ -7,13 +7,14 @@ import { formatVideoDuration } from "../../utils/formatVideoDuration";
 import RenderButton from "../ui/RenderButton";
 import Button from "../ui/Button";
 import IconButton from "../ui/IconButton";
+import ProfileMenu from "./ProfileMenu";
 import { SlidersHorizontal, Cloud, CloudOff, Loader2, Sun, Moon } from "@/utils/icons";
 import { useProjectAutosave } from "../../hooks/useProjectAutosave";
 import { useTheme } from "../../hooks/useTheme";
 
 export default function Header() {
   const { totalTime, videos, clipsDetails, setIsCompositionSettingsOpen, fps } = useAppDetailsContext();
-  const { user, logout, promptLogin } = useAuth();
+  const { user, promptLogin } = useAuth();
   const { status: saveStatus, errorMessage: saveErrorMessage } = useProjectAutosave();
   const { theme, toggleTheme, mounted } = useTheme();
   const primary = videos.find(v => v.name === clipsDetails[0]?.name);
@@ -113,18 +114,7 @@ export default function Header() {
         <div className="hidden sm:block w-px h-5 bg-studio-border flex-shrink-0" />
 
         {user ? (
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            <div className="w-6 h-6 rounded-full bg-signal/15 border border-signal/30 text-signal flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-              {(user.displayName || user.email)[0]?.toUpperCase()}
-            </div>
-            <button
-              onClick={logout}
-              title={user.email}
-              className="hidden sm:inline text-[11.5px] font-semibold text-ink-secondary hover:text-ink-primary transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
+          <ProfileMenu />
         ) : (
           <button
             onClick={() => promptLogin()}

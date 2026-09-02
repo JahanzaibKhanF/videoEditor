@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await sql`
-      SELECT u.id, u.email, u.display_name
+      SELECT u.id, u.email, u.display_name, u.created_at
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ${hashToken(token)}
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ user: null }, { status: 200 });
     }
     return NextResponse.json({
-      user: { id: user.id, email: user.email, displayName: user.display_name },
+      user: { id: user.id, email: user.email, displayName: user.display_name, createdAt: user.created_at },
     });
   } catch (err) {
     console.error("[auth/me]", err);

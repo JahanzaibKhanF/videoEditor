@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     `;
 
     const res = NextResponse.json({
-      user: { id: user.id, email: user.email, displayName: user.display_name },
+      user: { id: user.id, email: user.email, displayName: user.display_name, createdAt: user.created_at },
     });
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,

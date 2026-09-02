@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await sql`
-      SELECT id, email, password_hash, display_name FROM users WHERE email = ${email}
+      SELECT id, email, password_hash, display_name, created_at FROM users WHERE email = ${email}
     `;
     const user = rows[0];
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     `;
 
     const res = NextResponse.json({
-      user: { id: user.id, email: user.email, displayName: user.display_name },
+      user: { id: user.id, email: user.email, displayName: user.display_name, createdAt: user.created_at },
     });
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
