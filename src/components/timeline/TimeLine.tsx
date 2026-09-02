@@ -15,7 +15,7 @@
  * Labels column is in the SAME scroll container but positioned sticky-left,
  * so vertical scroll moves both together. Horizontal scroll only moves tracks.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { useEngineControls } from "../../context/useAppContext";
 import { formatVideoDuration } from "../../utils/formatVideoDuration";
@@ -211,14 +211,39 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
 }
 
 // ── Ruler ──────────────────────────────────────────────────────────────────
+// The tick grid is always 12 divisions, but the number of *labelled* ticks
+// adapts to the ruler's real pixel width — on a phone (or a zoomed-out
+// timeline) there isn't room for 13 timecodes, so they'd overprint each
+// other. We keep every Nth label such that each has ~54px of clear space,
+// and pin the first/last labels to the edges so they don't clip.
 function Ruler({ totalTime }: { totalTime: number }) {
-  if (!totalTime) return <div style={{ height: RULER_H }} />;
+  const elRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const divs = 12;
+
+  if (!totalTime) return <div ref={elRef} style={{ height: RULER_H }} />;
+
   const steps = Array.from({ length: divs + 1 }, (_, i) => (i * totalTime) / divs);
   const micro = Array.from({ length: divs * 5 }, (_, i) => (i * totalTime) / (divs * 5));
 
+  // Label every Nth tick so each timecode keeps ~LABEL_PX of clear space.
+  // Falls back to a sane default before the ResizeObserver has measured.
+  const LABEL_PX = 54;
+  const every = Math.max(1, Math.ceil(((divs + 1) * LABEL_PX) / Math.max(width || 320, 1)));
+
   return (
-    <div style={{ height: RULER_H, position: "relative", width: "100%", borderBottom: "1px solid rgba(0,0,0,.07)" }}
+    <div ref={elRef} style={{ height: RULER_H, position: "relative", width: "100%", borderBottom: "1px solid rgba(0,0,0,.07)" }}
       className="bg-studio-base select-none">
       {micro.map((t, i) => {
         const nearMain = steps.some(s => Math.abs(s - t) < totalTime / 200);
@@ -233,16 +258,28 @@ function Ruler({ totalTime }: { totalTime: number }) {
           }} />
         );
       })}
-      {steps.map((t, i) => (
-        <div key={i} style={{
-          position: "absolute", top: 3,
-          left: `${(t / totalTime) * 100}%`,
-          transform: "translateX(-50%)",
-          fontSize: 9.5, fontWeight: 600, color: "#89859F", whiteSpace: "nowrap",
-        }}>
-          {formatVideoDuration(t)}
-        </div>
-      ))}
+      {steps.map((t, i) => {
+        const isLast = i === steps.length - 1;
+        // Keep every Nth label, always keep the first and last, and drop any
+        // regular label that would crowd the pinned last one.
+        if (!isLast) {
+          if (i % every !== 0) return null;
+          if (divs - i < every * 0.75) return null;
+        }
+        const edge = i === 0 ? "left" : isLast ? "right" : "center";
+        return (
+          <div key={i} style={{
+            position: "absolute", top: 3,
+            left: edge === "right" ? undefined : `${(t / totalTime) * 100}%`,
+            right: edge === "right" ? 2 : undefined,
+            transform: edge === "center" ? "translateX(-50%)" : edge === "left" ? "translateX(2px)" : undefined,
+            fontSize: 9.5, fontWeight: 600, color: "#89859F", whiteSpace: "nowrap",
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {formatVideoDuration(t)}
+          </div>
+        );
+      })}
     </div>
   );
 }
