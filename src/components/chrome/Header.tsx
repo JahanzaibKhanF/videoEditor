@@ -11,29 +11,34 @@ import ProfileMenu from "./ProfileMenu";
 import { SlidersHorizontal, Cloud, CloudOff, Loader2, Sun, Moon } from "@/utils/icons";
 import { useProjectAutosave } from "../../hooks/useProjectAutosave";
 import { useTheme } from "../../hooks/useTheme";
+import { startNewProject } from "../../utils/startNewProject";
 
 export default function Header() {
   const { totalTime, videos, clipsDetails, setIsCompositionSettingsOpen, fps } = useAppDetailsContext();
   const { user, promptLogin } = useAuth();
-  const { status: saveStatus, errorMessage: saveErrorMessage } = useProjectAutosave();
+  const { status: saveStatus, errorMessage: saveErrorMessage, limitReached } = useProjectAutosave();
   const { theme, toggleTheme, mounted } = useTheme();
   const primary = videos.find(v => v.name === clipsDetails[0]?.name);
 
   return (
     <div className="h-[60px] bg-studio-surface border-b border-studio-border flex items-center px-2.5 sm:px-4 gap-2 sm:gap-3 flex-shrink-0 z-50 overflow-hidden">
 
-      {/* Logo */}
-      <div className="flex items-center gap-2 mr-0.5 sm:mr-1 flex-shrink-0">
-        <div className="w-[30px] h-[30px] rounded-[9px] bg-signal flex items-center justify-center shadow-glow flex-shrink-0">
+      {/* Logo — click to leave for the project picker / new project */}
+      <button
+        onClick={() => startNewProject((clipsDetails.length > 0 || videos.length > 0) && saveStatus !== "saved")}
+        title="New project / switch projects"
+        className="group flex items-center gap-2 mr-0.5 sm:mr-1 flex-shrink-0 cursor-pointer"
+      >
+        <div className="w-[30px] h-[30px] rounded-[9px] bg-signal flex items-center justify-center shadow-glow flex-shrink-0 group-hover:opacity-90 transition-opacity">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <rect x="1" y="3" width="12" height="8" rx="1.5" stroke="#07070C" strokeWidth="1.4" />
             <path d="M5.5 5l4 2-4 2V5z" fill="#07070C" />
           </svg>
         </div>
-        <span className="hidden sm:inline font-display text-sm font-bold text-ink-primary tracking-tight">
+        <span className="hidden sm:inline font-display text-sm font-bold text-ink-primary tracking-tight group-hover:text-signal transition-colors">
           ClipFlow
         </span>
-      </div>
+      </button>
 
       <div className="hidden sm:block w-px h-5 bg-studio-border flex-shrink-0" />
 
@@ -85,7 +90,10 @@ export default function Header() {
             {saveStatus === "saving" && <Loader2 size={11} className="animate-spin" />}
             {saveStatus === "saved" && <Cloud size={11} />}
             {saveStatus === "error" && <CloudOff size={11} />}
-            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : ""}
+            {saveStatus === "saving" ? "Saving…"
+              : saveStatus === "saved" ? "Saved"
+              : saveStatus === "error" ? (limitReached ? "Project limit reached" : "Save failed")
+              : ""}
           </span>
         )}
 

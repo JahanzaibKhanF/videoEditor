@@ -17,7 +17,8 @@ import { useEffect, useState, MouseEvent } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { useAuth } from "../../context/useAuthContext";
 import { deleteBgRemovedForProject } from "../../utils/bgRemovedStore";
-import { Clock, Trash2, RefreshCw, FolderOpen, LogIn } from "@/utils/icons";
+import { Clock, Trash2, RefreshCw, FolderOpen, LogIn, Plus } from "@/utils/icons";
+import { startNewProject } from "../../utils/startNewProject";
 
 interface RecentProject {
   id: string;
@@ -28,8 +29,9 @@ interface RecentProject {
 }
 
 export default function RecentProjectsPanel() {
-  const { resumedProjectId } = useAppDetailsContext();
+  const { resumedProjectId, clipsDetails, textsDetails, imagesDetails } = useAppDetailsContext();
   const { user, promptLogin } = useAuth();
+  const hasWork = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0;
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,9 @@ export default function RecentProjectsPanel() {
       setProjects((prev) => prev.filter((p) => p.id !== id));
       // Deleted the project we're currently sitting in — nothing left to
       // show here, so go back to a clean start instead of a dead editor.
-      if (id === resumedProjectId) window.location.href = "/";
+      if (id === resumedProjectId) { window.location.href = "/"; return; }
+      // Freed a slot — let autosave retry now if it was blocked at the cap.
+      window.dispatchEvent(new Event("clipflow:project-slot-freed"));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -82,11 +86,20 @@ export default function RecentProjectsPanel() {
     <div className="flex flex-col h-full bg-studio-surface">
       <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
         <div className="text-[13px] font-bold text-ink-primary flex items-center gap-1.5">
-          <Clock size={13} className="text-signal" /> Recent Projects
+          <Clock size={13} className="text-signal" /> Projects
         </div>
         <div className="text-[10.5px] text-ink-secondary mt-0.5">
-          Switch to another project, or delete one
+          Start a new one, switch, or delete
         </div>
+        <button
+          onClick={() => startNewProject(hasWork)}
+          className="mt-2.5 w-full flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-bold text-[#07070C]
+            bg-gradient-to-br from-signal to-signal-hover shadow-[0_2px_14px_rgba(139,92,255,.4)]
+            hover:opacity-90 active:scale-[.98] transition-[opacity,transform] cursor-pointer"
+        >
+          <Plus size={14} strokeWidth={2.6} />
+          New project
+        </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-2 flex flex-col gap-1.5">
@@ -113,7 +126,7 @@ export default function RecentProjectsPanel() {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-[11.5px] text-ink-faint italic text-center py-8 px-3">
-            No other saved projects yet.
+            No saved projects yet — this one saves automatically as you edit.
           </div>
         ) : (
           projects.map((p) => {

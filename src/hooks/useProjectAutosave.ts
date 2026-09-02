@@ -21,6 +21,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "react-toastify";
 import { useAppDetailsContext } from "../context/useAppContext";
 import { useAuth } from "../context/useAuthContext";
 import { migrateUntitledHandles } from "../utils/mediaHandleStore";
@@ -28,6 +29,11 @@ import { migrateUntitledHandles } from "../utils/mediaHandleStore";
 export type AutosaveStatus = "signed-out" | "idle" | "saving" | "saved" | "error";
 
 const AUTOSAVE_DEBOUNCE_MS = 4000;
+// When a save keeps failing (most commonly the free-tier project cap), back
+// the retry cadence right off so we're not firing a doomed POST every few
+// seconds while the person is still editing.
+const AUTOSAVE_ERROR_DEBOUNCE_MS = 20000;
+const PROJECT_LIMIT_TOAST_ID = "clipflow-project-limit";
 
 export function useProjectAutosave() {
   const { user } = useAuth();
@@ -41,9 +47,14 @@ export function useProjectAutosave() {
   const [projectId, setProjectId] = useState<string | null>(resumedProjectId);
   const [status, setStatus] = useState<AutosaveStatus>(user ? "idle" : "signed-out");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // True when the last create failed because the account is at its project
+  // cap — surfaced in the header pill and as a sticky toast.
+  const [limitReached, setLimitReached] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingRef = useRef(false);
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
   const projectIdRef = useRef<string | null>(resumedProjectId);
   useEffect(() => { projectIdRef.current = projectId; }, [projectId]);
   // A resumed project's id can arrive slightly after mount (it's set once
@@ -91,9 +102,17 @@ export function useProjectAutosave() {
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error ?? "Could not create project.");
+          const message = data.error ?? "Could not create project.";
+          if (res.status === 403) {
+            setLimitReached(true);
+            // toastId dedupes, so repeated failed autosaves don't stack.
+            toast.error(message, { toastId: PROJECT_LIMIT_TOAST_ID, autoClose: false });
+          }
+          throw new Error(message);
         }
         const data = await res.json();
+        setLimitReached(false);
+        toast.dismiss(PROJECT_LIMIT_TOAST_ID);
         setProjectId(data.project.id);
         migrateUntitledHandles(data.project.id);
         if (searchParams.get("project") !== data.project.id) {
@@ -129,7 +148,8 @@ export function useProjectAutosave() {
     if (!hasContent) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => { save(); }, AUTOSAVE_DEBOUNCE_MS);
+    const delay = statusRef.current === "error" ? AUTOSAVE_ERROR_DEBOUNCE_MS : AUTOSAVE_DEBOUNCE_MS;
+    timerRef.current = setTimeout(() => { save(); }, delay);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
     // Deliberately re-runs on every tracked field change, not just length —
     // position/timing/text edits should debounce-trigger a save too.
@@ -143,5 +163,19 @@ export function useProjectAutosave() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [user, save]);
 
-  return { projectId, status, saveNow: save, errorMessage };
+  // A project was deleted elsewhere (RecentProjectsPanel) — if we were
+  // blocked at the project cap, a slot is now free, so retry the create now
+  // instead of waiting for the next edit.
+  useEffect(() => {
+    const onSlotFreed = () => {
+      if (statusRef.current === "error" && !projectIdRef.current) {
+        setLimitReached(false);
+        save();
+      }
+    };
+    window.addEventListener("clipflow:project-slot-freed", onSlotFreed);
+    return () => window.removeEventListener("clipflow:project-slot-freed", onSlotFreed);
+  }, [save]);
+
+  return { projectId, status, saveNow: save, errorMessage, limitReached };
 }

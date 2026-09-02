@@ -1,6 +1,31 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — in-editor "New project" entry point + visible project-limit error
+
+`npm run build` + `tsc --noEmit` clean.
+
+**Start a new project from inside the editor.** There was no way back to the
+create / project-picker screen once a project was open. Added
+`utils/startNewProject.ts` (full nav to `/` with an unsaved-work confirm) and
+wired it to:
+- a prominent **"+ New project"** button in the `RecentProjectsPanel` header
+  (the "Projects" tab), and
+- the **header logo** (now a button — click to go to the picker; hover hint;
+  confirm skipped when autosave status is already "saved").
+
+**Project-cap save failure is now visible.** Hitting the free-tier 3-project
+limit made `POST /api/projects` return 403; `useProjectAutosave` only surfaced
+it as a tooltip on the header pill. Now:
+- a **sticky toast** ("You've reached the 3-project limit…") on the 403,
+  deduped by `toastId` so repeated autosaves don't stack it;
+- the header pill reads **"Project limit reached"** instead of "Save failed";
+- autosave backs its retry cadence off to 20s while erroring instead of
+  re-POSTing every 4s;
+- deleting a project in `RecentProjectsPanel` fires
+  `clipflow:project-slot-freed`, which retries the blocked create immediately
+  and clears the toast on success.
+
 ## Session — preview interaction: pick background layers + activate timeline selection on canvas
 
 Two real bugs in how the preview's `InteractionOverlay` let you select/move
