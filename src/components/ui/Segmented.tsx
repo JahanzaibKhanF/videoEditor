@@ -49,7 +49,7 @@ export default function Segmented<T extends string>({
             className={cn(
               "flex-1 inline-flex items-center justify-center gap-1 rounded-md font-bold cursor-pointer",
               "transition-[background,color] duration-100 whitespace-nowrap",
-              size === "sm" ? "py-1 text-micro" : "py-1.5 text-mini",
+              size === "sm" ? "py-1 text-mini" : "py-1.5 text-mini",
               active
                 ? "bg-signal/12 text-signal"
                 : "text-ink-muted hover:bg-studio-hover hover:text-ink-secondary"
