@@ -53,15 +53,15 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
 
   // Deselect on outside click
   useEffect(() => {
-    const fn = (e: MouseEvent) => {
+    const fn = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest(`[data-audio-id="${track.id}"]`)) setSelId(null);
     };
-    window.addEventListener("mousedown", fn);
-    return () => window.removeEventListener("mousedown", fn);
+    window.addEventListener("pointerdown", fn);
+    return () => window.removeEventListener("pointerdown", fn);
   }, [track.id]);
 
   const handleDrag = (
-    e: React.MouseEvent,
+    e: React.PointerEvent,
     type: "move" | "resize-left" | "resize-right"
   ) => {
     e.preventDefault(); e.stopPropagation();
@@ -73,7 +73,7 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
     const orig = audioRef.current.find(a => a.id === track.id)!;
     const minW = (MIN_W_PCT / 100) * totalTime;
 
-    const mv = (me: MouseEvent) => {
+    const mv = (me: PointerEvent) => {
       const dt = ((me.clientX - startX) / tw) * totalTime;
       let s = orig.startTime, end = orig.endTime;
       if (type === "move") {
@@ -89,11 +89,11 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
     };
 
     const up = () => {
-      document.removeEventListener("mousemove", mv);
-      document.removeEventListener("mouseup", up);
+      document.removeEventListener("pointermove", mv);
+      document.removeEventListener("pointerup", up);
     };
-    document.addEventListener("mousemove", mv);
-    document.addEventListener("mouseup", up);
+    document.addEventListener("pointermove", mv);
+    document.addEventListener("pointerup", up);
   };
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -112,7 +112,7 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
       className="audio-chip"
       data-audio-id={track.id}
       onClick={() => setSelId(track.id)}
-      onMouseDown={e => handleDrag(e, "move")}
+      onPointerDown={e => handleDrag(e, "move")}
       style={{
         position: "absolute", top: 0, left, width, height: "100%",
         background: track.muted
@@ -129,7 +129,7 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
       }}
     >
       {/* Left resize */}
-      <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-left"); }}
+      <div onPointerDown={e => { e.stopPropagation(); handleDrag(e, "resize-left"); }}
         style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.1)", borderRadius: "7px 0 0 7px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.7)" }} />
       </div>
@@ -151,7 +151,7 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
         {/* Mute button */}
         <button
           onClick={toggleMute}
-          onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           title={track.muted ? "Unmute" : "Mute"}
           style={{
             background: "rgba(255,255,255,.15)", border: "none",
@@ -165,7 +165,7 @@ export function AudioTrackRow({ track, containerRef }: { track: AudioDetails; co
       </div>
 
       {/* Right resize */}
-      <div onMouseDown={e => { e.stopPropagation(); handleDrag(e, "resize-right"); }}
+      <div onPointerDown={e => { e.stopPropagation(); handleDrag(e, "resize-right"); }}
         style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.1)", borderRadius: "0 7px 7px 0", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.7)" }} />
       </div>

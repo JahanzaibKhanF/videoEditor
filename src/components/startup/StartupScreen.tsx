@@ -204,15 +204,15 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
 
       <div className="relative flex flex-col items-center w-[96vw] max-w-[900px]" style={{ zIndex: 1 }}>
         {/* ── Hero title — sits on the moving aurora background, above the card ── */}
-        <div className="flex items-center gap-3 sm:gap-4 mb-7 sm:mb-11">
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+        <div className="flex items-center gap-2.5 sm:gap-4 mb-4 sm:mb-11">
+          <div className="w-9 h-9 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0"
             style={{ background: "linear-gradient(135deg,#8B5CFF 0%,#A47CFF 40%,#8B5CFF 100%)", boxShadow: "0 8px 28px rgba(139,92,255,.55)" }}>
-            <svg width="30" height="30" viewBox="0 0 22 22" fill="none">
+            <svg viewBox="0 0 22 22" fill="none" className="w-[22px] h-[22px] sm:w-[30px] sm:h-[30px]">
               <rect x="2" y="5" width="18" height="12" rx="2.5" stroke="white" strokeWidth="1.6" />
               <path d="M9 8.5l5 2.5-5 2.5V8.5z" fill="white" />
             </svg>
           </div>
-          <h1 className="text-white font-extrabold tracking-tight leading-none text-[44px] sm:text-[64px] md:text-[76px]"
+          <h1 className="text-white font-extrabold tracking-tight leading-none text-[30px] sm:text-[64px] md:text-[76px]"
             style={{ textShadow: "0 6px 40px rgba(139,92,255,.55), 0 2px 10px rgba(0,0,0,.5)" }}>
             ClipFlow
           </h1>
@@ -220,11 +220,11 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
 
         <div className="
           relative w-full
-          max-h-[80dvh] overflow-y-auto scrollbar-thin
-          p-1 sm:p-2">
+          overflow-visible sm:overflow-y-auto sm:max-h-[80dvh] scrollbar-thin
+          p-0 sm:p-2">
 
         {/* ── Tab row ─────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8 gap-3 flex-wrap">
+        <div className="flex items-center justify-between mb-4 sm:mb-8 gap-3 flex-wrap">
           <div className="text-[10px] sm:text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,.35)" }}>
             Professional Video Editor
           </div>
@@ -255,11 +255,11 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
         {tab === "create" && step === "grid" && (
           <>
             <p className="text-sm sm:text-base font-bold text-white mb-1">Start creating</p>
-            <p className="text-[11px] sm:text-xs mb-5" style={{ color: "rgba(255,255,255,.4)" }}>
+            <p className="text-[11px] sm:text-xs mb-3 sm:mb-5" style={{ color: "rgba(255,255,255,.4)" }}>
               Start blank, or pick a template — everything's editable after.
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
               {/* Big "+" tile — first in the same grid as templates, not a separate tab */}
               <button
                 onClick={() => setStep("ratio")}
@@ -491,11 +491,11 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
         </div>
 
         {/* ── Tagline — sits below the card, on the moving background ── */}
-        <div className="text-center mt-4 sm:mt-6 px-4 max-w-[640px]">
-          <p className="text-[12.5px] sm:text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,.55)" }}>
+        <div className="text-center mt-3 sm:mt-6 px-4 max-w-[640px]">
+          <p className="text-[11.5px] sm:text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,.55)" }}>
             A premium, studio-grade video editor that runs entirely in your browser.
           </p>
-          <p className="text-[11px] sm:text-[12.5px] leading-relaxed mt-1" style={{ color: "rgba(255,255,255,.35)" }}>
+          <p className="hidden sm:block text-[11px] sm:text-[12.5px] leading-relaxed mt-1" style={{ color: "rgba(255,255,255,.35)" }}>
             Trim, layer, and animate clips, apply ready-made templates with speed ramps and color grading,
             then export in seconds — no uploads, no accounts required to start.
           </p>

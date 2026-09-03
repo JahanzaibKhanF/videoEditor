@@ -132,6 +132,14 @@ html, body, #root {
   border-top: 1px solid rgb(var(--studio-border));
 }
 
+/* Timeline clip chips own the touch gesture that starts on them (drag to
+   move / trim) instead of letting the browser pan the scroll container —
+   without this, a finger-drag on a clip on mobile just scrolls the timeline
+   and the drag never starts. The track background keeps normal touch-scroll. */
+.vc-chip, .video-text, .video-image, .video-blur, .audio-chip {
+  touch-action: none;
+}
+
 /* ── Preview stage — the area the canvas floats in. Soft checkerboard so a
    transparent composition reads as transparent, tuned per theme (the old
    values were a hard-coded dark slate that clashed in light mode). ── */
@@ -236,7 +244,15 @@ html.light .preview-stage {
   transition: opacity .25s ease;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px;
+  padding: 14px 12px;
+}
+/* Tall content on a phone overflows a flex-centered container and clips at
+   the top — pin to the top there and let the overlay scroll. */
+@media (max-width: 640px) {
+  .startup-overlay { align-items: flex-start; padding: 16px 12px 28px; }
+}
+@media (min-width: 641px) {
+  .startup-overlay { padding: 24px; }
 }
 .startup-overlay.closing {
   opacity: 0;

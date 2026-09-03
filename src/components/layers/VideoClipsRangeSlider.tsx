@@ -116,11 +116,11 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
 
   // Deselect on outside click
   useEffect(() => {
-    const fn = (e: MouseEvent) => {
+    const fn = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest(".vc-chip")) setSelId(null);
     };
-    window.addEventListener("mousedown", fn);
-    return () => window.removeEventListener("mousedown", fn);
+    window.addEventListener("pointerdown", fn);
+    return () => window.removeEventListener("pointerdown", fn);
   }, []);
 
   // Delete on key
@@ -150,7 +150,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
     });
   };
 
-  const drag = (e: React.MouseEvent, id: string, type: "move" | "resize-left" | "resize-right") => {
+  const drag = (e: React.PointerEvent, id: string, type: "move" | "resize-left" | "resize-right") => {
     e.preventDefault(); e.stopPropagation();
     selectInScreen(id);
     const el = ref.current;
@@ -184,7 +184,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
       .filter(c => (c.startPosition ?? 0) >= (origClip.endPosition ?? 0) - 0.001)
       .sort((a, b) => (a.startPosition ?? 0) - (b.startPosition ?? 0))[0];
 
-    const mv = (me: MouseEvent) => {
+    const mv = (me: PointerEvent) => {
       const dt = ((me.clientX - startX) / tw) * totalTime;
       let sp = origClip.startPosition ?? 0;
       let ep = origClip.endPosition ?? 0;
@@ -287,11 +287,11 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
         const maxBlurEnd = blursDetails.reduce((m, b) => Math.max(m, b.endTime ?? 0), 0);
         return Math.max(maxClipEnd, maxImageEnd, maxTextEnd, maxBlurEnd);
       });
-      document.removeEventListener("mousemove", mv);
-      document.removeEventListener("mouseup", up);
+      document.removeEventListener("pointermove", mv);
+      document.removeEventListener("pointerup", up);
     };
-    document.addEventListener("mousemove", mv);
-    document.addEventListener("mouseup", up);
+    document.addEventListener("pointermove", mv);
+    document.addEventListener("pointerup", up);
   };
 
   // ── Group clips into tracks (rows) by zIndex ──────────────────────────
@@ -382,7 +382,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
 
                 return (
                   <div key={clip.id} className="vc-chip"
-                    onMouseDown={e => drag(e, clip.id, "move")}
+                    onPointerDown={e => drag(e, clip.id, "move")}
                     onClick={e => { e.stopPropagation(); selectInScreen(clip.id); }}
                     style={{
                       position: "absolute", top: 0, left, width, height: "100%",
@@ -397,7 +397,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                     }}>
                     <div style={{ position: "absolute", inset: 0, borderRadius: 7, overflow: "hidden" }}>
                       {/* Left trim */}
-                      <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
+                      <div onPointerDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-left"); }}
                         style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.16)" : "rgba(0,0,0,.08)", borderRadius: "7px 0 0 7px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.75)" }} />
                       </div>
@@ -415,7 +415,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                         </span>
                       </div>
                       {/* Right trim */}
-                      <div onMouseDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
+                      <div onPointerDown={e => { e.stopPropagation(); drag(e, clip.id, "resize-right"); }}
                         style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", background: isSel ? "rgba(0,0,0,.16)" : "rgba(0,0,0,.08)", borderRadius: "0 7px 7px 0", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ width: 2, height: 12, borderRadius: 2, background: "rgba(255,255,255,.75)" }} />
                       </div>
@@ -429,13 +429,13 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
                         display: "flex", flexDirection: "column", gap: 1, zIndex: 15,
                       }}>
                         <button title="Move to track above"
-                          onMouseDown={e => e.stopPropagation()}
+                          onPointerDown={e => e.stopPropagation()}
                           onClick={e => { e.stopPropagation(); moveClipToTrack(clip.id, "up"); }}
                           style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
                           <ChevronUp size={9} color="white" />
                         </button>
                         <button title="Move to track below"
-                          onMouseDown={e => e.stopPropagation()}
+                          onPointerDown={e => e.stopPropagation()}
                           onClick={e => { e.stopPropagation(); moveClipToTrack(clip.id, "down"); }}
                           style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
                           <ChevronDown size={9} color="white" />

@@ -1,6 +1,34 @@
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
 
+## Session — mobile: timeline drag works on touch + denser welcome screen
+
+`npm run build` + `tsc --noEmit` clean.
+
+**Timeline clips couldn't be dragged/trimmed on a phone.** Every range slider
+(`VideoClipsRangeSlider`, `TextRangeSlider`, `ImagesRangeSlider`,
+`BlurRangeSlider`, `AudioRangeSlider`/`AudioTrackRow`) started its drag from
+`onMouseDown` + `document` `mousemove`/`mouseup` listeners — mouse-only, so
+touch never triggered them. Converted all five to Pointer Events
+(`onPointerDown` + `pointermove`/`pointerup`, `MouseEvent` → `PointerEvent`),
+plus `touch-action: none` on `.vc-chip / .video-text / .video-image /
+.video-blur / .audio-chip` in `globals.css` so a finger-drag on a chip moves
+it instead of scrolling the timeline (the track background still scrolls).
+Pointer events are a mouse/touch/pen superset — desktop is unchanged. The
+preview's `InteractionOverlay` was already pointer-based.
+
+**Welcome screen was cramped on mobile.** `StartupScreen` + `.startup-overlay`:
+smaller hero (30px vs 44px logo text, 36px logo tile), tighter margins, the
+inner card no longer nests its own scroll on mobile (one scroll context via
+the overlay, pinned to the top so tall content doesn't clip), 2-col grid gets
+a smaller gap, the secondary tagline paragraph is `sm:`-only, overlay padding
+14→ down on phones.
+
+Still open (told the user): the preview canvas is small on a phone because it
+fits the whole composition — text isn't tiny, the frame is scaled down.
+Proper fix is pinch-zoom + pan on the mobile preview (blocked today by the
+global multi-touch `preventDefault` in `ClipFlowApp`).
+
 ## Session — in-editor "New project" entry point + visible project-limit error
 
 `npm run build` + `tsc --noEmit` clean.

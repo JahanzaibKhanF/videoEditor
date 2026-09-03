@@ -26,11 +26,11 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
   };
 
   useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
+    const handleGlobalClick = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest(".video-image")) setSelectedImageId(null);
     };
-    window.addEventListener("mousedown", handleGlobalClick);
-    return () => window.removeEventListener("mousedown", handleGlobalClick);
+    window.addEventListener("pointerdown", handleGlobalClick);
+    return () => window.removeEventListener("pointerdown", handleGlobalClick);
   }, []);
 
   useEffect(() => { setLocalImages(imagesDetails); }, [imagesDetails]);
@@ -90,7 +90,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
     setLocalImages(updated); setImagesDetails(updated);
   };
 
-  const handleDrag = (e: React.MouseEvent, imageId: string, dragType: "move" | "resize-left" | "resize-right") => {
+  const handleDrag = (e: React.PointerEvent, imageId: string, dragType: "move" | "resize-left" | "resize-right") => {
     e.preventDefault();
     const startX = e.clientX;
     let startY = e.clientY;
@@ -116,7 +116,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
     ];
     let curZ = orig.zIndex ?? 0;
 
-    const onMouseMove = (me: MouseEvent) => {
+    const onMouseMove = (me: PointerEvent) => {
       const dt = ((me.clientX - startX) / timelineWidth) * totalTime;
       let s = orig.startTime ?? 0, end = orig.endTime ?? 0;
       if (dragType === "move") {
@@ -140,9 +140,9 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
       if (s < 0 || end > totalTime || end <= s) return;
       updateImageTime(imageId, s, end);
     };
-    const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    const onMouseUp = () => { document.removeEventListener("pointermove", onMouseMove); document.removeEventListener("pointerup", onMouseUp); };
+    document.addEventListener("pointermove", onMouseMove);
+    document.addEventListener("pointerup", onMouseUp);
   };
 
   return (
@@ -175,7 +175,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
                 cursor: "move", gap: 4, overflow: "hidden",
                 border: img.animation !== "none" ? "1.5px solid rgba(255,255,255,.4)" : "none",
               }}
-              onMouseDown={e => handleDrag(e, img.id, "move")}
+              onPointerDown={e => handleDrag(e, img.id, "move")}
               onClick={() => { selectInScreen(img.id); }}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
@@ -191,8 +191,8 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
                     : formatVideoDuration(img.endTime - img.startTime)}
                 </p>
               )}
-              <div className="absolute top-0 left-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-left"); }} />
-              <div className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize z-20" onMouseDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-right"); }} />
+              <div className="absolute top-0 left-0 h-full w-1.5 cursor-ew-resize z-20" onPointerDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-left"); }} />
+              <div className="absolute top-0 right-0 h-full w-1.5 cursor-ew-resize z-20" onPointerDown={e => { e.stopPropagation(); handleDrag(e, img.id, "resize-right"); }} />
             </div>
             {/* Overlay stacking order — which image/overlay draws on top of
                 which (e.g. a transparent or background-removed PNG meant to
@@ -200,13 +200,13 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
             {isSelected && (
               <div style={{ position: "absolute", right: -18, top: "50%", transform: "translateY(-50%)", display: "flex", flexDirection: "column", gap: 1, zIndex: 15 }}>
                 <button title="Bring forward (draw on top)"
-                  onMouseDown={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
                   onClick={e => { e.stopPropagation(); moveImageStack(img.id, "up"); }}
                   style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
                   <ChevronUp size={9} color="white" />
                 </button>
                 <button title="Send backward"
-                  onMouseDown={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
                   onClick={e => { e.stopPropagation(); moveImageStack(img.id, "down"); }}
                   style={{ background: "rgba(20,20,30,.85)", border: "1px solid rgba(255,255,255,.15)", borderRadius: 3, padding: 1, cursor: "pointer", lineHeight: 0 }}>
                   <ChevronDown size={9} color="white" />
