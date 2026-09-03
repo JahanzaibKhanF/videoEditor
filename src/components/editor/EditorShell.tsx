@@ -36,6 +36,19 @@ export default function EditorShell({ pendingTemplate }: { pendingTemplate?: Tem
   const [activeTab, setActiveTab] = useState("media");
   const templateTriggered = useRef(false);
 
+  // The inspector's "Change" rows and the timeline's transition-seam badges
+  // ask the shell to open a catalog on the left via this window event
+  // (same pattern as clipflow:project-slot-freed) rather than prop drilling.
+  useEffect(() => {
+    if (isMobile) return;
+    const fn = (e: Event) => {
+      const tab = (e as CustomEvent<string>).detail;
+      if (typeof tab === "string") setActiveTab(tab);
+    };
+    window.addEventListener("clipflow:open-catalog", fn as EventListener);
+    return () => window.removeEventListener("clipflow:open-catalog", fn as EventListener);
+  }, [isMobile]);
+
   // A template that needs footage → open the Templates picker so it can
   // wire the chosen video(s) onto the timeline and set activeTemplate.
   useEffect(() => {

@@ -323,49 +323,65 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
     }
   }
 
-  // A clip's `transition` describes the transition OUT of it, into
-  // whichever clip starts right where it ends. Precompute each bridge's
-  // (fromRow, toRow, timeFraction) so it can be drawn as a badge at the
-  // exact boundary between the two clips.
-  const bridges = totalTime > 0 ? clipsDetails
-    .filter(clip => clip.transition && clip.transition !== "none")
-    .map(clip => {
-      const fromTrackIdx = trackIds.indexOf(clip.zIndex ?? 0);
-      const nextClip = clipsDetails.find(c => Math.abs((c.startPosition ?? -999) - (clip.endPosition ?? 0)) < 0.05);
-      if (!nextClip || fromTrackIdx === -1) return null;
-      const toTrackIdx = trackIds.indexOf(nextClip.zIndex ?? 0);
-      if (toTrackIdx === -1) return null;
-      const meta = transitionOptions.find(t => t.key === clip.transition);
-      return {
-        id: `${clip.id}->${nextClip.id}`,
-        fromRow: rowOffsets[fromTrackIdx], toRow: rowOffsets[toTrackIdx],
-        leftPct: ((clip.endPosition ?? 0) / totalTime) * 100,
-        label: meta?.name ?? clip.transition,
-      };
-    })
-    .filter((b): b is NonNullable<typeof b> => b !== null) : [];
+  // Every boundary between two back-to-back clips on the SAME track gets a
+  // ⇄ badge: filled when a transition is set on the left clip, a dim
+  // outline otherwise. Clicking it selects that clip and opens the
+  // Transitions catalog on the left (via the shell's open-catalog event) —
+  // the spatial way to add / change a transition, like every NLE.
+  const seams = totalTime > 0
+    ? clipsByTrack.flatMap(({ clips: trackClips }, trackIdx) => {
+        const out: { id: string; clipId: string; row: number; leftPct: number; active: boolean; label: string }[] = [];
+        for (let i = 0; i < trackClips.length - 1; i++) {
+          const a = trackClips[i], b = trackClips[i + 1];
+          if (Math.abs((b.startPosition ?? 0) - (a.endPosition ?? 0)) > 0.05) continue;
+          const active = !!a.transition && a.transition !== "none";
+          out.push({
+            id: `${a.id}|${b.id}`,
+            clipId: a.id,
+            row: rowOffsets[trackIdx] ?? 0,
+            leftPct: ((a.endPosition ?? 0) / totalTime) * 100,
+            active,
+            label: active
+              ? (transitionOptions.find(t => t.key === a.transition)?.name ?? a.transition!)
+              : "Add transition",
+          });
+        }
+        return out;
+      })
+    : [];
 
   return (
     <div ref={ref} style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", gap: ROW_GAP }}>
-      {/* Transition bridges — drawn above all clip rows so they aren't
+      {/* Transition seam badges — drawn above all clip rows so they aren't
           clipped by any individual row's overflow:hidden */}
-      {bridges.map(b => {
-        const topFrom = b.fromRow * (ROW_H + ROW_GAP) + ROW_H / 2;
-        const topTo = b.toRow * (ROW_H + ROW_GAP) + ROW_H / 2;
-        const midTop = (topFrom + topTo) / 2;
+      {seams.map(s => {
+        const top = s.row * (ROW_H + ROW_GAP) + ROW_H / 2;
         return (
-          <div key={b.id} title={`Transition: ${b.label}`}
+          <button key={s.id}
+            title={s.active ? `Transition: ${s.label} — click to change` : "Add a transition on this cut"}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation();
+              selectInScreen(s.clipId);
+              window.dispatchEvent(new CustomEvent("clipflow:open-catalog", { detail: "transitions" }));
+            }}
+            onMouseEnter={e => { if (!s.active) e.currentTarget.style.background = "rgba(139,92,255,.4)"; }}
+            onMouseLeave={e => { if (!s.active) e.currentTarget.style.background = "rgba(30,30,45,.92)"; }}
             style={{
-              position: "absolute", zIndex: 20, left: `${b.leftPct}%`, top: midTop,
+              position: "absolute", zIndex: 20, left: `${s.leftPct}%`, top,
               transform: "translate(-50%, -50%)",
-              width: 18, height: 18, borderRadius: "50%",
-              background: "linear-gradient(135deg,#8B5CFF,#A47CFF)",
+              width: 18, height: 18, borderRadius: "50%", padding: 0,
               border: "2px solid rgba(10,10,19,.9)",
+              background: s.active ? "linear-gradient(135deg,#8B5CFF,#A47CFF)" : "rgba(30,30,45,.92)",
+              color: s.active ? "#fff" : "rgba(200,195,225,.8)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 6px rgba(0,0,0,.4)", cursor: "help", pointerEvents: "auto",
+              boxShadow: s.active ? "0 2px 6px rgba(0,0,0,.4)" : "0 1px 4px rgba(0,0,0,.35)",
+              cursor: "pointer", pointerEvents: "auto",
+              opacity: s.active ? 1 : 0.7,
+              transition: "background .12s",
             }}>
-            <Shuffle size={9} color="white" strokeWidth={2.6} />
-          </div>
+            <Shuffle size={9} strokeWidth={2.6} />
+          </button>
         );
       })}
       {clipsByTrack.map(({ z, clips: trackClips }) => {

@@ -53,9 +53,23 @@ module.exports = {
         mono: ["var(--font-mono)", "JetBrains Mono", "ui-monospace", "monospace"],
       },
       fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        // ── UI type scale ─────────────────────────────────────────────
+        // The editor chrome lives between 9px and 13px. Before this every
+        // size was an arbitrary `text-[10.5px]` bracket value written
+        // inline; these named steps are what the shared primitives use so
+        // the same element is the same size everywhere.
+        micro: ["0.5625rem", { lineHeight: "0.75rem" }],   //  9px  — badges, tick labels
+        "3xs": ["0.625rem", { lineHeight: "0.875rem" }],   // 10px  — SectionLabel caption
+        mini: ["0.65625rem", { lineHeight: "0.875rem" }],  // 10.5px — value read-outs, dense meta
+        meta: ["0.6875rem", { lineHeight: "1rem" }],       // 11px  — hints, panel subtitles
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],      // 11px  — control labels (legacy alias)
+        label: ["0.71875rem", { lineHeight: "1rem" }],     // 11.5px — field labels, row titles
+        title: ["0.8125rem", { lineHeight: "1.1rem" }],    // 13px  — panel titles
       },
       borderRadius: {
+        // md 6 / lg 8 / xl 10 / 2xl 14 / 3xl 24 — the only radii the UI
+        // should use. Arbitrary `rounded-[9px]` / `rounded-[5px]` values
+        // scattered through components should collapse onto these.
         xl: "0.625rem",
         "2xl": "0.875rem",
         "3xl": "1.5rem",

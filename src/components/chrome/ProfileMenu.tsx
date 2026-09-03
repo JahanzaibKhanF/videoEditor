@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/useAuthContext";
-import { LogOut, FolderOpen, CalendarDays } from "@/utils/icons";
+import { LogOut, FolderOpen, CalendarDays, History } from "@/utils/icons";
 
 /**
  * ProfileMenu — the header account control. Replaces the bare avatar + inline
@@ -119,6 +119,19 @@ export default function ProfileMenu() {
           </div>
 
           {/* Actions */}
+          <button
+            onClick={() => {
+              setOpen(false);
+              // Opens the Recent-projects panel on the left (same window
+              // event the inspector's Change rows use).
+              window.dispatchEvent(new CustomEvent("clipflow:open-catalog", { detail: "recent" }));
+            }}
+            role="menuitem"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[12.5px] font-semibold text-ink-secondary hover:bg-studio-hover hover:text-ink-primary transition-colors cursor-pointer border-b border-studio-border"
+          >
+            <History size={13} />
+            Recent projects
+          </button>
           <button
             onClick={() => { setOpen(false); logout(); }}
             role="menuitem"

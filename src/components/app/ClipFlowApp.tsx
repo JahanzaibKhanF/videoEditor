@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/context/useAuthContext";
 import AuthScreen from "@/components/auth/AuthScreen";
 import Editor from "@/components/editor/EditorShell";
 import StartupScreen from "@/components/startup/StartupScreen";
+import LoadingScreen from "@/components/startup/LoadingScreen";
 import { AspectRatio } from "@/types/types";
 import { Template } from "@/utils/templates";
 import { restoreProjectMedia } from "@/utils/restoreProjectMedia";
@@ -144,10 +145,18 @@ function ClipFlowAppInner() {
   // a one-frame flash of "Sign in" before we know someone's already
   // logged in.
   if (loading) {
+    return <LoadingScreen stages={["Starting ClipFlow", "Checking your session"]} />;
+  }
+
+  // A saved project is being fetched + rehydrated (either the user clicked
+  // one in Recent, or ?project=<id> auto-resume on first load). Show the
+  // branded loader instead of a dimmed startup screen until the editor
+  // takes over.
+  if (resuming && initialAspect === null && !resumeError) {
     return (
-      <div className="min-h-[100dvh] w-full flex items-center justify-center bg-studio-void">
-        <div className="w-8 h-8 rounded-full border-2 border-studio-border border-t-signal animate-spin" />
-      </div>
+      <LoadingScreen
+        stages={["Opening your project", "Loading your media", "Restoring the timeline"]}
+      />
     );
   }
 

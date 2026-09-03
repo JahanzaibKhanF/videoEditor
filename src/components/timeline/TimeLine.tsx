@@ -23,7 +23,7 @@ import { LayerType } from "../../types/types";
 import TimeLineZoom from "./TimeLineZoom";
 import Layers, { ROW_H, ROW_GAP } from "../layers/Layers";
 import TemplateBar from "./TemplateBar";
-import { Lock as LockIcon } from "@/utils/icons";
+import { Lock as LockIcon, VolumeX, Volume2 } from "@/utils/icons";
 import { buildMergedEntries, groupIntoRuns } from "../../utils/layerStack";
 
 export const LABEL_W = 80;
@@ -98,7 +98,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
       <div className="flex-shrink-0 h-[34px] flex items-center bg-studio-base border-b border-studio-border">
         <div style={{ width: LABEL_W, minWidth: LABEL_W, flexShrink: 0 }}
           className="h-full flex items-center px-3 border-r border-studio-border">
-          <span className="text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-muted">Layers</span>
+          <span className="text-3xs font-bold uppercase tracking-[0.7px] text-ink-muted">Layers</span>
         </div>
         <div className="flex-1 flex items-center px-3 gap-2">
           {clipsDetails.length > 0 && (
@@ -201,7 +201,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center w-full h-full text-ink-muted dark:text-[rgba(255,255,255,.25)] text-[13px] italic py-8">
+          <div className="flex items-center justify-center w-full h-full text-ink-faint text-meta py-8">
             Import a video to get started
           </div>
         )}
@@ -299,7 +299,7 @@ function Ruler({ totalTime }: { totalTime: number }) {
 // shared zIndex stack, so there's no separate "block" control here anymore.
 function LabelColumn() {
   const {
-    blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails,
+    blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails, setAudioDetails,
     activeTemplate,
   } = useAppDetailsContext();
 
@@ -316,7 +316,7 @@ function LabelColumn() {
   const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails);
   const runs = groupIntoRuns(entries);
 
-  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string }[] = [];
+  const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; trackZ?: number }[] = [];
   runs.forEach((run, runIdx) => {
     if (run.kind === "video") {
       run.entries.forEach(entry => {
@@ -331,7 +331,7 @@ function LabelColumn() {
         rows.push({ key: `run-${runIdx}-track-${z}`, type: "video", label: "Video", color: CFG.video.color, sub: label });
         const hasAudio = trackClips.some(c => audioDetails.some(a => a.clipId === c.id));
         if (hasAudio) {
-          rows.push({ key: `run-${runIdx}-audio-${z}`, type: "audio", label: "Audio", color: CFG.audio.color, sub: label });
+          rows.push({ key: `run-${runIdx}-audio-${z}`, type: "audio", label: "Audio", color: CFG.audio.color, sub: label, trackZ: z });
         }
       });
     } else if (run.kind === "image") {
@@ -353,25 +353,50 @@ function LabelColumn() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: ROW_GAP, paddingBottom: 4, paddingRight: 4 }}>
-      {rows.map((row) => (
-        <div key={row.key} style={{
-          height: ROW_H, flexShrink: 0,
-          display: "flex", alignItems: "center", gap: 6,
-          background: `${row.color}14`,
-          borderLeft: `3px solid ${row.color}`,
-          borderRadius: "0 6px 6px 0",
-          paddingLeft: 7, paddingRight: 5,
-        }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-            background: row.color, boxShadow: `0 0 0 2px ${row.color}22`,
-          }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".02em", color: row.color, lineHeight: 1.15, textTransform: "uppercase" }}>{row.label}</div>
-            {row.sub && <div className="text-ink-muted" style={{ fontSize: 8.5, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
+      {rows.map((row) => {
+        // Per-track audio mute — toggles `muted` on every audio entry whose
+        // clip sits on this track (row.trackZ). Mirrors the inspector's
+        // single-clip mute, at track scope.
+        const trackAudios = row.trackZ != null
+          ? audioDetails.filter(a => clipsDetails.some(c => c.id === a.clipId && (c.zIndex ?? 0) === row.trackZ))
+          : [];
+        const trackMuted = trackAudios.length > 0 && trackAudios.every(a => a.muted);
+        return (
+          <div key={row.key} style={{
+            height: ROW_H, flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 6,
+            background: `${row.color}14`,
+            borderLeft: `3px solid ${row.color}`,
+            borderRadius: "0 6px 6px 0",
+            paddingLeft: 7, paddingRight: 4,
+          }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+              background: row.color, boxShadow: `0 0 0 2px ${row.color}22`,
+            }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".02em", color: row.color, lineHeight: 1.15, textTransform: "uppercase" }}>{row.label}</div>
+              {row.sub && <div className="text-ink-muted" style={{ fontSize: 8.5, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.sub}</div>}
+            </div>
+            {row.trackZ != null && trackAudios.length > 0 && (
+              <button
+                title={trackMuted ? "Unmute this track" : "Mute this track"}
+                onClick={() => setAudioDetails(prev => prev.map(a =>
+                  trackAudios.some(t => t.id === a.id) ? { ...a, muted: !trackMuted } : a
+                ))}
+                style={{
+                  flexShrink: 0, width: 16, height: 16, borderRadius: 4, border: "none",
+                  display: "grid", placeItems: "center", cursor: "pointer",
+                  background: trackMuted ? "rgba(255,79,112,.16)" : "transparent",
+                  color: trackMuted ? "#FF4F70" : "#89859F",
+                }}
+              >
+                {trackMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+              </button>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
