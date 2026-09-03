@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { ClipDetails, ClipEffectDetails, ClipEffectType } from "../../types/types";
 import Slider from "../ui/Slider";
+import { FieldHint } from "../ui/Field";
 import { Zap, Waves, Sparkles as SparklesIcon, Sparkle, Palette, X } from "@/utils/icons";
 
 const EFFECT_TYPES: { type: ClipEffectType; label: string; Icon: any; gradient: string; defaultColor: string; defaultIntensity: number }[] = [
@@ -41,13 +42,9 @@ export default function ClipEffectsPanel({ clip }: { clip: ClipDetails }) {
 
   return (
     <div>
-      <div className="text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-muted mb-2">
-        Special Effects
-      </div>
-
-      <div className="text-[10.5px] text-ink-faint mb-2">
+      <FieldHint className="mb-2">
         Tap a card to add it — like the effect drawers in CapCut/TikTok editors, stack as many as you want.
-      </div>
+      </FieldHint>
 
       {/* Add cards — big and colorful, not a cramped icon strip */}
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -67,7 +64,7 @@ export default function ClipEffectsPanel({ clip }: { clip: ClipDetails }) {
 
       {/* Active effects on this clip */}
       {onThisClip.length === 0 ? (
-        <div className="text-[11px] text-ink-faint italic text-center py-2">No effects on this clip yet — tap one above to add it.</div>
+        <FieldHint className="text-center py-2">No effects on this clip yet — tap one above to add it.</FieldHint>
       ) : (
         <div className="flex flex-col gap-2">
           {onThisClip.map(fx => {

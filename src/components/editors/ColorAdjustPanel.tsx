@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { ColorAdjustments, DEFAULT_COLOR_ADJUSTMENTS } from "../../types/types";
 import { DEFAULT_FILTER_PRESETS, FilterPreset, buildFilterPresetFromRecord, FilterPresetRecord } from "../../utils/filterPresets";
 import Slider from "../ui/Slider";
+import SectionLabel from "../ui/SectionLabel";
+import { FieldRow, FieldValue } from "../ui/Field";
 import { Palette, RotateCcw } from "@/utils/icons";
 
 interface Props {
@@ -44,22 +46,21 @@ export default function ColorAdjustPanel({ adjustments, onChange }: Props) {
   const isDefault = a.brightness === 1 && a.contrast === 1 && a.saturation === 1 && a.temperature === 0;
   const set = (patch: Partial<ColorAdjustments>) => onChange({ ...a, ...patch });
 
-  const row = "flex items-center gap-2.5";
-  const rowLabel = "text-[11px] text-ink-muted font-semibold min-w-[74px]";
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-          <Palette size={11} /> Color
-        </div>
-        {!isDefault && (
+      <SectionLabel
+        inset={false}
+        className="mb-0"
+        icon={<Palette size={11} />}
+        right={!isDefault && (
           <button onClick={() => onChange(DEFAULT_COLOR_ADJUSTMENTS)}
-            className="flex items-center gap-1 text-[10.5px] font-semibold text-ink-faint hover:text-signal transition-colors">
+            className="flex items-center gap-1 text-mini font-semibold text-ink-faint hover:text-signal transition-colors">
             <RotateCcw size={10} /> Reset
           </button>
         )}
-      </div>
+      >
+        Color
+      </SectionLabel>
 
       {/* Filter preset swatches */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1">
@@ -86,26 +87,22 @@ export default function ColorAdjustPanel({ adjustments, onChange }: Props) {
 
       {/* Manual sliders */}
       <div className="flex flex-col gap-2.5">
-        <div className={row}>
-          <span className={rowLabel}>Brightness</span>
+        <FieldRow label="Brightness" labelWidth={74}>
           <Slider value={a.brightness} min={0} max={2} onChange={v => set({ brightness: v })} />
-          <span className="text-[10.5px] text-ink-faint font-mono min-w-[30px] text-right">{Math.round(a.brightness * 100)}</span>
-        </div>
-        <div className={row}>
-          <span className={rowLabel}>Contrast</span>
+          <FieldValue className="min-w-[30px]">{Math.round(a.brightness * 100)}</FieldValue>
+        </FieldRow>
+        <FieldRow label="Contrast" labelWidth={74}>
           <Slider value={a.contrast} min={0} max={2} onChange={v => set({ contrast: v })} />
-          <span className="text-[10.5px] text-ink-faint font-mono min-w-[30px] text-right">{Math.round(a.contrast * 100)}</span>
-        </div>
-        <div className={row}>
-          <span className={rowLabel}>Saturation</span>
+          <FieldValue className="min-w-[30px]">{Math.round(a.contrast * 100)}</FieldValue>
+        </FieldRow>
+        <FieldRow label="Saturation" labelWidth={74}>
           <Slider value={a.saturation} min={0} max={2} onChange={v => set({ saturation: v })} />
-          <span className="text-[10.5px] text-ink-faint font-mono min-w-[30px] text-right">{Math.round(a.saturation * 100)}</span>
-        </div>
-        <div className={row}>
-          <span className={rowLabel}>Temperature</span>
+          <FieldValue className="min-w-[30px]">{Math.round(a.saturation * 100)}</FieldValue>
+        </FieldRow>
+        <FieldRow label="Temperature" labelWidth={74}>
           <Slider value={a.temperature} min={-100} max={100} onChange={v => set({ temperature: v })} />
-          <span className="text-[10.5px] text-ink-faint font-mono min-w-[30px] text-right">{a.temperature > 0 ? "+" : ""}{Math.round(a.temperature)}</span>
-        </div>
+          <FieldValue className="min-w-[30px]">{a.temperature > 0 ? "+" : ""}{Math.round(a.temperature)}</FieldValue>
+        </FieldRow>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import {
   Film, Type, Sparkles, Scissors, Shuffle, LayoutTemplate,
-  Layers2, History, ImageIcon, SlidersHorizontal,
+  Layers2, History, ImageIcon, SlidersHorizontal, Wand2,
 } from "@/utils/icons";
 
 export interface MobileTool {
@@ -24,6 +24,7 @@ export const MOBILE_TOOLS: MobileTool[] = [
   { key: "effects",     label: "Effects",   Icon: Sparkles,          view: "effects" },
   { key: "bgremove",    label: "Remove BG", Icon: Scissors,          view: "bgremove", badge: "AI" },
   { key: "transitions", label: "Transition",Icon: Shuffle,           view: "transitions" },
+  { key: "animations",  label: "Animate",   Icon: Wand2,             view: "animations" },
   { key: "templates",   label: "Templates", Icon: LayoutTemplate,    view: "templates" },
   { key: "layers",      label: "Layers",    Icon: Layers2,           view: "layers" },
   { key: "assets",      label: "Assets",    Icon: ImageIcon,         view: "assets" },

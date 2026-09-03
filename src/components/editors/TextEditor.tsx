@@ -4,6 +4,10 @@ import { FaBold, FaItalic, FaUnderline } from "@/utils/icons";
 import { useEffect, useState, useRef } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import Slider from "../ui/Slider";
+import InspectorCard from "../ui/InspectorCard";
+import SectionLabel from "../ui/SectionLabel";
+import Segmented from "../ui/Segmented";
+import { Type as TypeIcon } from "@/utils/icons";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 
 const fontFamilies = [
@@ -37,7 +41,7 @@ const colors = [
   { value:"#27ae60", cls:"bg-[#27ae60]" },
 ];
 
-const inputCls = "w-full text-center rounded-lg border border-studio-border bg-studio-surface text-ink-primary p-1.5 outline-none text-[12px] font-[inherit] focus:border-signal";
+const inputCls = "w-full text-center rounded-lg border border-studio-border bg-studio-surface text-ink-primary py-1 px-2 outline-none text-[11.5px] font-[inherit] focus:border-signal";
 
 export default function TextEditor() {
   const { selectedTextId, setTextsDetails, textsDetails } = useAppDetailsContext();
@@ -83,51 +87,50 @@ export default function TextEditor() {
     }));
   }, [fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight]);
 
-  const sectionLabel = "text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-secondary mb-2.5";
-  const divider = "h-px bg-[#211F33] dark:bg-[rgba(255,255,255,.07)] my-3";
+  const divider = "h-px bg-studio-border my-2.5";
 
   return (
-    <div className="bg-studio-raised border border-studio-border rounded-xl p-3.5">
-      <div className={sectionLabel}>Text Style</div>
+    <InspectorCard accent="signal" icon={<TypeIcon size={12} />} title="Text">
+      <SectionLabel inset={false} className="mb-0">Text Style</SectionLabel>
 
       {/* Font size + line height */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-2 gap-2 mb-2.5">
         <label className="flex flex-col gap-1">
-          <span className="text-[11.5px] text-ink-secondary font-medium">Font Size</span>
+          <span className="text-mini text-ink-secondary font-medium">Font Size</span>
           <input type="number" min={1} value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))} className={inputCls} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11.5px] text-ink-secondary font-medium">Line Height</span>
+          <span className="text-mini text-ink-secondary font-medium">Line Height</span>
           <input type="number" min={1} value={lineHeight} onChange={e => setLineHeight(parseInt(e.target.value))} className={inputCls} />
         </label>
       </div>
 
       {/* Opacity */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[11.5px] text-ink-secondary font-medium min-w-[48px]">Opacity</span>
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-mini text-ink-secondary font-medium min-w-[48px]">Opacity</span>
         <div className="flex-1"><Slider min={0} max={1} step={0.01} value={opacity} onChange={setOpacity} /></div>
         <input type="number" step={0.01} min={0} max={1} value={opacity} onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0 && v <= 1) setOpacity(v); }}
-          className="w-14 text-center rounded-lg border border-studio-border bg-studio-surface text-ink-primary p-1 outline-none text-[11px] font-mono" />
+          className="w-12 text-center rounded-lg border border-studio-border bg-studio-surface text-ink-primary py-1 px-1.5 outline-none text-[10.5px] font-mono" />
       </div>
 
       {/* Font */}
-      <div className="mb-3">
-        <span className="text-[11.5px] text-ink-secondary font-medium block mb-1">Font Family</span>
+      <div className="mb-2.5">
+        <span className="text-mini text-ink-secondary font-medium block mb-1">Font Family</span>
         <select value={fontFamily} onChange={e => setFontFamily(e.target.value)}
-          className="w-full rounded-lg border border-studio-border bg-studio-surface text-ink-primary p-1.5 text-[12px] outline-none font-[inherit] focus:border-signal cursor-pointer">
+          className="w-full rounded-lg border border-studio-border bg-studio-surface text-ink-primary py-1 px-2 text-[11.5px] outline-none font-[inherit] focus:border-signal cursor-pointer">
           {fontFamilies.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
         </select>
       </div>
 
       {/* B/I/U */}
-      <div className="mb-3">
-        <span className="text-[11.5px] text-ink-secondary font-medium block mb-2">Style</span>
+      <div className="mb-2.5">
+        <span className="text-mini text-ink-secondary font-medium block mb-2">Style</span>
         <div className="flex gap-1.5">
           {[{ Icon: FaBold, s: isBold, set: setIsBold }, { Icon: FaItalic, s: isItalic, set: setIsItalic }, { Icon: FaUnderline, s: isUnderline, set: setIsUnderline }].map(({ Icon, s, set }, i) => (
             <div key={i} onClick={() => set(!s)}
               className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border-[1.5px]
                 ${s
-                  ? "border-signal bg-[rgba(139,92,255,.1)] dark:bg-[rgba(139,92,255,.2)] text-signal"
+                  ? "border-signal bg-signal/15 text-signal"
                   : "border-studio-border bg-studio-surface text-ink-secondary hover:border-signal hover:text-signal"}`}>
               <Icon size={11} />
             </div>
@@ -138,31 +141,33 @@ export default function TextEditor() {
       <div className={divider} />
 
       {/* Color mode */}
-      <div className="flex gap-4 border-b border-studio-border mb-3">
-        {(["text", "background", "shadow"] as const).map(m => (
-          <button key={m} onClick={() => setColorMode(m)}
-            className={`text-[11.5px] font-semibold pb-1.5 border-none bg-transparent cursor-pointer font-[inherit] border-b-2 transition-all
-              ${colorMode === m ? "text-signal border-signal" : "text-ink-secondary border-transparent"}`}>
-            {m.charAt(0).toUpperCase() + m.slice(1)}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        size="sm"
+        className="mb-2.5"
+        value={colorMode}
+        onChange={setColorMode}
+        options={[
+          { value: "text", label: "Text" },
+          { value: "background", label: "Background" },
+          { value: "shadow", label: "Shadow" },
+        ]}
+      />
 
       {/* Color swatches */}
       {(colorMode === "text" || colorMode === "background") && (
-        <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-studio-surface border border-studio-border">
+        <div className="flex flex-wrap gap-1.5 p-1.5 rounded-lg bg-studio-surface border border-studio-border">
           {colorMode === "background" && (
             <div onClick={() => setBackgroundColor("transparent")}
-              className={`w-[22px] h-[22px] rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
-                ${backgroundColor === "transparent" ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : "border-[#211F33] dark:border-[#3d4758]"}`}>
+              className={`w-5 h-5 rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
+                ${backgroundColor === "transparent" ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,0.25)]" : "border-studio-borderLight"}`}>
               <div className="absolute top-1/2 left-0 w-full h-[1.5px] bg-red-500 rotate-[-35deg]" />
             </div>
           )}
           {colors.map(c => {
             const sel = colorMode === "text" ? c.value === textColor : c.value === backgroundColor;
             return (
-              <div key={c.value} className={`${c.cls} w-[22px] h-[22px] rounded-[5px] cursor-pointer transition-all border-[1.5px]
-                ${sel ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#211F33] dark:border-[#3d4758]" : "border-transparent"}
+              <div key={c.value} className={`${c.cls} w-5 h-5 rounded-[5px] cursor-pointer transition-all border-[1.5px]
+                ${sel ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,0.25)]" : (c.value === "black" || c.value === "white") ? "border-studio-borderLight" : "border-transparent"}
                 hover:scale-110`}
                 onClick={() => colorMode === "text" ? setTextColor(c.value) : setBackgroundColor(c.value)} />
             );
@@ -172,28 +177,28 @@ export default function TextEditor() {
 
       {colorMode === "shadow" && (
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-studio-surface border border-studio-border">
+          <div className="flex flex-wrap gap-1.5 p-1.5 rounded-lg bg-studio-surface border border-studio-border">
             <div onClick={() => setShadowColor("transparent")}
-              className={`w-[22px] h-[22px] rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
-                ${shadowColor === "transparent" ? "border-signal" : "border-[#211F33] dark:border-[#3d4758]"}`}>
+              className={`w-5 h-5 rounded-[5px] cursor-pointer relative overflow-hidden border-[1.5px] bg-studio-raised
+                ${shadowColor === "transparent" ? "border-signal" : "border-studio-borderLight"}`}>
               <div className="absolute top-1/2 left-0 w-full h-[1.5px] bg-red-500 rotate-[-35deg]" />
             </div>
             {colors.map(c => (
-              <div key={c.value} className={`${c.cls} w-[22px] h-[22px] rounded-[5px] cursor-pointer transition-all border-[1.5px] hover:scale-110
-                ${c.value === shadowColor ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,.2)]" : (c.value === "black" || c.value === "white") ? "border-[#211F33] dark:border-[#3d4758]" : "border-transparent"}`}
+              <div key={c.value} className={`${c.cls} w-5 h-5 rounded-[5px] cursor-pointer transition-all border-[1.5px] hover:scale-110
+                ${c.value === shadowColor ? "border-signal shadow-[0_0_0_2px_rgba(139,92,255,0.25)]" : (c.value === "black" || c.value === "white") ? "border-studio-borderLight" : "border-transparent"}`}
                 onClick={() => setShadowColor(c.value)} />
             ))}
           </div>
           <div className="grid grid-cols-3 gap-2">
             {[{ label: "Blur", val: shadowBlur, set: setShadowBlur }, { label: "Offset X", val: shadowOffsetX, set: setShadowOffsetX }, { label: "Offset Y", val: shadowOffsetY, set: setShadowOffsetY }].map(({ label, val, set }) => (
               <label key={label} className="flex flex-col gap-1">
-                <span className="text-[11px] text-ink-secondary">{label}</span>
+                <span className="text-mini text-ink-secondary">{label}</span>
                 <input type="number" value={val} onChange={e => set(parseInt(e.target.value))} className={inputCls} />
               </label>
             ))}
           </div>
         </div>
       )}
-    </div>
+    </InspectorCard>
   );
 }

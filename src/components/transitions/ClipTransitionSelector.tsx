@@ -1,29 +1,28 @@
 "use client";
 
 /**
- * ClipTransitionSelector — curated transition picker.
+ * ClipTransitionSelector — transition picker.
  *
- * Same pattern as AnimationSelection.tsx: a short curated set (built-in 5,
- * merged with anything published from /settings → Motion Presets) as the
- * default experience, full legacy grid available behind "Browse all
- * transitions" for anyone who wants more. The actual xfade math and the
- * FFMPEG_XFADE_MAP translation stay in code — the JSON only controls which
- * curated presets appear here.
+ * Same shape as AnimationSelection: every transition the engine supports in
+ * one searchable grid, curated presets (built-in, merged with anything
+ * published from /settings → Motion Presets) first, then the rest. The
+ * xfade math / FFMPEG_XFADE_MAP stay in code — JSON only controls which
+ * curated presets lead the list, and their labels/order.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { transitionOptions } from "../../utils/transitionOptionsConstants";
 import { DEFAULT_TRANSITION_PRESETS, buildMotionPresetFromRecord, MotionPreset, MotionPresetRecord } from "../../utils/motionPresets";
 import { toast } from "react-toastify";
-import { ChevronDown, ChevronUp } from "@/utils/icons";
+import { Search } from "@/utils/icons";
 import TransitionPreviewTile from "./TransitionPreviewTile";
+import SectionLabel from "../ui/SectionLabel";
 
 export default function ClipTransitionSelector() {
   const { selectedClipId, clipsDetails, setClipsDetails } = useAppDetailsContext();
   const selectedTransition = clipsDetails.find(c => c.id === selectedClipId)?.transition || "none";
 
   const [dbPresets, setDbPresets] = useState<MotionPreset[]>([]);
-  const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -39,12 +38,31 @@ export default function ClipTransitionSelector() {
     return () => { cancelled = true; };
   }, []);
 
-  const curated: MotionPreset[] = (() => {
+  const curated: MotionPreset[] = useMemo(() => {
     const byId = new Map<string, MotionPreset>();
     for (const p of DEFAULT_TRANSITION_PRESETS) byId.set(p.id, p);
     for (const p of dbPresets) byId.set(p.id, p);
     return Array.from(byId.values());
-  })();
+  }, [dbPresets]);
+
+  const allItems = useMemo(() => {
+    const seen = new Set<string>(["none"]);
+    const items: { key: string; label: string }[] = [];
+    for (const p of curated) {
+      if (seen.has(p.engineKey)) continue;
+      seen.add(p.engineKey);
+      items.push({ key: p.engineKey, label: p.name });
+    }
+    for (const t of transitionOptions) {
+      if (seen.has(t.key)) continue;
+      seen.add(t.key);
+      items.push({ key: t.key, label: t.name });
+    }
+    return items;
+  }, [curated]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = q ? allItems.filter(i => i.label.toLowerCase().includes(q)) : allItems;
 
   const handleTransitionChange = (key: string) => {
     if (key !== "none" && clipsDetails.length === 0) { toast.error("Please add a clip to Timeline first."); return; }
@@ -54,56 +72,47 @@ export default function ClipTransitionSelector() {
     setClipsDetails(prev => prev.map(c => c.id === selectedClipId ? { ...c, transition: key } : c));
   };
 
-  const filtered = transitionOptions.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
-
   return (
-    <div className="p-3">
-      <div className="text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-muted mb-1">Clip Transition</div>
-      <div className="text-[10.5px] text-ink-faint mb-2.5">
-        Hover any tile to preview the transition — click to apply.
+    <div>
+      <SectionLabel
+        inset={false}
+        className="mb-1.5"
+        right={<span className="text-micro text-ink-faint font-medium">hover to preview · click to apply</span>}
+      >
+        Clip Transition
+      </SectionLabel>
+
+      <div className="relative mb-2.5">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          type="text"
+          placeholder={`Search ${allItems.length} transitions…`}
+          className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-mini outline-none font-[inherit] focus:border-signal placeholder:text-ink-muted"
+        />
       </div>
 
-      {/* Curated grid — the default, primary experience */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <TransitionPreviewTile
-          transitionKey="none" label="None"
-          active={selectedTransition === "none"}
-          onClick={() => handleTransitionChange("none")}
-        />
-        {curated.map(preset => (
+      <div className="grid grid-cols-3 gap-2">
+        {!q && (
           <TransitionPreviewTile
-            key={preset.id}
-            transitionKey={preset.engineKey} label={preset.name}
-            active={selectedTransition === preset.engineKey}
-            onClick={() => handleTransitionChange(preset.engineKey)}
+            transitionKey="none" label="None"
+            active={selectedTransition === "none"}
+            onClick={() => handleTransitionChange("none")}
+          />
+        )}
+        {filtered.map(item => (
+          <TransitionPreviewTile
+            key={item.key}
+            transitionKey={item.key} label={item.label}
+            active={selectedTransition === item.key}
+            onClick={() => handleTransitionChange(item.key)}
           />
         ))}
       </div>
 
-      <button
-        onClick={() => setShowAll(v => !v)}
-        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-muted hover:text-signal py-1.5 transition-colors"
-      >
-        {showAll ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        {showAll ? "Hide full transition library" : "Browse all transitions"}
-      </button>
-
-      {showAll && (
-        <div className="mt-2.5 pt-3 border-t border-studio-border">
-          <input value={search} onChange={e => setSearch(e.target.value)} type="text" placeholder="Search transitions…"
-            className="w-full px-3 py-2 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-[12px] outline-none font-[inherit] focus:border-signal mb-3 placeholder:text-ink-muted" />
-          <div className="grid grid-cols-3 gap-2">
-            {filtered.map(({ key, name }) => (
-              <TransitionPreviewTile
-                key={key}
-                transitionKey={key} label={name}
-                active={selectedTransition === key}
-                onClick={() => handleTransitionChange(key)}
-              />
-            ))}
-          </div>
-          {filtered.length === 0 && <div className="mt-4 text-center text-ink-muted text-[12px] italic">No transitions found.</div>}
-        </div>
+      {q && filtered.length === 0 && (
+        <div className="mt-4 text-center text-ink-muted text-mini">No transitions match “{search}”.</div>
       )}
     </div>
   );

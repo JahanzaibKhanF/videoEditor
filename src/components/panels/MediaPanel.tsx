@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles } from "@/utils/icons";
+import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle } from "@/utils/icons";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -10,6 +10,7 @@ import { splitLayer } from "../../utils/splitLayer";
 import { frontmostZ } from "../../utils/zStack";
 import { formatVideoSize } from "../../utils/formatVideoSize";
 import ClipTransitionSelector from "../transitions/ClipTransitionSelector";
+import AnimationSelection from "../animations/AnimationSelection";
 import TemplatesPanel from "./TemplatesPanel";
 import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
@@ -17,6 +18,9 @@ import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
 import { useProjectMedia } from "../../hooks/useProjectMedia";
 import { pickMediaFiles } from "../../utils/pickMediaFiles";
 import type { Template } from "../../utils/templates";
+import { PanelShell, PanelHeader, PanelBody } from "../ui/Panel";
+import SectionLabel from "../ui/SectionLabel";
+import EmptyState from "../ui/EmptyState";
 
 export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: string; pendingTemplate?: Template }) {
   const {
@@ -190,9 +194,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     setSelectedBlurId(b.id);
   };
 
-  const sectionLabel = "text-[10px] font-bold uppercase tracking-[.7px] text-ink-muted px-3 pt-3 pb-1.5";
   const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors border-l-2";
-  const emptyMsg = "flex flex-col items-center justify-center gap-1 py-8 text-ink-faint text-[11.5px] text-center px-4 leading-relaxed";
 
   const addGradBtn = (onClick: () => void, disabled = false, grad = "linear-gradient(135deg,#8B5CFF,#A47CFF)") => (
     <button onClick={onClick} disabled={disabled}
@@ -204,18 +206,15 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
 
   /* ─── MEDIA TAB ─── */
   if (activeTab === "media") return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      <div className="px-3 py-3 border-b border-studio-border flex items-center justify-between flex-shrink-0">
-        <div>
-          <div className="text-[13px] font-bold text-ink-primary">Media Library</div>
-          <div className="text-[11px] text-ink-secondary mt-0.5">{videos.length} video{videos.length !== 1 ? "s" : ""} · {imagesDetails.length} image{imagesDetails.length !== 1 ? "s" : ""}</div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {addGradBtn(handleImport, !!activeTemplate)}
-        </div>
-      </div>
+    <PanelShell>
+      <PanelHeader
+        icon={<Film size={13} />}
+        title="Media Library"
+        subtitle={`${videos.length} video${videos.length !== 1 ? "s" : ""} · ${imagesDetails.length} image${imagesDetails.length !== 1 ? "s" : ""}`}
+        action={addGradBtn(handleImport, !!activeTemplate)}
+      />
 
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+      <PanelBody>
         {videos.length === 0 && imagesDetails.length === 0 ? (
           <div className={`m-4 border-[1.5px] border-dashed rounded-xl p-6 text-center transition-all ${activeTemplate ? "border-studio-border opacity-40 cursor-not-allowed" : "border-studio-borderLight cursor-pointer hover:border-signal hover:bg-signal/5"}`} onClick={activeTemplate ? undefined : handleImport}>
             <Upload size={22} className="mx-auto mb-2 text-ink-faint" />
@@ -224,7 +223,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
           </div>
         ) : (<>
           {videos.length > 0 && <>
-            <div className={sectionLabel}>Videos ({videos.length})</div>
+            <SectionLabel>Videos ({videos.length})</SectionLabel>
             {videos.map((v, i) => (
               <div key={i} className={`${rowBase} border-transparent hover:bg-studio-hover`}>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-studio-hover to-studio-void border border-studio-border">
@@ -246,7 +245,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
             ))}
           </>}
           {imagesDetails.length > 0 && <>
-            <div className={sectionLabel}>Images ({imagesDetails.length})</div>
+            <SectionLabel>Images ({imagesDetails.length})</SectionLabel>
             <div className="grid grid-cols-2 gap-2 px-3 pb-2">
               {imagesDetails.map(img => (
                 <div key={img.id}
@@ -262,19 +261,20 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
             </div>
           </>}
         </>)}
-      </div>
-    </div>
+      </PanelBody>
+    </PanelShell>
   );
 
   /* ─── TEXT TAB ─── */
   if (activeTab === "text") return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      <div className="px-3 py-3 border-b border-studio-border flex items-center justify-between flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary">Text Layers</div>
-        {addGradBtn(addText, videos.length === 0 || !!activeTemplate)}
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-        {textsDetails.length === 0 ? <div className={emptyMsg}>No text layers.<br/>Click + to add one.</div>
+    <PanelShell>
+      <PanelHeader
+        icon={<Type size={13} />}
+        title="Text Layers"
+        action={addGradBtn(addText, videos.length === 0 || !!activeTemplate)}
+      />
+      <PanelBody>
+        {textsDetails.length === 0 ? <EmptyState compact icon={<Type size={18} strokeWidth={1.7} />} title="No text layers" hint="Click + to add one." />
           : textsDetails.map(t => {
             const active = selectedTextId === t.id;
             return (
@@ -295,30 +295,27 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
               </div>
             );
           })}
-      </div>
-    </div>
+      </PanelBody>
+    </PanelShell>
   );
 
   /* ─── EFFECTS TAB ─── */
   if (activeTab === "effects") {
     const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
     return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary">Effects</div>
-        <div className="text-[10.5px] text-ink-secondary mt-0.5">
-          {selectedClip ? "Applying to the selected clip" : "Select a clip on the timeline to add effects to it"}
-        </div>
-      </div>
+    <PanelShell>
+      <PanelHeader
+        icon={<Sparkles size={13} />}
+        title="Effects"
+        subtitle={selectedClip ? "Applying to the selected clip" : "Select a timeline clip to add effects"}
+      />
 
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3 flex flex-col gap-4">
+      <PanelBody padded className="flex flex-col gap-4">
         {/* ── Special Effects (particles, shake, wiggle, etc) ── */}
         <div>
-          <div className="text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-muted mb-2">
-            Special Effects
-          </div>
+          <SectionLabel inset={false}>Special Effects</SectionLabel>
           {selectedClip ? <ClipEffectsPanel clip={selectedClip} /> : (
-            <div className="text-[11px] text-ink-faint italic text-center py-3 border border-dashed border-studio-border rounded-lg">
+            <div className="text-meta text-ink-faint text-center py-3 border border-dashed border-studio-border rounded-lg">
               Select a video clip first
             </div>
           )}
@@ -326,11 +323,10 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
 
         {/* ── Blur Regions ─────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10.5px] font-bold uppercase tracking-[.7px] text-ink-muted">Blur Regions</div>
-            {addGradBtn(addBlur, videos.length === 0 || !!activeTemplate, "linear-gradient(135deg,#10B981,#06B6D4)")}
-          </div>
-          {blursDetails.length === 0 ? <div className={emptyMsg}>No blur regions.<br/>Click + to add one.</div>
+          <SectionLabel inset={false} right={addGradBtn(addBlur, videos.length === 0 || !!activeTemplate, "linear-gradient(135deg,#10B981,#06B6D4)")}>
+            Blur Regions
+          </SectionLabel>
+          {blursDetails.length === 0 ? <EmptyState compact icon={<Droplets size={18} strokeWidth={1.7} />} title="No blur regions" hint="Click + to add one." />
             : blursDetails.map((b, i) => {
               const active = selectedBlurId === b.id;
               return (
@@ -352,8 +348,8 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
               );
             })}
         </div>
-      </div>
-    </div>
+      </PanelBody>
+    </PanelShell>
   );
   }
 
@@ -361,36 +357,37 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
   if (activeTab === "bgremove") {
     const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
     return (
-      <div className="flex flex-col h-full bg-studio-surface">
-        <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-          <div className="text-[13px] font-bold text-ink-primary flex items-center gap-1.5">
-            <Scissors size={12} className="text-signal" /> Background Removal
-          </div>
-          <div className="text-[10.5px] text-ink-secondary mt-0.5">
-            {selectedClip ? "Ready for the selected clip" : "Select a clip on the timeline first"}
-          </div>
-        </div>
+      <PanelShell>
+        <PanelHeader
+          icon={<Scissors size={13} />}
+          title="Background Removal"
+          subtitle={selectedClip ? "Ready for the selected clip" : "Select a clip on the timeline first"}
+        />
 
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
+        <PanelBody padded>
           {selectedClip ? (
             <BackgroundRemovalPanel clip={selectedClip} />
           ) : (
-            <div className="text-[11.5px] text-ink-faint italic text-center py-8 px-3">
-              Tap a video clip on the timeline, then come back here.
-            </div>
+            <EmptyState
+              compact
+              icon={<Scissors size={18} strokeWidth={1.7} />}
+              title="No clip selected"
+              hint="Tap a video clip on the timeline, then come back here."
+            />
           )}
-        </div>
-      </div>
+        </PanelBody>
+      </PanelShell>
     );
   }
 
   /* ─── LAYERS TAB ─── */
   if (activeTab === "layers") return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary">All Layers</div>
-        <div className="text-[11px] text-ink-secondary mt-0.5">{clipsDetails.length + textsDetails.length + imagesDetails.length + blursDetails.length} layers total</div>
-      </div>
+    <PanelShell>
+      <PanelHeader
+        icon={<FiLayers size={13} />}
+        title="All Layers"
+        subtitle={`${clipsDetails.length + textsDetails.length + imagesDetails.length + blursDetails.length} layers total`}
+      />
       <div className="px-3 py-2 border-b border-studio-border flex flex-wrap gap-1.5 flex-shrink-0">
         {[
           { label: "Import", icon: <Upload size={13} />, onClick: handleImport, disabled: !!activeTemplate },
@@ -404,11 +401,11 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
           </button>
         ))}
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+      <PanelBody>
         {clipsDetails.length === 0 && textsDetails.length === 0 && imagesDetails.length === 0 && blursDetails.length === 0
-          ? <div className={emptyMsg}>No layers. Import a video to start.</div>
+          ? <EmptyState compact icon={<FiLayers size={18} strokeWidth={1.7} />} title="No layers yet" hint="Import a video to start." />
           : <>
-            {clipsDetails.length > 0 && <div className={sectionLabel}>Video Clips</div>}
+            {clipsDetails.length > 0 && <SectionLabel>Video Clips</SectionLabel>}
             {clipsDetails.map(c => (
               <div key={c.id} className={`${rowBase} border-transparent`}>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-signal/25 to-scrub/15 border border-studio-border">
@@ -420,7 +417,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
                 </div>
               </div>
             ))}
-            {textsDetails.length > 0 && <div className={sectionLabel}>Text Layers</div>}
+            {textsDetails.length > 0 && <SectionLabel>Text Layers</SectionLabel>}
             {textsDetails.map(t => (
               <div key={t.id} className={`${rowBase} ${selectedTextId === t.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => setSelectedTextId(t.id)}>
@@ -437,7 +434,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
                 </button>
               </div>
             ))}
-            {blursDetails.length > 0 && <div className={sectionLabel}>Blur Regions</div>}
+            {blursDetails.length > 0 && <SectionLabel>Blur Regions</SectionLabel>}
             {blursDetails.map((b, i) => (
               <div key={b.id} className={`${rowBase} ${selectedBlurId === b.id ? "border-signal bg-signal/10" : "border-transparent hover:bg-studio-hover"}`}
                 onClick={() => setSelectedBlurId(b.id)}>
@@ -455,21 +452,36 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
               </div>
             ))}
           </>}
-      </div>
-    </div>
+      </PanelBody>
+    </PanelShell>
   );
 
   /* ─── TRANSITIONS TAB ─── */
   if (activeTab === "transitions") return (
-    <div className="flex flex-col h-full bg-studio-surface overflow-hidden">
-      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary">Transitions</div>
-        <div className="text-[11px] text-ink-secondary mt-0.5">Select a clip then pick transition</div>
-      </div>
-      <div className="flex-1 overflow-hidden scrollbar-thin">
+    <PanelShell>
+      <PanelHeader
+        icon={<Shuffle size={13} />}
+        title="Transitions"
+        subtitle="Select a clip, then pick a transition"
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
         <ClipTransitionSelector />
       </div>
-    </div>
+    </PanelShell>
+  );
+
+  /* ─── ANIMATIONS TAB ─── */
+  if (activeTab === "animations") return (
+    <PanelShell>
+      <PanelHeader
+        icon={<Wand2 size={13} />}
+        title="Animations"
+        subtitle="Select a text or image layer, then pick"
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-3">
+        <AnimationSelection />
+      </div>
+    </PanelShell>
   );
 
   return null;

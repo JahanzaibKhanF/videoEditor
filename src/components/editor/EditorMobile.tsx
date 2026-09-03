@@ -42,6 +42,18 @@ export default function EditorMobile({ pendingTemplate }: { pendingTemplate?: Te
     }
   }, [pendingTemplate, videos.length]);
 
+  // The inspector's "Change" rows / the timeline seam badges ask the shell
+  // to open a catalog tool — mirror of EditorShell's desktop listener.
+  useEffect(() => {
+    const fn = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      const tool = MOBILE_TOOLS.find((t) => t.key === key);
+      if (tool) setActiveTool(tool);
+    };
+    window.addEventListener("clipflow:open-catalog", fn as EventListener);
+    return () => window.removeEventListener("clipflow:open-catalog", fn as EventListener);
+  }, []);
+
   // Selecting something on the canvas (not from inside a sheet) opens the
   // Edit sheet, matching how desktop reveals the properties panel.
   useEffect(() => {

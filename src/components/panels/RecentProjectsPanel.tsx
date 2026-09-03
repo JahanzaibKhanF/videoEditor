@@ -19,6 +19,8 @@ import { useAuth } from "../../context/useAuthContext";
 import { deleteBgRemovedForProject } from "../../utils/bgRemovedStore";
 import { Clock, Trash2, RefreshCw, FolderOpen, LogIn, Plus } from "@/utils/icons";
 import { startNewProject } from "../../utils/startNewProject";
+import { PanelShell, PanelHeader, PanelBody } from "../ui/Panel";
+import EmptyState from "../ui/EmptyState";
 
 interface RecentProject {
   id: string;
@@ -83,17 +85,16 @@ export default function RecentProjectsPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      <div className="px-3 py-3 border-b border-studio-border flex-shrink-0">
-        <div className="text-[13px] font-bold text-ink-primary flex items-center gap-1.5">
-          <Clock size={13} className="text-signal" /> Projects
-        </div>
-        <div className="text-[10.5px] text-ink-secondary mt-0.5">
-          Start a new one, switch, or delete
-        </div>
+    <PanelShell>
+      <PanelHeader
+        icon={<Clock size={13} />}
+        title="Projects"
+        subtitle="Start a new one, switch, or delete"
+      />
+      <div className="px-3.5 py-2.5 border-b border-studio-border flex-shrink-0">
         <button
           onClick={() => startNewProject(hasWork)}
-          className="mt-2.5 w-full flex items-center justify-center gap-1.5 h-8 rounded-lg text-[12px] font-bold text-[#07070C]
+          className="w-full flex items-center justify-center gap-1.5 h-8 rounded-lg text-meta font-bold text-[#07070C]
             bg-gradient-to-br from-signal to-signal-hover shadow-[0_2px_14px_rgba(139,92,255,.4)]
             hover:opacity-90 active:scale-[.98] transition-[opacity,transform] cursor-pointer"
         >
@@ -102,20 +103,18 @@ export default function RecentProjectsPanel() {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-2 flex flex-col gap-1.5">
+      <PanelBody className="p-2 flex flex-col gap-1.5">
         {!user ? (
-          <div className="flex flex-col items-center gap-2.5 text-center py-8 px-3">
-            <div className="w-10 h-10 rounded-full bg-studio-hover flex items-center justify-center text-ink-faint">
-              <LogIn size={16} />
-            </div>
-            <p className="text-[11.5px] text-ink-secondary">Sign in to save projects and see them here.</p>
-            <button
-              onClick={() => promptLogin()}
-              className="text-[11.5px] font-bold text-signal hover:underline"
-            >
-              Sign in
-            </button>
-          </div>
+          <EmptyState
+            compact
+            icon={<LogIn size={16} />}
+            title="Sign in to save projects and see them here."
+            hint={
+              <button onClick={() => promptLogin()} className="font-bold text-signal hover:underline">
+                Sign in
+              </button>
+            }
+          />
         ) : loading ? (
           <div className="flex items-center justify-center py-10 text-ink-faint">
             <RefreshCw size={16} className="animate-spin" />
@@ -125,9 +124,12 @@ export default function RecentProjectsPanel() {
             {error}
           </div>
         ) : projects.length === 0 ? (
-          <div className="text-[11.5px] text-ink-faint italic text-center py-8 px-3">
-            No saved projects yet — this one saves automatically as you edit.
-          </div>
+          <EmptyState
+            compact
+            icon={<FolderOpen size={16} />}
+            title="No saved projects yet"
+            hint="This one saves automatically as you edit."
+          />
         ) : (
           projects.map((p) => {
             const isCurrent = p.id === resumedProjectId;
@@ -168,7 +170,7 @@ export default function RecentProjectsPanel() {
             );
           })
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </PanelShell>
   );
 }

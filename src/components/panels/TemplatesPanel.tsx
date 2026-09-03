@@ -30,6 +30,7 @@ import { buildTemplatesFromRecords, TemplateRecord } from "../../utils/templateI
 import { v4 as uuidv4 } from "uuid";
 import { LayoutTemplate, Check, Plus, Sparkles, Film, ImageIcon, X, Maximize2 } from "@/utils/icons";
 import { hasSpeedRamp, totalSourceConsumed } from "../../utils/speedRamp";
+import { PanelShell, PanelHeader } from "../ui/Panel";
 
 const CATEGORIES = ["all", "title", "lower-third", "social", "minimal"] as const;
 const catColors: Record<string, string> = {
@@ -299,26 +300,21 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
   };
 
   return (
-    <div className="flex flex-col h-full bg-studio-surface">
-      {/* Header */}
-      <div className="px-3.5 py-3.5 border-b border-studio-border flex-shrink-0 flex items-center justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <LayoutTemplate size={14} className="text-signal" />
-            <span className="text-[13px] font-bold text-ink-primary font-display">Templates</span>
-          </div>
-          <div className="text-[11px] text-ink-muted mt-0.5">
-            {allTemplates.length} template{allTemplates.length !== 1 ? "s" : ""} · select to apply
-          </div>
-        </div>
-        <button
-          onClick={() => setBrowseOpen(true)}
-          title="Browse full-size grid"
-          className="flex-shrink-0 w-7 h-7 rounded-lg border border-studio-border bg-studio-raised hover:border-signal/40 hover:text-signal text-ink-secondary flex items-center justify-center transition-colors"
-        >
-          <Maximize2 size={12} />
-        </button>
-      </div>
+    <PanelShell>
+      <PanelHeader
+        icon={<LayoutTemplate size={13} />}
+        title="Templates"
+        subtitle={`${allTemplates.length} template${allTemplates.length !== 1 ? "s" : ""} · select to apply`}
+        action={
+          <button
+            onClick={() => setBrowseOpen(true)}
+            title="Browse full-size grid"
+            className="flex-shrink-0 w-7 h-7 rounded-lg border border-studio-border bg-studio-raised hover:border-signal/40 hover:text-signal text-ink-secondary flex items-center justify-center transition-colors"
+          >
+            <Maximize2 size={12} />
+          </button>
+        }
+      />
 
       {/* Category tabs */}
       <div className="flex gap-1.5 px-3 py-2.5 border-b border-studio-border flex-shrink-0 overflow-x-auto scrollbar-thin">
@@ -620,7 +616,7 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
           </div>
         </div>
       )}
-    </div>
+    </PanelShell>
   );
 }
 

@@ -8,15 +8,17 @@ import type { Template } from "../../../utils/templates";
 
 const TITLES: Record<string, string> = {
   media: "Media", edit: "Edit", text: "Text", effects: "Effects",
-  bgremove: "Remove Background", transitions: "Transitions", templates: "Templates",
-  layers: "Layers", assets: "Assets & Audio", recent: "Recent Projects",
+  bgremove: "Remove Background", transitions: "Transitions", animations: "Animations",
+  templates: "Templates", layers: "Layers", assets: "Assets & Audio", recent: "Recent Projects",
 };
 
 // Views that render through MediaPanel's own activeTab switch — identical
 // routing to the desktop IconSidebar.
 const MEDIA_VIEWS = new Set([
-  "media", "text", "effects", "bgremove", "transitions", "templates", "layers", "recent",
+  "media", "text", "effects", "bgremove", "transitions", "animations", "templates", "layers", "recent",
 ]);
+
+const TALL_VIEWS = new Set(["edit", "templates", "layers", "animations"]);
 
 /**
  * MobileToolSheet — hosts the SAME panel component the desktop uses for a
@@ -33,8 +35,7 @@ export default function MobileToolSheet({
   pendingTemplate?: Template;
 }) {
   const open = view !== null;
-  // "edit" is a taller sheet (lots of sliders); pickers are shorter.
-  const height = view === "edit" || view === "templates" || view === "layers" ? 0.8 : 0.66;
+  const height = view && TALL_VIEWS.has(view) ? 0.8 : 0.66;
 
   return (
     <Sheet open={open} onClose={onClose} title={view ? TITLES[view] ?? "" : ""} height={height}>
