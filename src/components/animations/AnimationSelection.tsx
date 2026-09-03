@@ -17,7 +17,6 @@ import { DEFAULT_ANIMATION_PRESETS, buildMotionPresetFromRecord, MotionPreset, M
 import { Search } from "@/utils/icons";
 import AnimationPreviewTile from "./AnimationPreviewTile";
 import SectionLabel from "../ui/SectionLabel";
-import { FieldHint } from "../ui/Field";
 
 export default function AnimationSelection() {
   const { selectedImageID, selectedTextId, imagesDetails, textsDetails, setImagesDetails, setTextsDetails } = useAppDetailsContext();
@@ -80,27 +79,28 @@ export default function AnimationSelection() {
 
   return (
     <div>
-      <SectionLabel inset={false} className="mb-1">
+      <SectionLabel
+        inset={false}
+        className="mb-1.5"
+        right={<span className="text-micro text-ink-faint font-medium">hover to preview · click to apply</span>}
+      >
         {showAnimationOptionsFor} Animations
       </SectionLabel>
-      <FieldHint className="mb-2">
-        Hover any tile to preview it playing — click to apply.
-      </FieldHint>
 
       {!isObjectSelected && (
-        <div className="mb-3 rounded-lg border border-dashed border-studio-border px-3 py-2 text-meta text-ink-faint text-center leading-snug">
-          Select a text or image layer first — then tap an animation to apply it.
+        <div className="mb-2.5 rounded-lg border border-dashed border-studio-border px-2.5 py-1.5 text-mini text-ink-faint text-center leading-snug">
+          Select a text or image layer first, then tap an animation.
         </div>
       )}
 
-      <div className="relative mb-3">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+      <div className="relative mb-2.5">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           type="text"
           placeholder={`Search ${allItems.length} animations…`}
-          className="w-full pl-8 pr-3 py-2 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-meta outline-none font-[inherit] focus:border-signal placeholder:text-ink-muted"
+          className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-mini outline-none font-[inherit] focus:border-signal placeholder:text-ink-muted"
         />
       </div>
 
@@ -123,7 +123,7 @@ export default function AnimationSelection() {
       </div>
 
       {q && filtered.length === 0 && (
-        <div className="mt-4 text-center text-ink-muted text-meta">No animations match “{search}”.</div>
+        <div className="mt-4 text-center text-ink-muted text-mini">No animations match “{search}”.</div>
       )}
     </div>
   );

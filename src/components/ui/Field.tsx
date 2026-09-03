@@ -49,7 +49,7 @@ export function FieldHint({
   className?: string;
 }) {
   return (
-    <p className={cn("text-meta text-ink-faint leading-snug", className)}>{children}</p>
+    <p className={cn("text-mini text-ink-faint leading-snug", className)}>{children}</p>
   );
 }
 

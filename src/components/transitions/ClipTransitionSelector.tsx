@@ -17,7 +17,6 @@ import { toast } from "react-toastify";
 import { Search } from "@/utils/icons";
 import TransitionPreviewTile from "./TransitionPreviewTile";
 import SectionLabel from "../ui/SectionLabel";
-import { FieldHint } from "../ui/Field";
 
 export default function ClipTransitionSelector() {
   const { selectedClipId, clipsDetails, setClipsDetails } = useAppDetailsContext();
@@ -75,19 +74,22 @@ export default function ClipTransitionSelector() {
 
   return (
     <div>
-      <SectionLabel inset={false} className="mb-1">Clip Transition</SectionLabel>
-      <FieldHint className="mb-2">
-        Hover any tile to preview the transition — click to apply.
-      </FieldHint>
+      <SectionLabel
+        inset={false}
+        className="mb-1.5"
+        right={<span className="text-micro text-ink-faint font-medium">hover to preview · click to apply</span>}
+      >
+        Clip Transition
+      </SectionLabel>
 
-      <div className="relative mb-3">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+      <div className="relative mb-2.5">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           type="text"
           placeholder={`Search ${allItems.length} transitions…`}
-          className="w-full pl-8 pr-3 py-2 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-meta outline-none font-[inherit] focus:border-signal placeholder:text-ink-muted"
+          className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-studio-border bg-studio-raised text-ink-primary text-mini outline-none font-[inherit] focus:border-signal placeholder:text-ink-muted"
         />
       </div>
 
@@ -110,7 +112,7 @@ export default function ClipTransitionSelector() {
       </div>
 
       {q && filtered.length === 0 && (
-        <div className="mt-4 text-center text-ink-muted text-meta">No transitions match “{search}”.</div>
+        <div className="mt-4 text-center text-ink-muted text-mini">No transitions match “{search}”.</div>
       )}
     </div>
   );
