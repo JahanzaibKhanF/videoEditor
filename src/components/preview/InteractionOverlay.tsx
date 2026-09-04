@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { measureWrappedTextHeight } from "../../utils/measureText";
+import { computeAnimState } from "../../utils/AnimationEngine";
 
 interface Props {
   width: number;
@@ -44,7 +45,8 @@ interface DragState {
   lockAspect?: boolean;
   startPointerX: number;
   startPointerY: number;
-  startRect: Rect;
+  startRect: Rect;     // animated rect at drag-start (what the box shows)
+  startBaseRect: Rect; // resting rect — what actually gets written on commit
 }
 
 const ACCENT: Record<Kind, string> = {
@@ -59,7 +61,7 @@ const SNAP_THRESHOLD = 8;
 
 export default function InteractionOverlay({ width, height }: Props) {
   const {
-    currentTime,
+    currentTime, fps,
     textsDetails, setTextsDetails,
     imagesDetails, setImagesDetails,
     blursDetails, setBlursDetails,
@@ -93,21 +95,48 @@ export default function InteractionOverlay({ width, height }: Props) {
 
   // ── Rect getters per kind — single source of truth for "where is this
   // object right now", checking liveRect first so drags feel instant ──────
+  //
+  // For text/image the returned rect is the ANIMATED rect at `currentTime`
+  // (same computeAnimState the compositor draws with), so the selection box
+  // tracks the glyphs/pixels instead of sitting at the static base position
+  // — otherwise, the instant a layer has an in-animation (or a whole-
+  // duration one like shake/pulse) the purple box and the visible content
+  // separate and it reads as "two of the same text".
+  const animRect = (
+    animation: string | undefined, baseX: number, baseY: number,
+    baseW: number, baseH: number, startTime: number, endTime: number, fontSize: number,
+  ): Rect => {
+    const a = computeAnimState(animation ?? "none", currentTime, startTime, endTime, fps || 30, baseX, baseY, width, height, fontSize);
+    const sw = a.scale * a.scaleX, sh = a.scale * a.scaleY;
+    const w = baseW * sw, h = baseH * sh;
+    const cx = a.tx + baseW / 2, cy = a.ty + baseH / 2; // compositor scales about the box centre
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  };
   const getClipRect = (c: typeof clipsDetails[number]): Rect => {
     if (liveRect?.id === c.id) return liveRect.rect;
     return { x: c.x ?? 0, y: c.y ?? 0, w: (c.width ?? width) * (c.scale ?? 1), h: (c.height ?? height) * (c.scale ?? 1) };
   };
   const getImageRect = (i: typeof imagesDetails[number]): Rect => {
     if (liveRect?.id === i.id) return liveRect.rect;
-    return { x: i.imageX, y: i.imageY, w: i.width * i.scaleX, h: i.height * i.scaleY };
+    return animRect(i.animation, i.imageX, i.imageY, i.width * i.scaleX, i.height * i.scaleY, i.startTime, i.endTime, 100);
   };
   const getTextRect = (t: typeof textsDetails[number]): Rect => {
     if (liveRect?.id === t.id) return liveRect.rect;
-    return { x: t.textX, y: t.textY, w: t.width, h: t.height };
+    return animRect(t.animation, t.textX, t.textY, t.width, t.height, t.startTime, t.endTime, t.fontSize);
   };
   const getBlurRect = (b: typeof blursDetails[number]): Rect => {
     if (liveRect?.id === b.id) return liveRect.rect;
     return { x: b.x, y: b.y, w: b.width, h: b.height };
+  };
+
+  // Resting (un-animated) rect — the value a finished drag actually writes,
+  // so grabbing a layer mid-animation still edits its base position/size.
+  const baseRectOf = (kind: Kind, id: string): Rect => {
+    if (kind === "text") { const t = textsDetails.find(x => x.id === id); return t ? { x: t.textX, y: t.textY, w: t.width, h: t.height } : { x: 0, y: 0, w: 0, h: 0 }; }
+    if (kind === "image") { const i = imagesDetails.find(x => x.id === id); return i ? { x: i.imageX, y: i.imageY, w: i.width * i.scaleX, h: i.height * i.scaleY } : { x: 0, y: 0, w: 0, h: 0 }; }
+    if (kind === "blur") { const b = blursDetails.find(x => x.id === id); return b ? { x: b.x, y: b.y, w: b.width, h: b.height } : { x: 0, y: 0, w: 0, h: 0 }; }
+    const c = clipsDetails.find(x => x.id === id);
+    return c ? { x: c.x ?? 0, y: c.y ?? 0, w: (c.width ?? width) * (c.scale ?? 1), h: (c.height ?? height) * (c.scale ?? 1) } : { x: 0, y: 0, w: 0, h: 0 };
   };
 
   // ── Commit a finished drag/resize back into the real app state ─────────
@@ -141,7 +170,7 @@ export default function InteractionOverlay({ width, height }: Props) {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const lockAspect = kind === "clip"; // clips only support uniform scale (single `scale` field, not independent w/h)
-    dragRef.current = { kind, id, mode, handle, lockAspect, startPointerX: e.clientX, startPointerY: e.clientY, startRect: rect };
+    dragRef.current = { kind, id, mode, handle, lockAspect, startPointerX: e.clientX, startPointerY: e.clientY, startRect: rect, startBaseRect: baseRectOf(kind, id) };
     setLiveRect({ id, rect });
 
     if (kind === "image") { setSelectedImageID(id); setSelectedTextId(null); setSelectedBlurId(null); setSelectedClipId(null); }
@@ -206,7 +235,18 @@ export default function InteractionOverlay({ width, height }: Props) {
       const drag = dragRef.current;
       if (!drag) return;
       const finalRect = liveRectRef.current;
-      if (finalRect && finalRect.id === drag.id) commit(drag.kind, drag.id, finalRect.rect);
+      if (finalRect && finalRect.id === drag.id) {
+        // Write the NET drag delta onto the resting rect, not the animated
+        // rect the box was showing — so a drag that started mid-animation
+        // doesn't bake the animation offset into the layer's base values.
+        const sr = drag.startRect, br = drag.startBaseRect, fr = finalRect.rect;
+        commit(drag.kind, drag.id, {
+          x: br.x + (fr.x - sr.x),
+          y: br.y + (fr.y - sr.y),
+          w: br.w + (fr.w - sr.w),
+          h: br.h + (fr.h - sr.h),
+        });
+      }
       dragRef.current = null;
       setLiveRect(null);
       setGuides({ x: false, y: false });
@@ -424,7 +464,10 @@ export default function InteractionOverlay({ width, height }: Props) {
                   position: "absolute", inset: 0, width: "100%", height: "100%",
                   background: "transparent", border: "none", outline: "none", resize: "none",
                   color: "transparent", caretColor: "white",
-                  fontFamily: t.fontFamily ?? "Arial", fontSize: t.fontSize, lineHeight: t.lineHeight ?? 1,
+                  // Match the compositor's line advance (fontSize * lineHeight,
+                  // default 1.2) so the caret sits on the same line as the
+                  // glyphs it's drawing under.
+                  fontFamily: t.fontFamily ?? "Arial", fontSize: t.fontSize, lineHeight: (t.lineHeight ?? 1.2) as number,
                   fontStyle: t.isItalic ? "italic" : "normal", fontWeight: t.isBold ? "bold" : "normal",
                   padding: 0, overflow: "hidden",
                 }}
