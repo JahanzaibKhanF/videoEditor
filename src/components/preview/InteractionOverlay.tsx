@@ -169,7 +169,11 @@ export default function InteractionOverlay({ width, height }: Props) {
   const beginDrag = (kind: Kind, id: string, mode: "move" | "resize", handle: HandleDir | undefined, rect: Rect, e: React.PointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const lockAspect = kind === "clip"; // clips only support uniform scale (single `scale` field, not independent w/h)
+    // Clips + images resize with a locked aspect ratio by default (an image
+    // stretched to a different ratio just looks broken); hold Shift while
+    // dragging a corner to free-stretch. Text stays free — its width
+    // controls where the copy wraps. Blur is a region, distortion is fine.
+    const lockAspect = kind === "clip" || kind === "image";
     dragRef.current = { kind, id, mode, handle, lockAspect, startPointerX: e.clientX, startPointerY: e.clientY, startRect: rect, startBaseRect: baseRectOf(kind, id) };
     setLiveRect({ id, rect });
 
@@ -211,11 +215,19 @@ export default function InteractionOverlay({ width, height }: Props) {
         // Resize from whichever corner was grabbed
         const { handle } = drag;
         const sr = drag.startRect;
+        // Shift inverts the default: locked → free, free → locked.
+        const lockAspect = drag.lockAspect !== e.shiftKey;
 
-        if (drag.lockAspect) {
-          // Uniform scale — use whichever axis moved further as the driver,
-          // apply the same ratio to both dimensions, anchor the opposite corner.
-          const ratio = sr.w !== 0 ? 1 + (Math.abs(dx) > Math.abs(dy) ? dx : dy) / sr.w : 1;
+        if (lockAspect) {
+          // Uniform scale. "Outward" is a different pointer direction per
+          // corner (se = +x/+y, nw = -x/-y, …); drive the ratio off
+          // whichever axis moved further in ITS outward direction so every
+          // corner grows when dragged away from the box.
+          const sx = handle === "se" || handle === "ne" ? 1 : -1;
+          const sy = handle === "se" || handle === "sw" ? 1 : -1;
+          const ox = sx * dx, oy = sy * dy;
+          const drive = Math.abs(ox) > Math.abs(oy) ? ox : oy;
+          const ratio = sr.w !== 0 ? 1 + drive / sr.w : 1;
           const newW = Math.max(MIN_SIZE, sr.w * ratio);
           const newH = Math.max(MIN_SIZE, sr.h * (newW / sr.w));
           if (handle === "se") { next.w = newW; next.h = newH; }
