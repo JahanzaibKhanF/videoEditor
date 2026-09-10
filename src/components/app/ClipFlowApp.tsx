@@ -10,7 +10,8 @@ import Editor from "@/components/editor/EditorShell";
 import StartupScreen from "@/components/startup/StartupScreen";
 import LoadingScreen from "@/components/startup/LoadingScreen";
 import { AspectRatio } from "@/types/types";
-import { Template } from "@/utils/templates";
+import { Template, templateDuration } from "@/utils/templates";
+import { aspectRatioDimensions } from "@/utils/aspectRatios";
 import { restoreProjectMedia } from "@/utils/restoreProjectMedia";
 
 interface ResumeData {
@@ -32,7 +33,8 @@ function EditorWithSetup({
 
   useEffect(() => {
     if (!template) return;
-    const w = 1280, h = 720, dur = 10;
+    const [w, h] = aspectRatioDimensions(template.aspectRatio);
+    const dur = templateDuration(template);
     const texts = template.buildTexts(w, h, dur);
     const blurs = template.buildBlurs(w, h, dur);
     if (texts.length > 0) setTextsDetails(texts);

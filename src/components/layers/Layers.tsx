@@ -23,6 +23,7 @@ import BlurRangeSlider from "./BlurRangeSlider";
 import ImagesRangeSlider from "./ImagesRangeSlider";
 import TextRangeSlider from "./TextRangeSlider";
 import VideoClipsRangeSlider from "./VideoClipsRangeSlider";
+import KeyframeLane from "../timeline/KeyframeLane";
 import { buildMergedEntries, groupIntoRuns } from "../../utils/layerStack";
 
 export const ROW_H = 36;
@@ -80,6 +81,7 @@ export default function Layers() {
           </div>
         );
       })}
+      <KeyframeLane />
     </div>
   );
 }

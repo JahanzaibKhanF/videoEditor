@@ -11,9 +11,12 @@
  * "Animation" / "Transition" row showing the current value with a Change
  * button that opens the matching catalog on the left (via a window event).
  */
-import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2 } from "@/utils/icons";
+import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline } from "@/utils/icons";
 import TextEditor from "../editors/TextEditor";
-import { useAppDetailsContext } from "../../context/useAppContext";
+import KeyframeEditor from "../editors/KeyframeEditor";
+import { useAppDetailsContext, useEngineControls } from "../../context/useAppContext";
+import { KeyframeTrack, KfProp } from "../../types/types";
+import { evalKeyframes, upsertKey, makeTrack, upsertTrack } from "../../utils/keyframes";
 import Slider from "../ui/Slider";
 import NumberInput from "../ui/NumberInput";
 import EmptyState from "../ui/EmptyState";
@@ -75,19 +78,49 @@ function ChangeRow({
   );
 }
 
+/** Shared "Motion / Keyframes" card. */
+function KfCard({ tracks, onChange, time, duration, layerStart, onSeek }: {
+  tracks: KeyframeTrack[] | undefined;
+  onChange: (t: KeyframeTrack[] | undefined) => void;
+  time: number; duration: number; layerStart: number; onSeek: (t: number) => void;
+}) {
+  return (
+    <InspectorCard accent="signal" icon={<Spline size={12} />} title="Motion / Keyframes">
+      <KeyframeEditor tracks={tracks} onChange={onChange} time={time} duration={duration} layerStart={layerStart} onSeek={onSeek} />
+    </InspectorCard>
+  );
+}
+
 export default function PropertiesPanel() {
   const {
-    textsDetails, blursDetails, imagesDetails,
+    textsDetails, blursDetails, imagesDetails, setTextsDetails,
     setBlursDetails, setImagesDetails,
     selectedBlurId, selectedImageID, selectedTextId,
     selectedClipId, clipsDetails, setClipsDetails,
     audioDetails, setAudioDetails,
+    currentTime, totalTime, setCurrentTime,
   } = useAppDetailsContext();
+  const { seekTo } = useEngineControls();
+  const seek = (t: number) => { setCurrentTime(t); seekTo(t); };
 
   const clip = selectedClipId ? clipsDetails.find(c => c.id === selectedClipId) : undefined;
   const text = selectedTextId ? textsDetails.find(t => t.id === selectedTextId) : undefined;
   const image = selectedImageID ? imagesDetails.find(i => i.id === selectedImageID) : undefined;
   const blur = selectedBlurId ? blursDetails.find(b => b.id === selectedBlurId) : undefined;
+
+  // When a clip property is being keyframed, its normal slider/field edits a
+  // keyframe at the current playhead instead of the resting value — so the
+  // familiar controls stay in sync with the "Motion / Keyframes" card.
+  const clipKfHas = (p: KfProp) => !!clip?.keyframes?.some(t => t.prop === p && t.keys.length > 0);
+  const clipKf = clip ? evalKeyframes(clip.keyframes, currentTime) : {};
+  const writeClipKf = (p: KfProp, kfValue: number) => {
+    setClipsDetails(prev => prev.map(cl => {
+      if (cl.id !== selectedClipId) return cl;
+      const tr = cl.keyframes?.find(t => t.prop === p)
+        ?? makeTrack(p, cl.startPosition ?? 0, p === "scale" ? 1 : 0);
+      return { ...cl, keyframes: upsertTrack(cl.keyframes, upsertKey(tr, currentTime, kfValue)) };
+    }));
+  };
 
   if (!clip && !text && !image && !blur) {
     return (
@@ -135,24 +168,39 @@ export default function PropertiesPanel() {
                   </FieldRow>
                 )}
 
-                <FieldRow label="Scale">
-                  <Slider value={clip.scale ?? 1} min={0.1} max={2}
-                    onChange={v => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, scale: v } : cl))} />
-                  <FieldValue>{((clip.scale ?? 1) * 100).toFixed(0)}%</FieldValue>
-                </FieldRow>
+                {(() => {
+                  const s = (clip.scale ?? 1) * (clipKf.scale ?? 1);
+                  const px = Math.round((clip.x ?? 0) + (clipKf.x ?? 0));
+                  const py = Math.round((clip.y ?? 0) + (clipKf.y ?? 0));
+                  return (
+                    <>
+                      <FieldRow label={clipKfHas("scale") ? "Scale ◆" : "Scale"}>
+                        <Slider value={s} min={0.1} max={3}
+                          onChange={v => clipKfHas("scale")
+                            ? writeClipKf("scale", v / (clip.scale ?? 1))
+                            : setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, scale: v } : cl))} />
+                        <FieldValue>{(s * 100).toFixed(0)}%</FieldValue>
+                      </FieldRow>
 
-                <FieldRow label="Position">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-3xs text-ink-faint font-bold">X</span>
-                    <NumberInput value={Math.round(clip.x ?? 0)} step={1}
-                      onChange={v => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, x: v } : cl))} />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-3xs text-ink-faint font-bold">Y</span>
-                    <NumberInput value={Math.round(clip.y ?? 0)} step={1}
-                      onChange={v => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, y: v } : cl))} />
-                  </div>
-                </FieldRow>
+                      <FieldRow label="Position">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-3xs text-ink-faint font-bold">{clipKfHas("x") ? "X◆" : "X"}</span>
+                          <NumberInput value={px} step={1}
+                            onChange={v => clipKfHas("x")
+                              ? writeClipKf("x", v - (clip.x ?? 0))
+                              : setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, x: v } : cl))} />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-3xs text-ink-faint font-bold">{clipKfHas("y") ? "Y◆" : "Y"}</span>
+                          <NumberInput value={py} step={1}
+                            onChange={v => clipKfHas("y")
+                              ? writeClipKf("y", v - (clip.y ?? 0))
+                              : setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, y: v } : cl))} />
+                        </div>
+                      </FieldRow>
+                    </>
+                  );
+                })()}
 
                 <div className="pt-1 border-t border-studio-border">
                   <ColorAdjustPanel
@@ -167,6 +215,12 @@ export default function PropertiesPanel() {
                 value={transitionName(clip.transition)}
                 catalog="transitions"
               />
+
+              <KfCard
+                tracks={clip.keyframes}
+                onChange={tracks => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, keyframes: tracks } : cl))}
+                time={currentTime} duration={totalTime} layerStart={clip.startPosition ?? 0} onSeek={seek}
+              />
             </>
           );
         })()}
@@ -179,6 +233,11 @@ export default function PropertiesPanel() {
               icon={<Wand2 size={12} />} kind="Animation"
               value={animationName(text.animation)}
               catalog="animations"
+            />
+            <KfCard
+              tracks={text.keyframes}
+              onChange={tracks => setTextsDetails(prev => prev.map(tx => tx.id === selectedTextId ? { ...tx, keyframes: tracks } : tx))}
+              time={currentTime} duration={totalTime} layerStart={text.startTime ?? 0} onSeek={seek}
             />
           </>
         )}
@@ -206,19 +265,31 @@ export default function PropertiesPanel() {
               value={animationName(image.animation)}
               catalog="animations"
             />
+            <KfCard
+              tracks={image.keyframes}
+              onChange={tracks => setImagesDetails(prev => prev.map(i => i.id === selectedImageID ? { ...i, keyframes: tracks } : i))}
+              time={currentTime} duration={totalTime} layerStart={image.startTime ?? 0} onSeek={seek}
+            />
           </>
         )}
 
         {/* ── Blur ─────────────────────────────────────────────── */}
         {blur && (
-          <InspectorCard accent="success" icon={<Droplets size={12} />} title="Blur Region">
-            <FieldRow label="Intensity">
-              <Slider value={blur.blurAmount ?? 10} min={0} max={100} step={1}
-                onChange={v => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, blurAmount: v } : b))} />
-              <NumberInput value={blur.blurAmount ?? 10} min={0} max={100} step={1}
-                onChange={v => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, blurAmount: v } : b))} />
-            </FieldRow>
-          </InspectorCard>
+          <>
+            <InspectorCard accent="success" icon={<Droplets size={12} />} title="Blur Region">
+              <FieldRow label="Intensity">
+                <Slider value={blur.blurAmount ?? 10} min={0} max={100} step={1}
+                  onChange={v => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, blurAmount: v } : b))} />
+                <NumberInput value={blur.blurAmount ?? 10} min={0} max={100} step={1}
+                  onChange={v => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, blurAmount: v } : b))} />
+              </FieldRow>
+            </InspectorCard>
+            <KfCard
+              tracks={blur.keyframes}
+              onChange={tracks => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, keyframes: tracks } : b))}
+              time={currentTime} duration={totalTime} layerStart={blur.startTime ?? 0} onSeek={seek}
+            />
+          </>
         )}
 
       </PanelBody>

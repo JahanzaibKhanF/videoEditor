@@ -30,9 +30,10 @@ import { buildTemplatesFromRecords, TemplateRecord } from "../../utils/templateI
 import { v4 as uuidv4 } from "uuid";
 import { LayoutTemplate, Check, Plus, Sparkles, Film, ImageIcon, X, Maximize2 } from "@/utils/icons";
 import { hasSpeedRamp, totalSourceConsumed } from "../../utils/speedRamp";
+import { aspectRatioDimensions } from "../../utils/aspectRatios";
 import { PanelShell, PanelHeader } from "../ui/Panel";
 
-const CATEGORIES = ["all", "title", "lower-third", "social", "minimal"] as const;
+const CATEGORIES = ["all", "title", "lower-third", "social", "minimal", "text"] as const;
 const catColors: Record<string, string> = {
   title: "#8B5CFF", "lower-third": "#4C8CFF", social: "#FFB648", minimal: "#33D8A0", text: "#8B5CFF",
 };
@@ -93,13 +94,18 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
     return () => { cancelled = true; };
   }, []);
 
-  // Merge built-ins with DB templates, DB wins on id collision (lets an
-  // admin override a default template's config without changing its id).
+  // Merge built-ins with DB templates. Dedupe by NAME, not id: built-in ids
+  // are stable slugs ("cinematic-title") while DB rows get random UUIDs, so
+  // an id-keyed merge never actually collides and "Import defaults" in the
+  // admin used to show every template twice. A DB template with the same
+  // name as a built-in overrides (and hides) it — that's how an admin edits
+  // or removes a default. DB templates come first so the admin's sort_order
+  // controls the user-facing order.
   const allTemplates: Template[] = (() => {
-    const byId = new Map<string, Template>();
-    for (const t of TEMPLATES) byId.set(t.id, t);
-    for (const t of dbTemplates) byId.set(t.id, t);
-    return Array.from(byId.values());
+    const norm = (s: string) => s.trim().toLowerCase();
+    const dbNames = new Set(dbTemplates.map((t) => norm(t.name)));
+    const builtinsNotOverridden = TEMPLATES.filter((t) => !dbNames.has(norm(t.name)));
+    return [...dbTemplates, ...builtinsNotOverridden];
   })();
 
   const filtered = allTemplates.filter(t => activeCategory === "all" || t.category === activeCategory);
@@ -169,12 +175,9 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
       setLayerOrder([]);
       setClipEffects([]);
 
-      // 3. Compute canvas dimensions based on aspect ratio
-      const AR_MAP: Record<string, [number, number]> = {
-        "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [720, 720],
-        "4:5": [720, 900], "3:4": [720, 960], "original": [1280, 720],
-      };
-      const [w, h] = AR_MAP[tpl.aspectRatio] ?? [1280, 720];
+      // 3. Compute canvas dimensions based on aspect ratio (shared map —
+      //    covers all 10 valid ratios, not just the 6 this used to list).
+      const [w, h] = aspectRatioDimensions(tpl.aspectRatio);
 
       // 4. Build texts/blurs with actual canvas dimensions
       const totalDur = tpl.videoSlots.length > 0

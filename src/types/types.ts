@@ -1,5 +1,30 @@
 import React from "react";
 
+// ── Keyframes ────────────────────────────────────────────────────────────
+// User-authored per-property animation, layered ON TOP of the preset
+// `animation` string (which stays as the quick entrance/exit). Every value
+// is RELATIVE to the layer's resting value so turning a track on never
+// teleports anything: x/y are px offsets, scale/scaleX/scaleY multipliers
+// (1 = unchanged), rotation degrees added, opacity a 0..1 multiplier, blur
+// px added. Evaluated by src/utils/keyframes.ts, composited in
+// compositeFrame.ts so both the live preview and the WebCodecs export get
+// them (the FFmpeg fallback does not — same lim.as clip effects).
+export type KfProp = "x" | "y" | "scale" | "scaleX" | "scaleY" | "rotation" | "opacity" | "blur";
+
+export interface Keyframe {
+  id: string;
+  t: number;               // seconds, ABSOLUTE on the master timeline
+  value: number;
+  // Cubic-bezier control points ([x1,y1,x2,y2], 0..1) for the segment that
+  // STARTS at this keyframe. Omitted = linear. "hold" = step (no interp).
+  ease?: [number, number, number, number] | "hold";
+}
+
+export interface KeyframeTrack {
+  prop: KfProp;
+  keys: Keyframe[];        // kept sorted by t
+}
+
 export interface TextDetails {
   id: string;
   text: string;
@@ -24,6 +49,7 @@ export interface TextDetails {
   endTime: number;
   animation: string;
   zIndex?: number;
+  keyframes?: KeyframeTrack[];
 }
 
 export interface ImageDetails {
@@ -41,6 +67,7 @@ export interface ImageDetails {
   endTime: number;
   animation: string;
   zIndex?: number;
+  keyframes?: KeyframeTrack[];
   colorAdjustments?: ColorAdjustments;
   // The real original filename on disk (e.g. "vacation.jpg") — separate
   // from `id`, which is only ever an internal uuid. This is what relinking
@@ -85,6 +112,7 @@ export interface ClipDetails {
   height: number;
   muted?: boolean;
   zIndex?: number;
+  keyframes?: KeyframeTrack[];
   colorAdjustments?: ColorAdjustments;
   // Full duration of the underlying source file, independent of how much of
   // it this clip actually uses (startTime..endTime). Only set for clips
@@ -153,6 +181,7 @@ export interface BlurDetails {
   startTime: number;
   endTime: number;
   zIndex?: number;
+  keyframes?: KeyframeTrack[];
 }
 
 export interface AudioDetails {

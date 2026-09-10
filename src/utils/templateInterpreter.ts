@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { TextDetails, BlurDetails, AspectRatio } from "../types/types";
+import { TextDetails, BlurDetails, AspectRatio, KeyframeTrack, KfProp } from "../types/types";
 import { Template, TemplateVideoSlot } from "./templates";
 
 /**
@@ -9,12 +9,25 @@ import { Template, TemplateVideoSlot } from "./templates";
  * This is the single source of truth for both the admin JSON editor and this
  * interpreter — keep them in sync if the shape ever changes.
  */
+/**
+ * A template keyframe track. Resolution-independent: `tFrac` is a fraction
+ * of the template's total duration, and for the `x`/`y` props `value` is a
+ * fraction of the canvas (width/height) — everything else (`scale`,
+ * `rotation`, `opacity`, `blur`) is a literal value. `buildTemplateFromRecord`
+ * converts these into real `KeyframeTrack`s (seconds + px) at apply time.
+ */
+export interface TemplateJsonKeyframeTrack {
+  prop: KfProp;
+  keys: { tFrac: number; value: number; ease?: [number, number, number, number] | "hold" }[];
+}
+
 export interface TemplateJsonText {
   text: string;
   xFrac: number;
   yFrac: number;
   wFrac: number;
   hFrac: number;
+  keyframes?: TemplateJsonKeyframeTrack[];
   fontSize?: number;
   fontFamily?: string;
   lineHeight?: number;
@@ -86,6 +99,25 @@ export function buildTemplateFromRecord(record: TemplateRecord): Template {
   const jsonTexts = Array.isArray(json.texts) ? json.texts : [];
   const jsonBlurs = Array.isArray(json.blurs) ? json.blurs : [];
 
+  // Fractional template keyframes → real KeyframeTrack (seconds + px).
+  const buildKeyframes = (
+    tracks: TemplateJsonKeyframeTrack[] | undefined, w: number, h: number, duration: number,
+  ): KeyframeTrack[] | undefined => {
+    if (!Array.isArray(tracks) || tracks.length === 0) return undefined;
+    const out = tracks
+      .filter((tr) => tr && Array.isArray(tr.keys) && tr.keys.length > 0)
+      .map((tr) => ({
+        prop: tr.prop,
+        keys: tr.keys.map((k) => ({
+          id: uuidv4(),
+          t: Math.max(0, (k.tFrac ?? 0) * duration),
+          value: tr.prop === "x" ? (k.value ?? 0) * w : tr.prop === "y" ? (k.value ?? 0) * h : (k.value ?? 0),
+          ease: k.ease,
+        })).sort((a, b) => a.t - b.t),
+      }));
+    return out.length ? out : undefined;
+  };
+
   return {
     id: record.id,
     name: record.name,
@@ -120,6 +152,7 @@ export function buildTemplateFromRecord(record: TemplateRecord): Template {
         startTime: t.startTime ?? 0,
         endTime: t.endTime ?? duration,
         animation: t.animation ?? "none",
+        keyframes: buildKeyframes(t.keyframes, w, h, duration),
       })),
     buildBlurs: (w: number, h: number, duration: number): BlurDetails[] =>
       jsonBlurs.map((b) => ({

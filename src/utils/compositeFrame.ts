@@ -12,6 +12,7 @@
  */
 import { ClipDetails, TextDetails, ImageDetails, BlurDetails, LayerOrder, ClipEffectDetails } from "../types/types";
 import { computeAnimState, computeTransition } from "./AnimationEngine";
+import { evalKeyframes, applyKfOverride } from "./keyframes";
 import { wrapTextLines } from "./measureText";
 import { buildCanvasFilterString } from "./colorAdjustments";
 
@@ -107,7 +108,7 @@ export function compositeFrame(input: CompositeFrameInput) {
         if (layer.kind === "video") drawVideoClip(ctx, layer.clip, clipsSorted, t, fps, w, h, clipEffects, getVideoDrawable);
         else if (layer.kind === "image") drawImageLayer(ctx, layer.image, t, fps, w, h, imageEls);
         else if (layer.kind === "text") drawTextLayer(ctx, layer.text, t, fps, w, h);
-        else drawBlurRegion(ctx, layer.blur);
+        else drawBlurRegion(ctx, layer.blur, t);
       }
     }
   }
@@ -116,7 +117,10 @@ export function compositeFrame(input: CompositeFrameInput) {
 // Draws one text layer. Extracted out of the old dedicated "text" block —
 // see the merged draw pass above.
 function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: number, fps: number, w: number, h: number) {
-  const anim = computeAnimState(text.animation, t, text.startTime, text.endTime, fps, text.textX, text.textY, w, h, text.fontSize);
+  const anim = applyKfOverride(
+    computeAnimState(text.animation, t, text.startTime, text.endTime, fps, text.textX, text.textY, w, h, text.fontSize),
+    evalKeyframes(text.keyframes, t),
+  );
   if (!anim.visible) return;
   const tw2 = text.width ?? 200, th2 = text.height ?? text.fontSize * 1.4;
   ctx.save();
@@ -145,18 +149,22 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
 // blur needed to join the unified z-stack instead of always running last:
 // its result now genuinely depends on what's already underneath it in the
 // merged order, not on the full final frame.
-function drawBlurRegion(ctx: CanvasRenderingContext2D, blur: BlurDetails) {
+function drawBlurRegion(ctx: CanvasRenderingContext2D, blur: BlurDetails, t: number) {
+  const kf = evalKeyframes(blur.keyframes, t);
+  const bx = Math.round((blur.x ?? 0) + (kf.x ?? 0));
+  const by = Math.round((blur.y ?? 0) + (kf.y ?? 0));
+  const amount = Math.max(0, (blur.blurAmount ?? 10) + (kf.blur ?? 0));
   ctx.save();
-  ctx.filter = `blur(${blur.blurAmount ?? 10}px)`;
+  ctx.filter = `blur(${amount}px)`;
   try {
-    const region = ctx.getImageData(blur.x, blur.y, blur.width, blur.height);
+    const region = ctx.getImageData(bx, by, blur.width, blur.height);
     const off = new OffscreenCanvas(blur.width, blur.height);
     const offCtx = off.getContext("2d")!;
     offCtx.putImageData(region, 0, 0);
-    ctx.drawImage(off, blur.x, blur.y);
+    ctx.drawImage(off, bx, by);
   } catch {
     ctx.fillStyle = "rgba(100,100,120,0.35)";
-    ctx.fillRect(blur.x, blur.y, blur.width, blur.height);
+    ctx.fillRect(bx, by, blur.width, blur.height);
   }
   ctx.filter = "none";
   ctx.restore();
@@ -177,9 +185,13 @@ function drawVideoClip(
 ) {
   const vid = getVideoDrawable(clip.id);
   if (!vid) return;
-  const cw = (clip.width ?? w) * (clip.scale ?? 1);
-  const ch = (clip.height ?? h) * (clip.scale ?? 1);
-  const cx0 = clip.x ?? 0, cy0 = clip.y ?? 0;
+  // User keyframes (position/scale/rotation/opacity) layered on top of the
+  // clip's resting transform — same evaluator the preview and export share.
+  const kf = evalKeyframes(clip.keyframes, t);
+  const kfScale = kf.scale ?? 1;
+  const cw = (clip.width ?? w) * (clip.scale ?? 1) * kfScale;
+  const ch = (clip.height ?? h) * (clip.scale ?? 1) * kfScale;
+  const cx0 = (clip.x ?? 0) + (kf.x ?? 0), cy0 = (clip.y ?? 0) + (kf.y ?? 0);
   const localT = t - (clip.startPosition ?? 0);
   const activeFx = clipEffects.filter(fx => fx.clipId === clip.id && localT >= fx.startTime && localT <= fx.endTime);
   const shakeFx = activeFx.filter(f => f.type === "shake");
@@ -188,6 +200,15 @@ function drawVideoClip(
 
   ctx.save();
   ctx.filter = buildCanvasFilterString(clip.colorAdjustments);
+  if (kf.opacity !== undefined) ctx.globalAlpha = Math.max(0, Math.min(1, kf.opacity));
+
+  // Keyframed rotation spins the clip around its own centre before drawing.
+  if (kf.rotation) {
+    const rcx = cx0 + cw / 2, rcy = cy0 + ch / 2;
+    ctx.translate(rcx, rcy);
+    ctx.rotate((kf.rotation * Math.PI) / 180);
+    ctx.translate(-rcx, -rcy);
+  }
 
   // shake/wiggle perturb the draw transform itself, around the clip's own
   // center, before the frame is drawn.
@@ -240,7 +261,10 @@ function drawImageLayer(
 ) {
   const el = imageEls[img.id];
   if (!el) return;
-  const anim = computeAnimState(img.animation, t, img.startTime, img.endTime, fps, img.imageX, img.imageY, w, h, 100);
+  const anim = applyKfOverride(
+    computeAnimState(img.animation, t, img.startTime, img.endTime, fps, img.imageX, img.imageY, w, h, 100),
+    evalKeyframes(img.keyframes, t),
+  );
   if (!anim.visible) return;
   const dw = img.width * (img.scaleX ?? 1), dh = img.height * (img.scaleY ?? 1);
   ctx.save();

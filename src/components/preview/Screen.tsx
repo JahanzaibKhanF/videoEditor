@@ -16,6 +16,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { useEngineControls } from "../../context/useAppContext";
 import { getFps } from "../../utils/getFps";
+import { aspectRatioDimensions } from "../../utils/aspectRatios";
 import CompositorCanvas from "./CompositorCanvas";
 import InteractionOverlay from "./InteractionOverlay";
 import TemplateLoaderBadge from "./TemplateLoaderBadge";
@@ -40,7 +41,15 @@ export default function Screen() {
   // ── Container dimensions from aspect ratio ────────────────────────
   useEffect(() => {
     if (videos.length === 0) {
-      setContainerDimenions({ width: 1280, height: 720 });
+      // No video yet — still honour an explicitly chosen aspect ratio
+      // (blank vertical composition, text-only template) instead of always
+      // forcing 16:9. "original" has no intrinsic size without media, so it
+      // stays 1280×720 until a clip is added.
+      setContainerDimenions(
+        selectedAspectRatio === "original"
+          ? { width: 1280, height: 720 }
+          : (([w, h]) => ({ width: w, height: h }))(aspectRatioDimensions(selectedAspectRatio)),
+      );
       return;
     }
     const vw = primaryVideoDimensions.width || 1280;

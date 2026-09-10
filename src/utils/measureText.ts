@@ -60,3 +60,39 @@ export function measureWrappedTextHeight(
   const lines = wrapTextLines(ctx, text || " ", maxW);
   return Math.max(lineH, lines.length * lineH) + fontSize * 0.3;
 }
+
+/**
+ * Tight bounding box of the actually-rendered text block — the widest
+ * wrapped line's real pixel width (never more than `maxW`) and the total
+ * wrapped height. Used to shrink-wrap the on-canvas selection box to the
+ * glyphs (so a wide wrap box doesn't draw a big empty rectangle around a
+ * short line, and clicks in that empty area fall through to layers behind).
+ * `wrapWidthKnown` skips re-measuring width when the caller already has it.
+ */
+export function measureTextBlock(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  lineHeight: number,
+  maxW: number,
+  isBold?: boolean,
+  isItalic?: boolean,
+): { width: number; height: number; lines: number } {
+  const ctx = getMeasureCtx();
+  const lineH = fontSize * (lineHeight || 1.2);
+  if (!ctx || maxW <= 0) {
+    return { width: Math.max(1, maxW), height: Math.max(lineH, fontSize * 1.4), lines: 1 };
+  }
+  ctx.font = `${isItalic ? "italic" : "normal"} ${isBold ? "bold" : "normal"} ${fontSize}px "${fontFamily ?? "Arial"}", sans-serif`;
+  const lines = wrapTextLines(ctx, text && text.length ? text : " ", maxW);
+  let widest = 0;
+  for (const ln of lines) widest = Math.max(widest, ctx.measureText(ln || " ").width);
+  // A hair of trailing room so italic overhang / antialiasing isn't clipped
+  // by the selection outline, but nothing like the old fixed box slack.
+  const pad = Math.max(2, fontSize * 0.08);
+  return {
+    width: Math.min(maxW, Math.ceil(widest + pad)),
+    height: Math.ceil(Math.max(lineH, lines.length * lineH) + fontSize * 0.18),
+    lines: lines.length,
+  };
+}

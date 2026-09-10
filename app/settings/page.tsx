@@ -3,11 +3,34 @@
 import { useEffect, useState, FormEvent, DragEvent } from "react";
 import {
   LayoutTemplate, Plus, Code2, LayoutGrid, GripVertical, Eye, EyeOff,
-  Trash2, Pencil, Check, X, Upload, Sparkles, ShieldAlert,
+  Trash2, Pencil, Check, X, Sparkles, ShieldAlert, Copy,
 } from "@/utils/icons";
 import * as Icons from "@/utils/icons";
 import { DEFAULT_TEMPLATE_RECORDS } from "@/utils/templates";
 import { DEFAULT_ANIMATION_RECORDS, DEFAULT_TRANSITION_RECORDS, DEFAULT_FILTER_RECORDS } from "@/utils/motionPresets";
+import { TemplateBuilderModal } from "@/components/settings/TemplateBuilder";
+import { adminApi as api } from "@/utils/adminApi";
+import { templateJsonDuration } from "@/utils/templateSchema";
+
+// Pull the human-readable summary out of a template's JSON for the admin card.
+function templateMeta(json: Record<string, unknown>) {
+  const j = (json ?? {}) as {
+    category?: string; aspectRatio?: string; description?: string;
+    videoSlots?: unknown[]; texts?: { animation?: string }[]; blurs?: unknown[];
+  };
+  const texts = Array.isArray(j.texts) ? j.texts : [];
+  const slots = Array.isArray(j.videoSlots) ? j.videoSlots : [];
+  return {
+    category: j.category || "—",
+    aspectRatio: j.aspectRatio || "16:9",
+    description: j.description || "",
+    slotCount: slots.length,
+    textCount: texts.length,
+    blurCount: Array.isArray(j.blurs) ? j.blurs.length : 0,
+    animated: texts.some((t) => t.animation && t.animation !== "none"),
+    durationSecs: templateJsonDuration(j as never),
+  };
+}
 
 interface AdminTemplate {
   id: string;
@@ -19,20 +42,6 @@ interface AdminTemplate {
   created_at: string;
   updated_at: string;
 }
-
-const DEFAULT_TEMPLATE_JSON = `{
-  "description": "Bold centered title with subtitle",
-  "category": "title",
-  "aspectRatio": "16:9",
-  "accentColor": "#8B5CFF",
-  "videoSlots": [
-    { "label": "Main clip", "durationSecs": 10 }
-  ],
-  "texts": [
-    { "text": "YOUR TITLE HERE", "xFrac": 0.1, "yFrac": 0.35, "wFrac": 0.8, "hFrac": 0.15, "fontSize": 100, "isBold": true, "textColor": "white", "animation": "fadeIn" }
-  ],
-  "blurs": []
-}`;
 
 // Shown as a help hint near the JSON editor (not part of the parseable
 // default) — documents the optional per-slot speed ramp shape.
@@ -47,16 +56,6 @@ const SPEED_RAMP_HINT = `Optional per-slot "speed" — a number (constant speed;
     ] }
 ]
 Text "animation" also supports "wiggle" and "shake" for continuous motion.`;
-
-async function api(path: string, options?: RequestInit) {
-  const res = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? "Request failed");
-  return data;
-}
 
 export default function SettingsPage() {
   const [section, setSection] = useState<"templates" | "motion">("templates");
@@ -142,13 +141,21 @@ export default function SettingsPage() {
     }
   };
 
-  // Import the 3 built-in defaults as real, editable DB rows — the fastest
-  // way to get a starting point for the drag-drop studio / JSON editor
-  // below without hand-typing template JSON from scratch.
+  // Import the built-in defaults as real, editable DB rows — the fastest way
+  // to get a starting point for the builder without authoring from scratch.
+  // Only imports the ones NOT already present (matched by name), so it's
+  // safe to click again after adding just some — mirrors the Motion Presets
+  // "Import defaults" behaviour and, crucially, never creates duplicates.
+  const existingNames = new Set(templates.map((t) => t.name.trim().toLowerCase()));
+  const missingTemplateDefaults = DEFAULT_TEMPLATE_RECORDS.filter(
+    (r) => !existingNames.has(r.name.trim().toLowerCase()),
+  );
+
   const handleSeedDefaults = async () => {
+    if (missingTemplateDefaults.length === 0) return;
     setSeeding(true);
     try {
-      for (const [i, rec] of DEFAULT_TEMPLATE_RECORDS.entries()) {
+      for (const [i, rec] of missingTemplateDefaults.entries()) {
         const data = await api("/api/admin/templates", {
           method: "POST",
           body: JSON.stringify({
@@ -165,6 +172,25 @@ export default function SettingsPage() {
       alert((err as Error).message);
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const handleDuplicate = async (t: AdminTemplate) => {
+    try {
+      const data = await api("/api/admin/templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: `${t.name} copy`,
+          coverImage: t.cover_image,
+          templateJson: t.template_json,
+          isActive: false,
+          sortOrder: templates.length,
+        }),
+      });
+      setTemplates((prev) => [...prev, data.template]);
+      setEditing(data.template);
+    } catch (err) {
+      alert((err as Error).message);
     }
   };
 
@@ -300,13 +326,14 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            {templates.length === 0 && (
+            {missingTemplateDefaults.length > 0 && (
               <button
                 onClick={handleSeedDefaults}
                 disabled={seeding}
+                title={`Import ${missingTemplateDefaults.length} built-in template${missingTemplateDefaults.length === 1 ? "" : "s"} not already here`}
                 className="flex items-center gap-1.5 bg-studio-surface border border-studio-border hover:border-signal/40 text-ink-secondary hover:text-signal text-[13px] font-semibold px-3.5 py-2 rounded-lg transition-colors disabled:opacity-50"
               >
-                <Sparkles size={14} /> {seeding ? "Importing…" : "Import 3 default templates"}
+                <Sparkles size={14} /> {seeding ? "Importing…" : `Import ${missingTemplateDefaults.length} default template${missingTemplateDefaults.length === 1 ? "" : "s"}`}
               </button>
             )}
 
@@ -331,7 +358,7 @@ export default function SettingsPage() {
           <div className="border border-dashed border-studio-borderLight rounded-xl py-14 text-center">
             <p className="text-ink-secondary text-[13px]">No templates yet.</p>
             <p className="text-ink-faint text-[12px] mt-1">
-              Click "Import 3 default templates" for a starting point, or "Add template" to start from scratch.
+              Click "Import {DEFAULT_TEMPLATE_RECORDS.length} default templates" for a starting point, or "Add template" to build one visually.
             </p>
           </div>
         ) : view === "grid" ? (
@@ -349,16 +376,35 @@ export default function SettingsPage() {
                   dragOverId === t.id ? "border-signal ring-2 ring-signal/30" : "border-studio-border hover:border-signal/40"
                 } ${dragId === t.id ? "opacity-40" : ""}`}
               >
+                {(() => { const m = templateMeta(t.template_json); return (
+                <>
                 <div className="relative aspect-video bg-studio-raised flex items-center justify-center overflow-hidden">
-                  <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70">
+                  <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 z-10">
                     <GripVertical size={13} />
                   </div>
                   {t.cover_image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={t.cover_image} alt={t.name} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-ink-faint text-[11px]">No cover image</span>
+                    <div className="w-full h-full bg-gradient-to-br from-studio-raised to-studio-base flex items-center justify-center">
+                      <span className="text-ink-faint text-[11px]">No cover image</span>
+                    </div>
                   )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                  <span className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/50 text-white/90 backdrop-blur-sm">
+                    {m.aspectRatio}
+                  </span>
+                  <div className="absolute bottom-1.5 left-2 right-2 flex items-center gap-1 flex-wrap">
+                    <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-signal/30 text-white border border-signal/40 backdrop-blur-sm">
+                      {m.category}
+                    </span>
+                    {m.slotCount > 0
+                      ? <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-black/50 text-white/90 backdrop-blur-sm">{m.slotCount} clip{m.slotCount !== 1 ? "s" : ""}</span>
+                      : <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-success/30 text-white border border-success/40 backdrop-blur-sm">No video</span>}
+                    <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-black/50 text-white/90 backdrop-blur-sm">T×{m.textCount}</span>
+                    {m.animated && <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-black/50 text-white/90 backdrop-blur-sm">✦ anim</span>}
+                    <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-black/50 text-white/90 backdrop-blur-sm ml-auto">{m.durationSecs.toFixed(1)}s</span>
+                  </div>
                 </div>
                 <div className="p-3.5">
                   <div className="flex items-center justify-between gap-2 mb-1">
@@ -371,6 +417,9 @@ export default function SettingsPage() {
                       {t.is_active ? "Active" : "Hidden"}
                     </span>
                   </div>
+                  {m.description && (
+                    <p className="text-[11px] text-ink-secondary leading-snug line-clamp-2 mb-1">{m.description}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-3">
                     <button
                       onClick={() => setEditing(t)}
@@ -385,13 +434,23 @@ export default function SettingsPage() {
                       {t.is_active ? <EyeOff size={11} /> : <Eye size={11} />} {t.is_active ? "Hide" : "Show"}
                     </button>
                     <button
+                      onClick={() => handleDuplicate(t)}
+                      title="Duplicate"
+                      className="text-[12px] font-semibold py-1.5 px-2.5 rounded-lg border border-studio-border text-ink-secondary hover:border-signal hover:text-signal transition-colors"
+                    >
+                      <Copy size={12} />
+                    </button>
+                    <button
                       onClick={() => handleDelete(t.id)}
+                      title="Delete"
                       className="text-[12px] font-semibold py-1.5 px-2.5 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors"
                     >
                       <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
+                </>
+                ); })()}
               </div>
             ))}
           </div>
@@ -410,7 +469,7 @@ export default function SettingsPage() {
       </div>
 
       {editing && (
-        <TemplateEditorModal
+        <TemplateBuilderModal
           template={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={(saved) => {
@@ -493,230 +552,6 @@ function JsonCard({ template, onSaved }: { template: AdminTemplate; onSaved: (t:
       {error && (
         <div className="text-[12px] text-danger bg-danger/10 border-t border-danger/25 px-4 py-2">{error}</div>
       )}
-    </div>
-  );
-}
-
-function TemplateEditorModal({
-  template,
-  onClose,
-  onSaved,
-}: {
-  template: AdminTemplate | null;
-  onClose: () => void;
-  onSaved: (t: AdminTemplate) => void;
-}) {
-  const [name, setName] = useState(template?.name ?? "");
-  const [coverImage, setCoverImage] = useState(template?.cover_image ?? "");
-  const [sortOrder, setSortOrder] = useState(template?.sort_order ?? 0);
-  const [templateJsonText, setTemplateJsonText] = useState(
-    template ? JSON.stringify(template.template_json, null, 2) : DEFAULT_TEMPLATE_JSON
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // Uploads go through our own server route now (POST /api/admin/upload-image),
-  // which holds the Cloudinary API key/secret and performs a signed upload —
-  // nothing Cloudinary-specific needs to be exposed to the browser at all.
-  const handleFileSelected = async (file: File | undefined) => {
-    if (!file) return;
-    setUploadError(null);
-
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Please choose an image file.");
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/admin/upload-image", { method: "POST", body: formData });
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data?.error ?? "Upload failed.");
-      }
-      if (!data.url) {
-        throw new Error("Upload didn't return an image URL.");
-      }
-
-      setCoverImage(data.url as string);
-    } catch (err) {
-      setUploadError((err as Error).message || "Upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setError(null);
-    if (!name.trim()) {
-      setError("Name is required.");
-      return;
-    }
-    let parsedJson: Record<string, unknown>;
-    try {
-      parsedJson = JSON.parse(templateJsonText);
-    } catch {
-      setError("Template config isn't valid JSON — check for a trailing comma or missing quote.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const body = {
-        name: name.trim(),
-        coverImage: coverImage.trim() || null,
-        sortOrder,
-        templateJson: parsedJson,
-      };
-      const data = template
-        ? await api(`/api/admin/templates/${template.id}`, { method: "PUT", body: JSON.stringify(body) })
-        : await api("/api/admin/templates", { method: "POST", body: JSON.stringify({ ...body, isActive: true }) });
-      onSaved(data.template);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 z-[1000] bg-black/65 backdrop-blur-md flex items-center justify-center px-4 animate-fade-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-[560px] max-h-[88vh] overflow-y-auto scrollbar-thin bg-studio-surface border border-studio-border rounded-2xl shadow-pop p-6 animate-rise-in">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            {template ? "Edit template" : "New template"}
-          </h2>
-          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center text-ink-muted hover:bg-studio-hover transition-colors">
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Cinematic Title"
-              className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">
-              Cover image
-            </label>
-
-            <label
-              className={`flex items-center justify-center gap-2 w-full border border-dashed rounded-lg py-4 text-[12.5px] font-semibold transition-colors ${
-                uploading
-                  ? "border-studio-borderLight text-ink-faint cursor-wait"
-                  : "border-studio-borderLight text-ink-secondary hover:border-signal hover:text-signal cursor-pointer"
-              }`}
-            >
-              <input
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(e) => handleFileSelected(e.target.files?.[0])}
-                className="hidden"
-              />
-              <Upload size={14} /> {uploading ? "Uploading…" : "Click to upload an image"}
-            </label>
-
-            {uploadError && (
-              <div className="text-[11px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2 mt-2">
-                {uploadError}
-              </div>
-            )}
-
-            <div className="mt-2">
-              <label className="text-[10.5px] text-ink-faint block mb-1">
-                Or paste an image URL directly
-              </label>
-              <input
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                placeholder="https://…"
-                className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2 text-[12.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors"
-              />
-            </div>
-
-            {coverImage && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={coverImage}
-                alt=""
-                className="mt-2 w-full aspect-video object-cover rounded-lg border border-studio-border"
-              />
-            )}
-          </div>
-
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Sort order</label>
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-              className="w-28 bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors"
-            />
-            <p className="text-[10.5px] text-ink-faint mt-1.5">
-              Lower numbers appear first. You can also drag cards to reorder from the Grid view.
-            </p>
-          </div>
-
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">
-              Template config (JSON)
-            </label>
-            <details className="mb-1.5">
-              <summary className="text-[11px] text-ink-faint cursor-pointer select-none">Field reference: speed ramps &amp; animations</summary>
-              <pre className="text-[10.5px] text-ink-muted font-mono whitespace-pre-wrap mt-1 leading-relaxed bg-studio-void border border-studio-border rounded-lg p-2.5">{SPEED_RAMP_HINT}</pre>
-            </details>
-            <textarea
-              value={templateJsonText}
-              onChange={(e) => setTemplateJsonText(e.target.value)}
-              rows={12}
-              spellCheck={false}
-              className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[12px] font-mono text-ink-primary outline-none focus:border-signal transition-colors resize-y"
-            />
-            <p className="text-[10.5px] text-ink-faint mt-1.5">
-              Fractional coordinates (0–1) scale to any canvas size. See PROGRESS.md for the full schema.
-            </p>
-          </div>
-
-          {error && (
-            <div className="text-[12px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 mt-1">
-            <button
-              onClick={handleSave}
-              disabled={saving || uploading}
-              className="flex-1 bg-signal hover:bg-signal-hover text-studio-void text-[13.5px] font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save template"}
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-lg border border-studio-border text-ink-secondary text-[13.5px] font-semibold hover:bg-studio-hover transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

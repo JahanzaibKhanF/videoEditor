@@ -49,12 +49,16 @@ export function templateDuration(tpl: Template): number {
 
 /**
  * ── Default templates ──────────────────────────────────────────────────
- * Exactly 3, curated. Each is defined as plain TemplateJson data — the same
- * format admin-created templates use — and run through the identical
- * interpreter (`buildTemplateFromRecord`) that DB templates go through.
- * That means these defaults are visible and editable in the /settings JSON
- * editor too: TemplatesPanel seeds them into Neon on first admin visit,
- * after which they behave exactly like any other DB-managed template.
+ * A curated set, always available (they work with no database connected).
+ * Each is plain TemplateJson data — the exact format admin-created
+ * templates use — run through the identical interpreter
+ * (`buildTemplateFromRecord`) that DB templates go through, so there is no
+ * behavioural difference between a built-in and an admin-authored one.
+ *
+ * These are NOT auto-seeded anywhere. An admin can pull them into the DB as
+ * editable rows via "Import default templates" in /settings; once a DB
+ * template shares a built-in's NAME it overrides and hides that built-in in
+ * the app (TemplatesPanel dedupes the merged list by name).
  *
  * Cover images are real photography (Unsplash), not emoji or icon glyphs.
  */
@@ -288,6 +292,51 @@ const beatSync4ClipJson: TemplateJson = {
   blurs: [],
 };
 
+// ── Text-only templates (no video slot — apply instantly) ────────────────
+const titleCardJson: TemplateJson = {
+  description: "Clean centered title card — no video needed, drops in instantly",
+  category: "text",
+  aspectRatio: "16:9",
+  accentColor: "#33D8A0",
+  videoSlots: [],
+  texts: [
+    {
+      text: "YOUR TITLE", xFrac: 0.1, yFrac: 0.36, wFrac: 0.8, hFrac: 0.18,
+      fontSize: 104, isBold: true, textColor: "#FFFFFF", fontFamily: "Georgia",
+      shadowColor: "rgba(0,0,0,0.5)", shadowBlur: 20, shadowOffsetY: 4,
+      animation: "fadeIn", startTime: 0,
+    },
+    {
+      text: "A short supporting line", xFrac: 0.15, yFrac: 0.57, wFrac: 0.7, hFrac: 0.08,
+      fontSize: 38, textColor: "rgba(255,255,255,0.8)",
+      animation: "slideUp", startTime: 0.4,
+    },
+  ],
+  blurs: [],
+};
+
+const endScreenJson: TemplateJson = {
+  description: "Vertical end screen — thanks + follow CTA, no video needed",
+  category: "social",
+  aspectRatio: "9:16",
+  accentColor: "#FF4F70",
+  videoSlots: [],
+  texts: [
+    {
+      text: "THANKS FOR\nWATCHING", xFrac: 0.08, yFrac: 0.3, wFrac: 0.84, hFrac: 0.2,
+      fontSize: 72, isBold: true, textColor: "#FFFFFF", fontFamily: "Trebuchet MS",
+      shadowColor: "rgba(0,0,0,0.5)", shadowBlur: 16, shadowOffsetY: 3,
+      animation: "popInUp", startTime: 0,
+    },
+    {
+      text: "Follow for more", xFrac: 0.15, yFrac: 0.6, wFrac: 0.7, hFrac: 0.07,
+      fontSize: 36, isBold: true, textColor: "#0A0A13", backgroundColor: "#FF4F70",
+      animation: "slideUp", startTime: 0.5,
+    },
+  ],
+  blurs: [],
+};
+
 export const DEFAULT_TEMPLATE_RECORDS: TemplateRecord[] = [
   {
     id: "cinematic-title",
@@ -344,6 +393,22 @@ export const DEFAULT_TEMPLATE_RECORDS: TemplateRecord[] = [
     template_json: beatSync4ClipJson,
     is_active: true,
     sort_order: 6,
+  },
+  {
+    id: "title-card",
+    name: "Title Card",
+    cover_image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&h=450&fit=crop&q=80",
+    template_json: titleCardJson,
+    is_active: true,
+    sort_order: 7,
+  },
+  {
+    id: "end-screen",
+    name: "End Screen",
+    cover_image: "https://images.unsplash.com/photo-1492724441997-5dc865305da7?w=800&h=1000&fit=crop&q=80",
+    template_json: endScreenJson,
+    is_active: true,
+    sort_order: 8,
   },
 ];
 
