@@ -107,22 +107,36 @@ export const useAppDetailsContext = () => {
 
 // ── Engine controls context ────────────────────────────────────────────────────
 // Wires play/pause/seekTo from CanvasEngine into any component via hook
+export interface BufferedRange { start: number; end: number; }
+
 interface EngineControls {
   play: () => void;
   pause: () => void;
   seekTo: (t: number) => void;
   isPlaying: boolean;
+  // Buffered ranges (master-timeline seconds) + live stall state, driven by
+  // CanvasEngine's real video "progress"/"waiting"/"canplay" events — lets
+  // any component (the buffered scrub bar, a future mini-map, etc.) show
+  // real load state without reaching into the engine itself.
+  bufferedRanges: BufferedRange[];
+  setBufferedRanges: (r: BufferedRange[]) => void;
+  isBuffering: boolean;
+  setIsBuffering: (b: boolean) => void;
   notifyEnded: () => void;
   setControls: (c: { play: () => void; pause: () => void; seekTo: (t: number) => void }) => void;
 }
 
 export const EngineControlsContext = React.createContext<EngineControls>({
   play: () => {}, pause: () => {}, seekTo: () => {}, isPlaying: false,
+  bufferedRanges: [], setBufferedRanges: () => {},
+  isBuffering: false, setIsBuffering: () => {},
   notifyEnded: () => {}, setControls: () => {},
 });
 
 export function EngineControlsProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = React.useState(false);
+  const [bufferedRanges, setBufferedRanges] = React.useState<BufferedRange[]>([]);
+  const [isBuffering, setIsBuffering] = React.useState(false);
   const playRef = React.useRef<() => void>(() => {});
   const pauseRef = React.useRef<() => void>(() => {});
   const seekRef = React.useRef<(t: number) => void>(() => {});
@@ -140,6 +154,8 @@ export function EngineControlsProvider({ children }: { children: React.ReactNode
       pause: () => pauseRef.current(),
       seekTo: (t) => seekRef.current(t),
       isPlaying,
+      bufferedRanges, setBufferedRanges,
+      isBuffering, setIsBuffering,
       notifyEnded: () => setIsPlaying(false),
       setControls,
     }}>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Header from "../chrome/Header";
 import MediaPanel from "../panels/MediaPanel";
 import Screen from "../preview/Screen";
+import BufferedScrubBar from "../preview/BufferedScrubBar";
 import PlayerControls from "../preview/PlayerControls";
 import PreviewScale from "../preview/PreviewScale";
 import PropertiesPanel from "../panels/PropertiesPanel";
@@ -80,6 +81,9 @@ export default function EditorDesktop({
         <div className="flex-1 min-w-[280px] flex flex-col overflow-hidden bg-studio-void">
           <div className="flex-1 min-h-0 overflow-hidden">
             <Screen />
+          </div>
+          <div className="px-4 pt-1.5 flex-shrink-0">
+            <BufferedScrubBar />
           </div>
           <div className="player-bar flex items-center justify-between px-4 gap-3 flex-shrink-0" style={{ height: 52 }}>
             <PlayerControls />

@@ -62,6 +62,11 @@ export class CanvasEngine {
   // loading indicator (like After Effects' "please wait") instead of
   // letting the canvas just go black while a clip buffers or seeks.
   public onBufferingChange: ((isBuffering: boolean) => void) | null = null;
+  // Fires whenever any pooled video's `buffered` TimeRanges may have grown —
+  // the ranges are already converted to MASTER-timeline seconds (see
+  // getBufferedRanges below), so the caller can draw a YouTube-style
+  // buffered bar directly without knowing anything about clips/pooling.
+  public onBufferedRangesChange: ((ranges: { start: number; end: number }[]) => void) | null = null;
   // Keyed by clip.id, same as videoPool.
   private waitingClipIds = new Set<string>();
 
@@ -117,6 +122,7 @@ export class CanvasEngine {
 
     this._syncAllVideoPositions();
     this._drawFrame();
+    this._emitBufferedRanges();
   }
 
   private _attachBufferingListeners(vid: HTMLVideoElement, clipId: string) {
@@ -135,6 +141,7 @@ export class CanvasEngine {
       // blank/frozen indefinitely, since drawImage() on a not-yet-ready
       // video silently no-ops rather than erroring.
       if (this._state === "paused") this._drawFrame();
+      this._emitBufferedRanges();
     };
     vid.addEventListener("waiting", markWaiting);
     vid.addEventListener("stalled", markWaiting);
@@ -143,6 +150,41 @@ export class CanvasEngine {
     vid.addEventListener("loadeddata", markReady);
     vid.addEventListener("seeked", markReady);
     vid.addEventListener("error", markReady);
+    // `progress` is what actually fires as bytes arrive — this is the real
+    // "how much of the file has downloaded" signal a YouTube-style bar needs
+    // (a local blob: URL is typically fully available already by the time
+    // `loadeddata`/`canplay` fire, via markReady above; `progress` covers
+    // the streamed/network-fetched case where buffered grows over time).
+    vid.addEventListener("progress", () => this._emitBufferedRanges());
+  }
+
+  /**
+   * Every pooled video's `buffered` TimeRanges (its own decode-local
+   * seconds), converted to MASTER-timeline seconds via that clip's
+   * startPosition/startTime, clamped to the clip's own on-timeline span.
+   * Approximate for speed-ramped clips (their source:master time mapping
+   * isn't linear) — close enough for a visual buffered indicator.
+   */
+  getBufferedRanges(): { start: number; end: number }[] {
+    const out: { start: number; end: number }[] = [];
+    for (const clip of this.clips) {
+      const vid = this.videoPool.get(clip.id);
+      if (!vid) continue;
+      const localStart = clip.startTime ?? 0;
+      const masterStart = clip.startPosition ?? 0;
+      const masterEnd = clip.endPosition ?? masterStart;
+      const buf = vid.buffered;
+      for (let i = 0; i < buf.length; i++) {
+        const s = Math.max(masterStart, masterStart + (buf.start(i) - localStart));
+        const e = Math.min(masterEnd, masterStart + (buf.end(i) - localStart));
+        if (e > s) out.push({ start: s, end: e });
+      }
+    }
+    return out.sort((a, b) => a.start - b.start);
+  }
+
+  private _emitBufferedRanges() {
+    this.onBufferedRangesChange?.(this.getBufferedRanges());
   }
 
   // ── Play ──────────────────────────────────────────────────────────────

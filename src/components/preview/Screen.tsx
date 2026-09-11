@@ -31,7 +31,7 @@ export default function Screen() {
     setFps, activeTemplate,
   } = useAppDetailsContext();
 
-  const { setControls, notifyEnded } = useEngineControls();
+  const { setControls, notifyEnded, setBufferedRanges, setIsBuffering: setIsBufferingCtx } = useEngineControls();
   const engineRef = useRef<CanvasEngine | null>(null);
   const notifyEndedRef = useRef(notifyEnded);
   useEffect(() => { notifyEndedRef.current = notifyEnded; }, [notifyEnded]);
@@ -130,7 +130,8 @@ export default function Screen() {
   const handleEngineReady = useCallback((engine: CanvasEngine) => {
     engineRef.current = engine;
     setEngineReady(true);
-    engine.onBufferingChange = (buffering) => setIsBuffering(buffering);
+    engine.onBufferingChange = (buffering) => { setIsBuffering(buffering); setIsBufferingCtx(buffering); };
+    engine.onBufferedRangesChange = (ranges) => setBufferedRanges(ranges);
     setControls({
       play: () => engine.play(),
       pause: () => engine.pause(),
@@ -140,7 +141,7 @@ export default function Screen() {
         setSeekTime(t);
       },
     });
-  }, [setControls, setCurrentTime, setSeekTime]);
+  }, [setControls, setCurrentTime, setSeekTime, setBufferedRanges, setIsBufferingCtx]);
 
   // ── Time update from engine ───────────────────────────────────────
   const handleTimeUpdate = useCallback((t: number) => {

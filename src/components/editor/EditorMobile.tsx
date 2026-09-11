@@ -5,6 +5,7 @@ import { useAppDetailsContext } from "../../context/useAppContext";
 import Header from "../chrome/Header";
 import MediaRelinkBanner from "../chrome/MediaRelinkBanner";
 import Screen from "../preview/Screen";
+import BufferedScrubBar from "../preview/BufferedScrubBar";
 import PlayerControls from "../preview/PlayerControls";
 import PreviewScale from "../preview/PreviewScale";
 import TimeLine from "../timeline/TimeLine";
@@ -72,6 +73,9 @@ export default function EditorMobile({ pendingTemplate }: { pendingTemplate?: Te
       <div className="flex flex-col bg-studio-void flex-shrink-0" style={{ height: "42dvh", minHeight: 190 }}>
         <div className="flex-1 min-h-0 overflow-hidden">
           <Screen />
+        </div>
+        <div className="px-3 pt-1 flex-shrink-0">
+          <BufferedScrubBar />
         </div>
         <div className="flex items-center justify-between px-3 gap-2 flex-shrink-0 border-t border-white/5" style={{ height: 46 }}>
           <PlayerControls />
