@@ -23,6 +23,8 @@ import BlurRangeSlider from "./BlurRangeSlider";
 import ImagesRangeSlider from "./ImagesRangeSlider";
 import TextRangeSlider from "./TextRangeSlider";
 import VideoClipsRangeSlider from "./VideoClipsRangeSlider";
+import ShapesRangeSlider from "./ShapesRangeSlider";
+import BrushRangeSlider from "./BrushRangeSlider";
 import KeyframeLane from "../timeline/KeyframeLane";
 import { buildMergedEntries, groupIntoRuns } from "../../utils/layerStack";
 
@@ -36,17 +38,26 @@ const ITEM_GAP = 3;
 export default function Layers() {
   const {
     videos, blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails,
-    activeTemplate,
+    shapesDetails, brushesDetails, activeTemplate,
   } = useAppDetailsContext();
 
-  if (!videos.length) return null;
+  // A composition doesn't need a video clip to be editable — a text/shape/
+  // image-only project (no footage at all, After Effects-style) still needs
+  // its layer rows visible so they can be dragged/trimmed/reordered. This
+  // used to just check `videos.length`, which hid the ENTIRE timeline layer
+  // list for a video-less project even though those layers could already be
+  // added and played (see the totalTime/playback fixes elsewhere this
+  // session) — they just had no visible timeline row to edit them from.
+  const hasAnyLayer = videos.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0
+    || blursDetails.length > 0 || shapesDetails.length > 0 || brushesDetails.length > 0;
+  if (!hasAnyLayer) return null;
   // Template mode locks all clip/text/blur editing to the dedicated
   // TemplateBar + TemplateClipRangeModal flow — clips never appear as
   // draggable/trimmable rows on the main timeline here, matching the spec
   // (no direct timeline manipulation while a template is active).
   if (activeTemplate) return null;
 
-  const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails);
+  const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails, shapesDetails, brushesDetails);
   const runs = groupIntoRuns(entries);
 
   return (
@@ -78,6 +89,8 @@ export default function Layers() {
             {run.kind === "blur" && <BlurRangeSlider onlyIds={ids} />}
             {run.kind === "text" && <TextRangeSlider onlyIds={ids} />}
             {run.kind === "image" && <ImagesRangeSlider onlyIds={ids} />}
+            {run.kind === "shape" && <ShapesRangeSlider onlyIds={ids} />}
+            {run.kind === "brush" && <BrushRangeSlider onlyIds={ids} />}
           </div>
         );
       })}

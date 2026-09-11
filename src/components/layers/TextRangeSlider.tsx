@@ -11,8 +11,10 @@ const MIN_WIDTH_PERCENT = 1;
 export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
   const {
     totalTime, textsDetails, setTextsDetails, imagesDetails, clipsDetails, blursDetails,
+    shapesDetails, brushesDetails,
     setSelectedTextId: setCtxTextSel, setSelectedImageID: setCtxImageSel,
     setSelectedBlurId: setCtxBlurSel, setSelectedClipId: setCtxClipSel,
+    setSelectedShapeId: setCtxShapeSel, setSelectedBrushId: setCtxBrushSel,
   } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null); // on the outer container for correct width
   const [localTexts, setLocalTexts] = useState(textsDetails);
@@ -24,6 +26,7 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
   const selectInScreen = (id: string) => {
     setSelectedTextId(id);
     setCtxTextSel(id); setCtxImageSel(null); setCtxBlurSel(null); setCtxClipSel(null);
+    setCtxShapeSel(null); setCtxBrushSel(null);
   };
 
   useEffect(() => {
@@ -67,6 +70,8 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...blursDetails.map(b => b.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localTexts.map(t => t.id === id ? { ...t, zIndex: newZ } : t);
@@ -90,6 +95,8 @@ export default function TextRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...blursDetails.map(b => b.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     let curZ = orig.zIndex ?? 0;
 

@@ -27,6 +27,7 @@ function EditorWithSetup({
     setSelectedAspectRatio, setTextsDetails, setBlursDetails,
     setClipsDetails, setImagesDetails, setAudioDetails, setLayerOrder,
     setTotalTime, setVideos, setResumedProjectId, setMissingMediaNames, setClipEffects,
+    setShapesDetails, setBrushesDetails,
   } = useAppDetailsContext();
 
   useEffect(() => { setSelectedAspectRatio(initialAspect); }, [initialAspect]);
@@ -61,6 +62,8 @@ function EditorWithSetup({
     setVideos(result.videos);
     setTextsDetails(Array.isArray(json.texts) ? json.texts : []);
     setBlursDetails(Array.isArray(json.blurs) ? json.blurs : []);
+    setShapesDetails(Array.isArray(json.shapes) ? json.shapes : []);
+    setBrushesDetails(Array.isArray(json.brushes) ? json.brushes : []);
     setAudioDetails(Array.isArray(json.audio) ? json.audio : []);
     setClipEffects(Array.isArray(json.clipEffects) ? json.clipEffects : []);
     setLayerOrder(Array.isArray(json.layerOrder) ? json.layerOrder : []);

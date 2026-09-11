@@ -30,11 +30,13 @@
  * is only committed to shared context on pointer-up.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { measureWrappedTextHeight, measureTextBlock } from "../../utils/measureText";
 import { computeAnimState } from "../../utils/AnimationEngine";
 import { evalKeyframes, evalTrack, applyKfOverride, upsertKey, makeTrack, upsertTrack } from "../../utils/keyframes";
-import { KeyframeTrack, KfProp } from "../../types/types";
+import { KeyframeTrack, KfProp, BrushDetails } from "../../types/types";
+import { frontmostZ } from "../../utils/zStack";
 import { RotateCw } from "@/utils/icons";
 
 interface Props {
@@ -42,7 +44,7 @@ interface Props {
   height: number;
 }
 
-type Kind = "clip" | "image" | "text" | "blur";
+type Kind = "clip" | "image" | "text" | "blur" | "shape" | "brush";
 type HandleDir = "nw" | "ne" | "sw" | "se" | "w" | "e" | "n" | "s";
 type ResizeMode = "scale" | "free" | "width";
 
@@ -65,6 +67,8 @@ const ACCENT: Record<Kind, string> = {
   image: "#4C8CFF",
   text: "#8B5CFF",
   blur: "#33D8A0",
+  shape: "#14B8A6",
+  brush: "#F97316",
 };
 
 const MIN_SIZE = 16;
@@ -75,15 +79,20 @@ const rectHit = (r: Rect, px: number, py: number, pad = 0) =>
 
 export default function InteractionOverlay({ width, height }: Props) {
   const {
-    currentTime, fps,
+    currentTime, fps, totalTime, setTotalTime,
     textsDetails, setTextsDetails,
     imagesDetails, setImagesDetails,
     blursDetails, setBlursDetails,
     clipsDetails, setClipsDetails,
+    shapesDetails, setShapesDetails,
+    brushesDetails, setBrushesDetails,
     selectedImageID, setSelectedImageID,
     selectedTextId, setSelectedTextId,
     selectedBlurId, setSelectedBlurId,
     selectedClipId, setSelectedClipId,
+    selectedShapeId, setSelectedShapeId,
+    selectedBrushId, setSelectedBrushId,
+    isDrawingBrush, setIsDrawingBrush, brushDraft,
   } = useAppDetailsContext();
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -106,22 +115,30 @@ export default function InteractionOverlay({ width, height }: Props) {
   // Set on pointerdown when an already-selected text is tapped; if the
   // pointer goes up without a drag, that tap opens edit mode.
   const pendingTextEditRef = useRef<string | null>(null);
+  // Brush draw mode: raw captured points (data-space) for the stroke in
+  // progress; mirrored into state only for the live SVG preview.
+  const drawingPointsRef = useRef<{ x: number; y: number }[]>([]);
+  const [liveBrushPoints, setLiveBrushPoints] = useState<{ x: number; y: number }[] | null>(null);
 
   const selectNone = useCallback(() => {
     setSelectedImageID(null);
     setSelectedTextId(null);
     setSelectedBlurId(null);
     setSelectedClipId(null);
+    setSelectedShapeId(null);
+    setSelectedBrushId(null);
     setEditingTextId(null);
-  }, [setSelectedImageID, setSelectedTextId, setSelectedBlurId, setSelectedClipId]);
+  }, [setSelectedImageID, setSelectedTextId, setSelectedBlurId, setSelectedClipId, setSelectedShapeId, setSelectedBrushId]);
 
   const selectOnly = useCallback((kind: Kind, id: string) => {
     setSelectedImageID(kind === "image" ? id : null);
     setSelectedTextId(kind === "text" ? id : null);
     setSelectedBlurId(kind === "blur" ? id : null);
     setSelectedClipId(kind === "clip" ? id : null);
+    setSelectedShapeId(kind === "shape" ? id : null);
+    setSelectedBrushId(kind === "brush" ? id : null);
     if (kind !== "text") setEditingTextId(null);
-  }, [setSelectedImageID, setSelectedTextId, setSelectedBlurId, setSelectedClipId]);
+  }, [setSelectedImageID, setSelectedTextId, setSelectedBlurId, setSelectedClipId, setSelectedShapeId, setSelectedBrushId]);
 
   // ── Animated transform for a layer at the current playhead ───────────────
   const animOf = (
@@ -161,6 +178,17 @@ export default function InteractionOverlay({ width, height }: Props) {
     if (liveRect?.id === b.id) return liveRect.rect;
     const kf = evalKeyframes(b.keyframes, currentTime);
     return { x: b.x + (kf.x ?? 0), y: b.y + (kf.y ?? 0), w: b.width, h: b.height };
+  };
+  // Shapes/brush strokes are geometrically identical to image: a bounding
+  // box, centre-scaled — no separate base scaleX/scaleY field, width/height
+  // already ARE the resting 1x size.
+  const getShapeRect = (s: typeof shapesDetails[number]): Rect => {
+    if (liveRect?.id === s.id) return liveRect.rect;
+    return scaledRect(s.animation, s.x, s.y, s.width, s.height, s.startTime, s.endTime, s.keyframes);
+  };
+  const getBrushRect = (b: typeof brushesDetails[number]): Rect => {
+    if (liveRect?.id === b.id) return liveRect.rect;
+    return scaledRect(b.animation, b.x, b.y, b.width, b.height, b.startTime, b.endTime, b.keyframes);
   };
 
   // Text: the box the user sees. When NOT editing (and no background fill)
@@ -204,6 +232,16 @@ export default function InteractionOverlay({ width, height }: Props) {
       if (!c) return 0;
       return animOf(c.animation, c.x ?? 0, c.y ?? 0, c.startPosition, c.endPosition, 100, c.keyframes).rotation + (c.rotation ?? 0);
     }
+    if (kind === "shape") {
+      const s = shapesDetails.find(x => x.id === id);
+      if (!s) return 0;
+      return animOf(s.animation, s.x, s.y, s.startTime, s.endTime, 100, s.keyframes).rotation + (s.rotation ?? 0);
+    }
+    if (kind === "brush") {
+      const b = brushesDetails.find(x => x.id === id);
+      if (!b) return 0;
+      return animOf(b.animation, b.x, b.y, b.startTime, b.endTime, 100, b.keyframes).rotation + (b.rotation ?? 0);
+    }
     return 0;
   };
 
@@ -226,6 +264,14 @@ export default function InteractionOverlay({ width, height }: Props) {
       setClipsDetails(prev => prev.map(c => c.id !== id ? c : kfActive(c.keyframes, "rotation")
         ? { ...c, keyframes: writeKf(c.keyframes, "rotation", (evalKeyframes(c.keyframes, currentTime).rotation ?? 0) + delta) }
         : { ...c, rotation: (c.rotation ?? 0) + delta }));
+    } else if (kind === "shape") {
+      setShapesDetails(prev => prev.map(s => s.id !== id ? s : kfActive(s.keyframes, "rotation")
+        ? { ...s, keyframes: writeKf(s.keyframes, "rotation", (evalKeyframes(s.keyframes, currentTime).rotation ?? 0) + delta) }
+        : { ...s, rotation: (s.rotation ?? 0) + delta }));
+    } else if (kind === "brush") {
+      setBrushesDetails(prev => prev.map(b => b.id !== id ? b : kfActive(b.keyframes, "rotation")
+        ? { ...b, keyframes: writeKf(b.keyframes, "rotation", (evalKeyframes(b.keyframes, currentTime).rotation ?? 0) + delta) }
+        : { ...b, rotation: (b.rotation ?? 0) + delta }));
     }
   };
 
@@ -234,6 +280,8 @@ export default function InteractionOverlay({ width, height }: Props) {
     if (kind === "text") { const t = textsDetails.find(x => x.id === id); return t ? { x: t.textX, y: t.textY, w: t.width, h: t.height } : { x: 0, y: 0, w: 0, h: 0 }; }
     if (kind === "image") { const i = imagesDetails.find(x => x.id === id); return i ? { x: i.imageX, y: i.imageY, w: i.width * i.scaleX, h: i.height * i.scaleY } : { x: 0, y: 0, w: 0, h: 0 }; }
     if (kind === "blur") { const b = blursDetails.find(x => x.id === id); return b ? { x: b.x, y: b.y, w: b.width, h: b.height } : { x: 0, y: 0, w: 0, h: 0 }; }
+    if (kind === "shape") { const s = shapesDetails.find(x => x.id === id); return s ? { x: s.x, y: s.y, w: s.width, h: s.height } : { x: 0, y: 0, w: 0, h: 0 }; }
+    if (kind === "brush") { const b = brushesDetails.find(x => x.id === id); return b ? { x: b.x, y: b.y, w: b.width, h: b.height } : { x: 0, y: 0, w: 0, h: 0 }; }
     const c = clipsDetails.find(x => x.id === id);
     return c ? { x: c.x ?? 0, y: c.y ?? 0, w: (c.width ?? width) * (c.scale ?? 1), h: (c.height ?? height) * (c.scale ?? 1) } : { x: 0, y: 0, w: 0, h: 0 };
   };
@@ -244,6 +292,8 @@ export default function InteractionOverlay({ width, height }: Props) {
     if (kind === "text") return textsDetails.find(x => x.id === id)?.keyframes;
     if (kind === "image") return imagesDetails.find(x => x.id === id)?.keyframes;
     if (kind === "blur") return blursDetails.find(x => x.id === id)?.keyframes;
+    if (kind === "shape") return shapesDetails.find(x => x.id === id)?.keyframes;
+    if (kind === "brush") return brushesDetails.find(x => x.id === id)?.keyframes;
     return clipsDetails.find(x => x.id === id)?.keyframes;
   };
   // Path anchor = the layer's centre with NO keyframe offset applied.
@@ -251,6 +301,8 @@ export default function InteractionOverlay({ width, height }: Props) {
     if (kind === "text") { const t = textsDetails.find(x => x.id === id); return t ? { x: t.textX + t.width / 2, y: t.textY + t.height / 2 } : null; }
     if (kind === "image") { const i = imagesDetails.find(x => x.id === id); return i ? { x: i.imageX + (i.width * i.scaleX) / 2, y: i.imageY + (i.height * i.scaleY) / 2 } : null; }
     if (kind === "blur") { const b = blursDetails.find(x => x.id === id); return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null; }
+    if (kind === "shape") { const s = shapesDetails.find(x => x.id === id); return s ? { x: s.x + s.width / 2, y: s.y + s.height / 2 } : null; }
+    if (kind === "brush") { const b = brushesDetails.find(x => x.id === id); return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null; }
     const c = clipsDetails.find(x => x.id === id);
     return c ? { x: (c.x ?? 0) + ((c.width ?? width) * (c.scale ?? 1)) / 2, y: (c.y ?? 0) + ((c.height ?? height) * (c.scale ?? 1)) / 2 } : null;
   };
@@ -341,6 +393,32 @@ export default function InteractionOverlay({ width, height }: Props) {
           return { ...next, keyframes: kfs };
         }));
         break;
+      case "shape":
+        setShapesDetails(prev => prev.map(s => {
+          if (s.id !== id) return s;
+          let kfs = s.keyframes; const next = { ...s };
+          if (kfActive(s.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(s.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
+          if (kfActive(s.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(s.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
+          if (mode === "resize") {
+            if (kfActive(s.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / s.width, anim.h / s.height)));
+            else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+          }
+          return { ...next, keyframes: kfs };
+        }));
+        break;
+      case "brush":
+        setBrushesDetails(prev => prev.map(b => {
+          if (b.id !== id) return b;
+          let kfs = b.keyframes; const next = { ...b };
+          if (kfActive(b.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(b.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
+          if (kfActive(b.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(b.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
+          if (mode === "resize") {
+            if (kfActive(b.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / b.width, anim.h / b.height)));
+            else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+          }
+          return { ...next, keyframes: kfs };
+        }));
+        break;
       case "text":
         setTextsDetails(prev => prev.map(t => {
           if (t.id !== id) return t;
@@ -385,7 +463,7 @@ export default function InteractionOverlay({ width, height }: Props) {
         }));
         break;
     }
-  }, [width, height, currentTime, setClipsDetails, setImagesDetails, setTextsDetails, setBlursDetails]);
+  }, [width, height, currentTime, setClipsDetails, setImagesDetails, setTextsDetails, setBlursDetails, setShapesDetails, setBrushesDetails]);
 
   // ── Front-to-back layer list for hit-testing (frontmost first) ───────────
   // Same convention as compositeFrame / layerStack: LOWER zIndex = frontmost.
@@ -401,9 +479,13 @@ export default function InteractionOverlay({ width, height }: Props) {
       .forEach(t => out.push({ kind: "text", id: t.id, rect: getTextRect(t), z: t.zIndex ?? 0, order: order++ }));
     blursDetails.filter(b => currentTime >= b.startTime && currentTime <= b.endTime)
       .forEach(b => out.push({ kind: "blur", id: b.id, rect: getBlurRect(b), z: b.zIndex ?? 0, order: order++ }));
+    shapesDetails.filter(s => currentTime >= s.startTime && currentTime <= s.endTime)
+      .forEach(s => out.push({ kind: "shape", id: s.id, rect: getShapeRect(s), z: s.zIndex ?? 0, order: order++ }));
+    brushesDetails.filter(b => currentTime >= b.startTime && currentTime <= b.endTime)
+      .forEach(b => out.push({ kind: "brush", id: b.id, rect: getBrushRect(b), z: b.zIndex ?? 0, order: order++ }));
     // frontmost first: ascending z; tie-break so later-added / overlay-ish
     // kinds (blur, text) sit above clips/images, matching the draw order.
-    const kindRank: Record<Kind, number> = { clip: 0, image: 1, text: 2, blur: 3 };
+    const kindRank: Record<Kind, number> = { clip: 0, image: 1, shape: 2, brush: 3, text: 4, blur: 5 };
     return out.sort((a, b) => a.z - b.z || kindRank[b.kind] - kindRank[a.kind] || b.order - a.order);
   };
 
@@ -464,6 +546,19 @@ export default function InteractionOverlay({ width, height }: Props) {
   // ── Root pointer / dblclick ─────────────────────────────────────────────
   const onRootPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
+
+    // Brush draw mode (armed from BrushPanel) takes over the pointer
+    // entirely — capture a freehand path instead of the normal hit-test/
+    // select/drag flow. See the matching pointermove/pointerup handling
+    // below (drawingPointsRef).
+    if (isDrawingBrush) {
+      const { x, y } = pointerToData(e.clientX, e.clientY);
+      drawingPointsRef.current = [{ x, y }];
+      setLiveBrushPoints([{ x, y }]);
+      if (rootRef.current) { try { rootRef.current.setPointerCapture(e.pointerId); } catch { /* noop */ } }
+      return;
+    }
+
     const { x, y } = pointerToData(e.clientX, e.clientY);
     const hit = hitTest(x, y);
     if (!hit) { selectNone(); return; }
@@ -475,7 +570,9 @@ export default function InteractionOverlay({ width, height }: Props) {
       (hit.kind === "text" && selectedTextId === hit.id) ||
       (hit.kind === "image" && selectedImageID === hit.id) ||
       (hit.kind === "blur" && selectedBlurId === hit.id) ||
-      (hit.kind === "clip" && selectedClipId === hit.id);
+      (hit.kind === "clip" && selectedClipId === hit.id) ||
+      (hit.kind === "shape" && selectedShapeId === hit.id) ||
+      (hit.kind === "brush" && selectedBrushId === hit.id);
 
     // Tapping an already-selected text a second time enters edit mode
     // (works on touch, where dblclick is unreliable). A drag cancels it.
@@ -508,6 +605,12 @@ export default function InteractionOverlay({ width, height }: Props) {
   // ── Drag move / up ─────────────────────────────────────────────────────
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      if (drawingPointsRef.current.length > 0) {
+        const { x, y } = pointerToData(e.clientX, e.clientY);
+        drawingPointsRef.current.push({ x, y });
+        setLiveBrushPoints([...drawingPointsRef.current]);
+        return;
+      }
       const rot = rotateRef.current;
       if (rot) {
         const angle = Math.atan2(e.clientY - rot.centerY, e.clientX - rot.centerX) * (180 / Math.PI);
@@ -565,6 +668,36 @@ export default function InteractionOverlay({ width, height }: Props) {
     };
 
     const onUp = () => {
+      if (drawingPointsRef.current.length > 0) {
+        const pts = drawingPointsRef.current;
+        drawingPointsRef.current = [];
+        setLiveBrushPoints(null);
+        setIsDrawingBrush(false);
+        if (pts.length >= 2) {
+          const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+          const pad = Math.max(4, brushDraft.strokeWidth);
+          const minX = Math.min(...xs) - pad / 2, maxX = Math.max(...xs) + pad / 2;
+          const minY = Math.min(...ys) - pad / 2, maxY = Math.max(...ys) + pad / 2;
+          const bx = Math.max(0, minX), by = Math.max(0, minY);
+          const bw = Math.max(MIN_SIZE, maxX - minX), bh = Math.max(MIN_SIZE, maxY - minY);
+          const normPts = pts.map(p => ({ x: (p.x - bx) / bw, y: (p.y - by) / bh }));
+          const zAll = [
+            ...clipsDetails.map(c => c.zIndex ?? 0), ...imagesDetails.map(i => i.zIndex ?? 0),
+            ...textsDetails.map(t => t.zIndex ?? 0), ...blursDetails.map(b => b.zIndex ?? 0),
+            ...shapesDetails.map(s => s.zIndex ?? 0), ...brushesDetails.map(b => b.zIndex ?? 0),
+          ];
+          const endTime = totalTime > 0 ? totalTime : 5;
+          const newBrush: BrushDetails = {
+            id: uuidv4(), points: normPts, x: bx, y: by, width: bw, height: bh,
+            color: brushDraft.color, strokeWidth: brushDraft.strokeWidth,
+            opacity: 1, startTime: 0, endTime, animation: "none", zIndex: frontmostZ(zAll),
+          };
+          setBrushesDetails(prev => [...prev, newBrush]);
+          setTotalTime(prev => Math.max(prev, endTime));
+          selectOnly("brush", newBrush.id);
+        }
+        return;
+      }
       const rot = rotateRef.current;
       if (rot) {
         const finalRot = liveRotationRef.current;
@@ -599,7 +732,8 @@ export default function InteractionOverlay({ width, height }: Props) {
       window.removeEventListener("pointerup", onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height, commit, currentTime]);
+  }, [width, height, commit, currentTime, isDrawingBrush, setIsDrawingBrush, brushDraft, setBrushesDetails, setTotalTime, selectOnly,
+      clipsDetails, imagesDetails, textsDetails, blursDetails, shapesDetails, brushesDetails]);
 
   // ── Keyboard delete ────────────────────────────────────────────────────
   useEffect(() => {
@@ -611,10 +745,14 @@ export default function InteractionOverlay({ width, height }: Props) {
       if (selectedTextId) { setTextsDetails(prev => prev.filter(d => d.id !== selectedTextId)); setSelectedTextId(null); }
       else if (selectedImageID) { setImagesDetails(prev => prev.filter(d => d.id !== selectedImageID)); setSelectedImageID(null); }
       else if (selectedBlurId) { setBlursDetails(prev => prev.filter(d => d.id !== selectedBlurId)); setSelectedBlurId(null); }
+      else if (selectedShapeId) { setShapesDetails(prev => prev.filter(d => d.id !== selectedShapeId)); setSelectedShapeId(null); }
+      else if (selectedBrushId) { setBrushesDetails(prev => prev.filter(d => d.id !== selectedBrushId)); setSelectedBrushId(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editingTextId, selectedTextId, selectedImageID, selectedBlurId, setTextsDetails, setImagesDetails, setBlursDetails, setSelectedTextId, setSelectedImageID, setSelectedBlurId]);
+  }, [editingTextId, selectedTextId, selectedImageID, selectedBlurId, selectedShapeId, selectedBrushId,
+      setTextsDetails, setImagesDetails, setBlursDetails, setShapesDetails, setBrushesDetails,
+      setSelectedTextId, setSelectedImageID, setSelectedBlurId, setSelectedShapeId, setSelectedBrushId]);
 
   // ── Chrome ─────────────────────────────────────────────────────────────
   const HANDLE_HIT = 38;
@@ -748,6 +886,36 @@ export default function InteractionOverlay({ width, height }: Props) {
     });
   });
 
+  shapesDetails.filter(s => currentTime >= s.startTime && currentTime <= s.endTime).forEach(s => {
+    const rect = getShapeRect(s);
+    const selected = selectedShapeId === s.id;
+    const rotateDeg = getRotationFor("shape", s.id);
+    items.push({
+      key: `shape-${s.id}`, z: s.zIndex ?? 0, sel: selected,
+      node: (
+        <div key={`shape-${s.id}`} style={box(rect, ACCENT.shape, { selected, rotateDeg })}>
+          {selected && renderHandles("shape", s.id, rect, ACCENT.shape, "scale")}
+          {selected && renderRotateHandle("shape", s.id, rect, ACCENT.shape)}
+        </div>
+      ),
+    });
+  });
+
+  brushesDetails.filter(b => currentTime >= b.startTime && currentTime <= b.endTime).forEach(b => {
+    const rect = getBrushRect(b);
+    const selected = selectedBrushId === b.id;
+    const rotateDeg = getRotationFor("brush", b.id);
+    items.push({
+      key: `brush-${b.id}`, z: b.zIndex ?? 0, sel: selected,
+      node: (
+        <div key={`brush-${b.id}`} style={box(rect, ACCENT.brush, { selected, rotateDeg })}>
+          {selected && renderHandles("brush", b.id, rect, ACCENT.brush, "scale")}
+          {selected && renderRotateHandle("brush", b.id, rect, ACCENT.brush)}
+        </div>
+      ),
+    });
+  });
+
   textsDetails.filter(t => currentTime >= t.startTime && currentTime <= t.endTime).forEach(t => {
     const editing = editingTextId === t.id;
     const selected = selectedTextId === t.id;
@@ -797,8 +965,9 @@ export default function InteractionOverlay({ width, height }: Props) {
   items.sort((a, b) => (a.sel ? 1 : 0) - (b.sel ? 1 : 0) || b.z - a.z);
 
   // Motion path for whichever single layer is selected.
-  const selKind: Kind | null = selectedTextId ? "text" : selectedImageID ? "image" : selectedClipId ? "clip" : selectedBlurId ? "blur" : null;
-  const selId = selectedTextId || selectedImageID || selectedClipId || selectedBlurId || null;
+  const selKind: Kind | null = selectedTextId ? "text" : selectedImageID ? "image" : selectedClipId ? "clip"
+    : selectedBlurId ? "blur" : selectedShapeId ? "shape" : selectedBrushId ? "brush" : null;
+  const selId = selectedTextId || selectedImageID || selectedClipId || selectedBlurId || selectedShapeId || selectedBrushId || null;
   const mPath = selKind && selId && !editingTextId ? motionPath(selKind, selId) : null;
   // While dragging a position-keyframed layer, a rubber-band line from where
   // the playhead-time keyframe currently sits → where you're dragging it.
@@ -834,6 +1003,18 @@ export default function InteractionOverlay({ width, height }: Props) {
       {items.map(it => it.node)}
       {guides.x && <div style={{ position: "absolute", left: width / 2, top: 0, bottom: 0, width: 1.5, background: "#FFB648", pointerEvents: "none" }} />}
       {guides.y && <div style={{ position: "absolute", top: height / 2, left: 0, right: 0, height: 1.5, background: "#FFB648", pointerEvents: "none" }} />}
+      {/* Live preview of the brush stroke currently being drawn — cleared
+          the instant it's committed as a real BrushDetails on pointer-up. */}
+      {liveBrushPoints && liveBrushPoints.length > 1 && (
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}>
+          <polyline
+            points={liveBrushPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+            fill="none" stroke={brushDraft.color} strokeWidth={brushDraft.strokeWidth}
+            strokeLinecap="round" strokeLinejoin="round" opacity={0.85}
+          />
+        </svg>
+      )}
     </div>
   );
 }

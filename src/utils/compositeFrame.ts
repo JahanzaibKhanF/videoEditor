@@ -10,7 +10,7 @@
  * future fix to how transitions/text/blur render only has to happen here,
  * not in two places that could drift apart.
  */
-import { ClipDetails, TextDetails, ImageDetails, BlurDetails, LayerOrder, ClipEffectDetails } from "../types/types";
+import { ClipDetails, TextDetails, ImageDetails, BlurDetails, ShapeDetails, BrushDetails, LayerOrder, ClipEffectDetails } from "../types/types";
 import { computeAnimState, computeTransition } from "./AnimationEngine";
 import { evalKeyframes, applyKfOverride } from "./keyframes";
 import { wrapTextLines } from "./measureText";
@@ -27,6 +27,8 @@ export interface CompositeFrameInput {
   texts: TextDetails[];
   images: ImageDetails[];
   blurs: BlurDetails[];
+  shapes?: ShapeDetails[];
+  brushes?: BrushDetails[];
   clipEffects?: ClipEffectDetails[];
   imageEls: Record<string, HTMLImageElement | null>;
   layerOrder: LayerOrder[];
@@ -41,7 +43,7 @@ export interface CompositeFrameInput {
 }
 
 export function compositeFrame(input: CompositeFrameInput) {
-  const { ctx, width: w, height: h, t, fps, clips, texts, images, blurs, clipEffects = [], imageEls, layerOrder, getVideoDrawable } = input;
+  const { ctx, width: w, height: h, t, fps, clips, texts, images, blurs, shapes = [], brushes = [], clipEffects = [], imageEls, layerOrder, getVideoDrawable } = input;
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#000";
@@ -76,7 +78,9 @@ export function compositeFrame(input: CompositeFrameInput) {
     | { kind: "video"; z: number; clip: ClipDetails }
     | { kind: "image"; z: number; image: ImageDetails }
     | { kind: "text"; z: number; text: TextDetails }
-    | { kind: "blur"; z: number; blur: BlurDetails };
+    | { kind: "blur"; z: number; blur: BlurDetails }
+    | { kind: "shape"; z: number; shape: ShapeDetails }
+    | { kind: "brush"; z: number; brush: BrushDetails };
 
   const activeClips: MergedLayer[] = clipsSorted
     .filter(c => t >= (c.startPosition ?? 0) && t <= (c.endPosition ?? Infinity))
@@ -90,10 +94,16 @@ export function compositeFrame(input: CompositeFrameInput) {
   const blurLayers: MergedLayer[] = blurs
     .filter(blur => t >= blur.startTime && t <= blur.endTime)
     .map(blur => ({ kind: "blur" as const, z: blur.zIndex ?? 0, blur }));
+  const shapeLayers: MergedLayer[] = shapes
+    .filter(shape => t >= shape.startTime && t <= shape.endTime)
+    .map(shape => ({ kind: "shape" as const, z: shape.zIndex ?? 0, shape }));
+  const brushLayers: MergedLayer[] = brushes
+    .filter(brush => t >= brush.startTime && t <= brush.endTime)
+    .map(brush => ({ kind: "brush" as const, z: brush.zIndex ?? 0, brush }));
 
   // HIGHEST zIndex drawn first (furthest back), LOWEST zIndex drawn last
   // (frontmost) — matches "higher in the track/layer list = drawn on top".
-  const merged = [...activeClips, ...imageLayers, ...textLayers, ...blurLayers]
+  const merged = [...activeClips, ...imageLayers, ...textLayers, ...blurLayers, ...shapeLayers, ...brushLayers]
     .sort((a, b) => b.z - a.z);
 
   let mergedDrawn = false;
@@ -101,7 +111,10 @@ export function compositeFrame(input: CompositeFrameInput) {
     if (layerType === "video" || layerType === "image" || layerType === "text" || layerType === "blur") {
       // Only actually draw once — whichever of these four comes first in
       // drawOrder triggers the single merged pass; the rest are no-ops so
-      // nothing draws twice.
+      // nothing draws twice. Shapes/brushes always ride along in this same
+      // pass regardless of `drawOrder` (which predates them and only ever
+      // listed the original four types) — same reasoning as blur joining
+      // the unified z-stack.
       if (mergedDrawn) continue;
       mergedDrawn = true;
 
@@ -109,6 +122,8 @@ export function compositeFrame(input: CompositeFrameInput) {
         if (layer.kind === "video") drawVideoClip(ctx, layer.clip, clipsSorted, t, fps, w, h, clipEffects, getVideoDrawable);
         else if (layer.kind === "image") drawImageLayer(ctx, layer.image, t, fps, w, h, imageEls);
         else if (layer.kind === "text") drawTextLayer(ctx, layer.text, t, fps, w, h);
+        else if (layer.kind === "shape") drawShapeLayer(ctx, layer.shape, t, fps, w, h);
+        else if (layer.kind === "brush") drawBrushLayer(ctx, layer.brush, t, fps, w, h);
         else drawBlurRegion(ctx, layer.blur, t);
       }
     }
@@ -142,6 +157,82 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
   ctx.fillStyle = text.textColor ?? "#fff";
   drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2));
   ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.filter = "none";
+  ctx.restore();
+}
+
+// Draws one vector shape layer (rectangle / ellipse / regular polygon).
+// Same anim+keyframe fold and centered-scale transform as drawImageLayer —
+// a shape is geometrically just a filled/stroked bounding box, so it uses
+// the exact same call shape.
+function drawShapeLayer(ctx: CanvasRenderingContext2D, shape: ShapeDetails, t: number, fps: number, w: number, h: number) {
+  const anim = applyKfOverride(
+    computeAnimState(shape.animation ?? "none", t, shape.startTime, shape.endTime, fps, shape.x, shape.y, w, h, 100),
+    evalKeyframes(shape.keyframes, t),
+  );
+  if (!anim.visible) return;
+  const sw2 = shape.width, sh2 = shape.height;
+  ctx.save();
+  if (anim.blur > 0) ctx.filter = `blur(${anim.blur}px)`;
+  ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity * (shape.opacity ?? 1)));
+  ctx.translate(anim.tx + sw2 / 2, anim.ty + sh2 / 2);
+  ctx.rotate(((anim.rotation + (shape.rotation ?? 0)) * Math.PI) / 180);
+  ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
+
+  ctx.beginPath();
+  if (shape.kind === "rectangle") {
+    ctx.rect(-sw2 / 2, -sh2 / 2, sw2, sh2);
+  } else if (shape.kind === "ellipse") {
+    ctx.ellipse(0, 0, sw2 / 2, sh2 / 2, 0, 0, Math.PI * 2);
+  } else {
+    const sides = Math.max(3, Math.min(12, Math.round(shape.sides ?? 3)));
+    const rx = sw2 / 2, ry = sh2 / 2;
+    for (let i = 0; i < sides; i++) {
+      // Start pointing straight up so a triangle/pentagon reads "upright"
+      // rather than balanced on a flat edge.
+      const angle = -Math.PI / 2 + (i * 2 * Math.PI) / sides;
+      const px = Math.cos(angle) * rx, py = Math.sin(angle) * ry;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  const hasFill = shape.fill && shape.fill !== "transparent";
+  const hasStroke = shape.stroke && shape.stroke !== "transparent" && (shape.strokeWidth ?? 0) > 0;
+  if (hasFill) { ctx.fillStyle = shape.fill!; ctx.fill(); }
+  if (hasStroke) { ctx.strokeStyle = shape.stroke!; ctx.lineWidth = shape.strokeWidth!; ctx.stroke(); }
+  ctx.filter = "none";
+  ctx.restore();
+}
+
+// Draws one freehand brush stroke. `brush.points` are normalized 0..1 within
+// the stroke's own bounding box, so resizing the layer (including via a
+// scale keyframe) is just a matter of the box scaling — no need to
+// re-record point geometry.
+function drawBrushLayer(ctx: CanvasRenderingContext2D, brush: BrushDetails, t: number, fps: number, w: number, h: number) {
+  const anim = applyKfOverride(
+    computeAnimState(brush.animation ?? "none", t, brush.startTime, brush.endTime, fps, brush.x, brush.y, w, h, 100),
+    evalKeyframes(brush.keyframes, t),
+  );
+  if (!anim.visible || brush.points.length < 2) return;
+  const bw = brush.width, bh = brush.height;
+  ctx.save();
+  if (anim.blur > 0) ctx.filter = `blur(${anim.blur}px)`;
+  ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity * (brush.opacity ?? 1)));
+  ctx.translate(anim.tx + bw / 2, anim.ty + bh / 2);
+  ctx.rotate(((anim.rotation + (brush.rotation ?? 0)) * Math.PI) / 180);
+  ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
+
+  ctx.beginPath();
+  brush.points.forEach((p, i) => {
+    const px = p.x * bw - bw / 2, py = p.y * bh - bh / 2;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.strokeStyle = brush.color;
+  ctx.lineWidth = brush.strokeWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  ctx.filter = "none";
   ctx.restore();
 }
 

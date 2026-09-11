@@ -20,6 +20,7 @@
 import { v4 as uuidv4 } from "uuid";
 import {
   AudioDetails, BlurDetails, ClipDetails, ImageDetails, RenderJob, TextDetails, TransitionFrame, ClipEffectDetails,
+  ShapeDetails, BrushDetails,
 } from "../types/types";
 import { clientRender } from "./clientRender";
 import { renderWithWebCodecs, pickSupportedWebCodecsConfig } from "./webCodecsRender";
@@ -47,6 +48,8 @@ export async function renderVideo(
   imageRefs?: ImageRefs,
   layerOrder?: LayerOrderList,
   clipEffects: ClipEffectDetails[] = [],
+  shapesDetails: ShapeDetails[] = [],
+  brushesDetails: BrushDetails[] = [],
   saveHandle?: FileSystemFileHandle,
 ): Promise<string> {
   const width = Math.max(2, Math.round(containerDimensions.width || 1280));
@@ -81,6 +84,8 @@ export async function renderVideo(
       texts: textsDetails,
       images: imagesDetails,
       blurs: blursDetails,
+      shapes: shapesDetails,
+      brushes: brushesDetails,
       clipEffects,
       audioTracks: audioDetails,
       layerOrder: layerOrder ?? [],

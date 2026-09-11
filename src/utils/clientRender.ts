@@ -234,16 +234,18 @@ function buildAtempoChain(targetTempo: number): string {
 }
 
 // NOTE: clip-level effects (shake/wiggle/colorBurst/particles/gradientOverlay,
-// see ClipEffectDetails in types.ts) AND per-property keyframes (KeyframeTrack
-// on text/image/clip/blur, see keyframes.ts) are rendered by compositeFrame.ts,
+// see ClipEffectDetails in types.ts), per-property keyframes (KeyframeTrack
+// on text/image/clip/blur, see keyframes.ts), AND shape/brush layers
+// (ShapeDetails/BrushDetails in types.ts) are rendered by compositeFrame.ts,
 // which this FFmpeg fallback path does NOT use — it builds its own independent
-// ffmpeg filter_complex graph instead. That means those effects/keyframes only
-// appear in exports that actually go through the WebCodecs path
-// (renderWithWebCodecs in webCodecsRender.ts); if a browser falls back to this
-// function, clips still render correctly, just without effects or keyframed
-// motion applied. Building equivalent ffmpeg filters for procedural effects
-// like particles isn't practical (no general-purpose particle filter exists in
-// ffmpeg), so this is a deliberate, documented scope boundary, not an oversight.
+// ffmpeg filter_complex graph instead. That means those effects/keyframes/
+// shape+brush layers only appear in exports that actually go through the
+// WebCodecs path (renderWithWebCodecs in webCodecsRender.ts); if a browser
+// falls back to this function, clips still render correctly, just without
+// effects, keyframed motion, or any shape/brush layers. Building equivalent
+// ffmpeg filters for procedural effects like particles (or arbitrary vector
+// shapes/freehand paths) isn't practical, so this is a deliberate, documented
+// scope boundary, not an oversight.
 export async function clientRender(
   videos: { video: File; name: string }[],
   _mediaPath: string,

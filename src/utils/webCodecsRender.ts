@@ -31,7 +31,7 @@
  * FFmpeg fallback below are unrelated to this and are unchanged.
  */
 import {
-  ClipDetails, TextDetails, ImageDetails, BlurDetails, AudioDetails, LayerOrder, ClipEffectDetails,
+  ClipDetails, TextDetails, ImageDetails, BlurDetails, ShapeDetails, BrushDetails, AudioDetails, LayerOrder, ClipEffectDetails,
 } from "../types/types";
 import { pickVideoEncoderConfig, isAudioEncodingSupported, PickedVideoConfig } from "./videoCodecSelect";
 import { mapOutputElapsedToSourceTime, totalSourceConsumed } from "./speedRamp";
@@ -42,6 +42,8 @@ export interface WebCodecsRenderParams {
   texts: TextDetails[];
   images: ImageDetails[];
   blurs: BlurDetails[];
+  shapes?: ShapeDetails[];
+  brushes?: BrushDetails[];
   clipEffects?: ClipEffectDetails[];
   audioTracks: AudioDetails[];
   layerOrder: LayerOrder[];
@@ -75,7 +77,7 @@ export async function pickSupportedWebCodecsConfig(width: number, height: number
 }
 
 export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promise<Blob> {
-  const { clips, texts, images, blurs, clipEffects = [], audioTracks, layerOrder, imageEls, width, height, fps, totalDuration, videoConfig, onProgress, saveHandle } = params;
+  const { clips, texts, images, blurs, shapes = [], brushes = [], clipEffects = [], audioTracks, layerOrder, imageEls, width, height, fps, totalDuration, videoConfig, onProgress, saveHandle } = params;
 
   onProgress?.(0, "Opening video sources…");
 
@@ -351,7 +353,7 @@ export async function renderWithWebCodecs(params: WebCodecsRenderParams): Promis
       }));
 
       try {
-        compositeFrameSafe(ctx, width, height, t, fps, clips, texts, images, blurs, clipEffects, imageEls, layerOrder, getVideoDrawable);
+        compositeFrameSafe(ctx, width, height, t, fps, clips, texts, images, blurs, shapes, brushes, clipEffects, imageEls, layerOrder, getVideoDrawable);
       } catch (err) {
         throw new Error(`Compositing failed at frame ${i} (t=${t.toFixed(2)}s): ${(err as Error)?.message ?? String(err)}`);
       }
@@ -394,13 +396,14 @@ import { compositeFrame } from "./compositeFrame";
 function compositeFrameSafe(
   ctx: OffscreenCanvasRenderingContext2D, width: number, height: number, t: number, fps: number,
   clips: ClipDetails[], texts: TextDetails[], images: ImageDetails[], blurs: BlurDetails[],
+  shapes: ShapeDetails[], brushes: BrushDetails[],
   clipEffects: ClipEffectDetails[],
   imageEls: Record<number, HTMLImageElement | null>, layerOrder: LayerOrder[],
   getVideoDrawable: (src: string) => CanvasImageSource | null,
 ) {
   compositeFrame({
     ctx: ctx as unknown as CanvasRenderingContext2D,
-    width, height, t, fps, clips, texts, images, blurs, clipEffects, imageEls, layerOrder, getVideoDrawable,
+    width, height, t, fps, clips, texts, images, blurs, shapes, brushes, clipEffects, imageEls, layerOrder, getVideoDrawable,
   });
 }
 

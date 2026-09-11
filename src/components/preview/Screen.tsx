@@ -29,6 +29,7 @@ export default function Screen() {
     videos, isShowProcessedVideo,
     selectedAspectRatio, setCurrentTime, setSeekTime,
     setFps, activeTemplate,
+    textsDetails, imagesDetails, blursDetails,
   } = useAppDetailsContext();
 
   const { setControls, notifyEnded, setBufferedRanges, setIsBuffering: setIsBufferingCtx } = useEngineControls();
@@ -209,7 +210,11 @@ export default function Screen() {
           </>
         )}
 
-        {videos.length === 0 && (
+        {/* Only a truly empty project shows this — a text/image-only
+            composition (no video clip at all) is a valid, playable project
+            on its own, After Effects-style, and must not have this overlay
+            sitting on top of it hiding the actual content. */}
+        {videos.length === 0 && textsDetails.length === 0 && imagesDetails.length === 0 && blursDetails.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-[rgba(255,255,255,.25)]">
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" opacity=".5">
               <rect x="4" y="8" width="40" height="32" rx="5" stroke="currentColor" strokeWidth="1.5"/>

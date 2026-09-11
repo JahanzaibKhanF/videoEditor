@@ -11,8 +11,10 @@ const MIN_WIDTH_PERCENT = 1;
 export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
   const {
     totalTime, blursDetails, setBlursDetails, imagesDetails, clipsDetails, textsDetails,
+    shapesDetails, brushesDetails,
     setSelectedBlurId: setCtxBlurSel, setSelectedTextId: setCtxTextSel,
     setSelectedImageID: setCtxImageSel, setSelectedClipId: setCtxClipSel,
+    setSelectedShapeId: setCtxShapeSel, setSelectedBrushId: setCtxBrushSel,
   } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localBlurs, setLocalBlurs] = useState(blursDetails);
@@ -23,6 +25,7 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
   const selectInScreen = (id: string) => {
     setSelectedBlurId(id);
     setCtxBlurSel(id); setCtxTextSel(null); setCtxImageSel(null); setCtxClipSel(null);
+    setCtxShapeSel(null); setCtxBrushSel(null);
   };
 
   useEffect(() => {
@@ -64,6 +67,8 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...textsDetails.map(t => t.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localBlurs.map(b => b.id === id ? { ...b, zIndex: newZ } : b);
@@ -87,6 +92,8 @@ export default function BlurRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}
       ...imagesDetails.map(i => i.zIndex ?? 0),
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...textsDetails.map(t => t.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     let curZ = orig.zIndex ?? 0;
 

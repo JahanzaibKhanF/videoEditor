@@ -16,6 +16,7 @@ export default function RenderButton() {
   const {
     containerDimenions, videos, mediaPath, primaryVideoDimensions,
     textsDetails, blursDetails, imagesDetails, clipsDetails, audioDetails, clipEffects,
+    shapesDetails, brushesDetails,
     totalTime, fps, transitionsFrames, imageRefs, layerOrder,
     renderJobs, setRenderJobs,
     setProcessedVideoLink, setIsShowProcessedVideo,
@@ -101,6 +102,7 @@ export default function RenderButton() {
         },
         imageRefs, layerOrder,
         clipEffects,
+        shapesDetails, brushesDetails,
       );
     } catch (err) {
       console.error("Render failed:", err);

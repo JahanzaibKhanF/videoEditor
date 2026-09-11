@@ -16,6 +16,8 @@ import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
 import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
 import ChromaKeyPanel from "../editors/ChromaKeyPanel";
+import ShapesPanel from "./ShapesPanel";
+import BrushPanel from "./BrushPanel";
 import { useProjectMedia } from "../../hooks/useProjectMedia";
 import { pickMediaFiles } from "../../utils/pickMediaFiles";
 import type { Template } from "../../utils/templates";
@@ -37,6 +39,8 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
   // Route templates tab directly to TemplatesPanel
   if (activeTab === "templates") return <TemplatesPanel initialTemplate={pendingTemplate} />;
   if (activeTab === "recent") return <RecentProjectsPanel />;
+  if (activeTab === "shapes") return <ShapesPanel />;
+  if (activeTab === "brush") return <BrushPanel />;
 
   // Shared by both the native <input type=file> picker AND files pulled
   // from a linked local folder (File System Access API) — either path
@@ -109,10 +113,15 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
           newRefs[id] = imgEl;
           const reader = new FileReader();
           reader.onload = () => {
-            newImages.push({ id, src: imgEl.src, image: file, sourceFileName: file.name, opacity: 1, imageX: placementIndex * 40, imageY: placementIndex * 30, width: imgEl.width, height: imgEl.height, scaleX: .4, scaleY: .4, startTime: 0, endTime: totalTime, animation: "none", zIndex });
+            // `totalTime` is still 0 for the very first import into a brand-new
+            // project — endTime:0 would make the image immediately invisible
+            // (a zero-length active range). Fall back to a real 5s duration.
+            const imgDuration = totalTime > 0 ? totalTime : 5;
+            newImages.push({ id, src: imgEl.src, image: file, sourceFileName: file.name, opacity: 1, imageX: placementIndex * 40, imageY: placementIndex * 30, width: imgEl.width, height: imgEl.height, scaleX: .4, scaleY: .4, startTime: 0, endTime: imgDuration, animation: "none", zIndex });
             setImagesDetails([...newImages]);
             setImageRefs({ ...newRefs });
             setSelectedImageID(id);
+            setTotalTime(prev => Math.max(prev, imgDuration));
           };
           reader.readAsDataURL(file);
         };
@@ -174,6 +183,12 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     const t = { text: defaultText, textColor: "white", backgroundColor: "transparent", shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 3, shadowOffsetY: 1, fontFamily: "Arial", textX: (containerDimenions.width - width) / 2, textY: (containerDimenions.height - height) / 2, width, height, fontSize, lineHeight: 1, isBold: false, isItalic: false, isUnderline: false, opacity: 1, id: uuidv4(), startTime: 0, endTime: defaultDuration, animation: "none", zIndex: textZIndex };
     setTextsDetails(prev => [...prev, t]);
     setSelectedTextId(t.id);
+    // A project with no video clip yet has totalTime stuck at 0 — without
+    // this, adding text to a blank composition would give the text a real
+    // endTime but leave the timeline/engine thinking the project is 0s long,
+    // so it could never actually be seen or played (After Effects lets a
+    // comp with only text/shape layers play just fine; this matches that).
+    setTotalTime(prev => Math.max(prev, defaultDuration));
   };
 
   const addBlur = () => {
@@ -190,9 +205,14 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
       ...textsDetails.map(t => t.zIndex ?? 0),
       ...blursDetails.map(b => b.zIndex ?? 0),
     ]);
-    const b = { id: uuidv4(), x: (containerDimenions.width - 200) / 2, y: 100, width: 400, height: 200, blurAmount: 10, startTime: 0, endTime: totalTime, zIndex: blurZIndex };
+    // `totalTime` can still be 0 in a brand-new, video-less project — fall
+    // back to a real 5s duration instead of a 0-length (invisible) region,
+    // same reasoning as addText above.
+    const blurDuration = totalTime > 0 ? totalTime : 5;
+    const b = { id: uuidv4(), x: (containerDimenions.width - 200) / 2, y: 100, width: 400, height: 200, blurAmount: 10, startTime: 0, endTime: blurDuration, zIndex: blurZIndex };
     setBlursDetails(prev => [...prev, b]);
     setSelectedBlurId(b.id);
+    setTotalTime(prev => Math.max(prev, blurDuration));
   };
 
   const rowBase = "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors border-l-2";
@@ -272,7 +292,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
       <PanelHeader
         icon={<Type size={13} />}
         title="Text Layers"
-        action={addGradBtn(addText, videos.length === 0 || !!activeTemplate)}
+        action={addGradBtn(addText, !!activeTemplate)}
       />
       <PanelBody>
         {textsDetails.length === 0 ? <EmptyState compact icon={<Type size={18} strokeWidth={1.7} />} title="No text layers" hint="Click + to add one." />
@@ -324,7 +344,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
 
         {/* ── Blur Regions ─────────────────────────────────── */}
         <div>
-          <SectionLabel inset={false} right={addGradBtn(addBlur, videos.length === 0 || !!activeTemplate, "linear-gradient(135deg,#10B981,#06B6D4)")}>
+          <SectionLabel inset={false} right={addGradBtn(addBlur, !!activeTemplate, "linear-gradient(135deg,#10B981,#06B6D4)")}>
             Blur Regions
           </SectionLabel>
           {blursDetails.length === 0 ? <EmptyState compact icon={<Droplets size={18} strokeWidth={1.7} />} title="No blur regions" hint="Click + to add one." />
@@ -421,8 +441,8 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
       <div className="px-3 py-2 border-b border-studio-border flex flex-wrap gap-1.5 flex-shrink-0">
         {[
           { label: "Import", icon: <Upload size={13} />, onClick: handleImport, disabled: !!activeTemplate },
-          { label: "Text",   icon: <Type size={13}/>, onClick: addText, disabled: videos.length === 0 || !!activeTemplate },
-          { label: "Blur",   icon: <Droplets size={13}/>, onClick: addBlur, disabled: videos.length === 0 },
+          { label: "Text",   icon: <Type size={13}/>, onClick: addText, disabled: !!activeTemplate },
+          { label: "Blur",   icon: <Droplets size={13}/>, onClick: addBlur, disabled: false },
           { label: "Split",  icon: <SplitSquareHorizontal size={13}/>, onClick: () => splitLayer(selectedClipId, clipsDetails, setClipsDetails, currentTime, audioDetails, setAudioDetails), disabled: videos.length === 0 },
         ].map(btn => (
           <button key={btn.label} onClick={btn.onClick} disabled={btn.disabled}

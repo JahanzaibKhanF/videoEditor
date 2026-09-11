@@ -34,8 +34,16 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
   const {
     clipsDetails, totalTime, timelineZoom, setTimelineZoom,
     setCurrentTime, setSeekTime, seekTime, videos, activeTemplate,
+    textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails,
   } = useAppDetailsContext();
   const { seekTo } = useEngineControls();
+
+  // Same "no video needed" reasoning as Layers.tsx — a text/shape/image-only
+  // composition is a valid, playable project (After Effects-style) and must
+  // still show its timeline (ruler, layer rows, playhead), not the "Import a
+  // video" empty state.
+  const hasAnyLayer = videos.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0
+    || blursDetails.length > 0 || shapesDetails.length > 0 || brushesDetails.length > 0;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const trackRef  = useRef<HTMLDivElement>(null);
@@ -120,7 +128,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
         className="flex-1 min-h-0 overflow-auto scrollbar-thin"
         style={{ position: "relative" }}
       >
-        {videos.length > 0 ? (
+        {hasAnyLayer ? (
           <div ref={trackRef}
             style={{ minWidth: `calc(100% * ${timelineZoom})`, minHeight: "100%", display: "flex", flexDirection: "column" }}
           >
@@ -202,7 +210,7 @@ export default function TimeLine({ compact = false }: { compact?: boolean }) {
           </div>
         ) : (
           <div className="flex items-center justify-center w-full h-full text-ink-faint text-meta py-8">
-            Import a video to get started
+            Import media or add a text/shape layer to get started
           </div>
         )}
       </div>
@@ -300,7 +308,7 @@ function Ruler({ totalTime }: { totalTime: number }) {
 function LabelColumn() {
   const {
     blursDetails, textsDetails, imagesDetails, clipsDetails, audioDetails, setAudioDetails,
-    activeTemplate,
+    shapesDetails, brushesDetails, activeTemplate,
   } = useAppDetailsContext();
 
   if (activeTemplate) return null;
@@ -311,9 +319,11 @@ function LabelColumn() {
     image: { label: "Image", color: "#EC4899" },
     audio: { label: "Audio", color: "#4C8CFF" },
     video: { label: "Video", color: "#FFB648" },
+    shape: { label: "Shape", color: "#14B8A6" },
+    brush: { label: "Brush", color: "#F97316" },
   } as const;
 
-  const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails);
+  const entries = buildMergedEntries(clipsDetails, imagesDetails, textsDetails, blursDetails, shapesDetails, brushesDetails);
   const runs = groupIntoRuns(entries);
 
   const rows: { key: string; type: LayerType; label: string; color: string; sub?: string; trackZ?: number }[] = [];
@@ -343,6 +353,15 @@ function LabelColumn() {
       run.entries.forEach(entry => {
         const t = textsDetails.find(tx => tx.id === entry.id);
         rows.push({ key: `run-${runIdx}-text-${entry.id}`, type: "text", label: CFG.text.label, color: CFG.text.color, sub: t?.text });
+      });
+    } else if (run.kind === "shape") {
+      run.entries.forEach(entry => {
+        const s = shapesDetails.find(sh => sh.id === entry.id);
+        rows.push({ key: `run-${runIdx}-shape-${entry.id}`, type: "shape", label: CFG.shape.label, color: CFG.shape.color, sub: s?.kind });
+      });
+    } else if (run.kind === "brush") {
+      run.entries.forEach(entry => {
+        rows.push({ key: `run-${runIdx}-brush-${entry.id}`, type: "brush", label: CFG.brush.label, color: CFG.brush.color });
       });
     } else {
       run.entries.forEach(entry => {

@@ -320,9 +320,19 @@ export class CanvasEngine {
 
   // ── PRIVATE ───────────────────────────────────────────────────────────
 
+  // The app's own notion of the project's length (from context `totalTime`) —
+  // covers text/image/blur layers, which this engine never sees directly
+  // (it only manages VIDEO decode/sync via `clips`). Without this, a
+  // composition with no video clip at all (text/shapes only, like an After
+  // Effects comp with no footage) had `_totalDuration()` return 0 from the
+  // empty clips array, so `play()` and the RAF loop's "ended" check fired
+  // instantly — the timeline could never actually advance/play.
+  private _externalTotalDuration = 0;
+  setTotalDuration(seconds: number) { this._externalTotalDuration = Math.max(0, seconds || 0); }
+
   private _totalDuration() {
-    if (!this.clips.length) return 0;
-    return Math.max(...this.clips.map(c => c.endPosition));
+    const clipsDur = this.clips.length ? Math.max(...this.clips.map(c => c.endPosition)) : 0;
+    return Math.max(clipsDur, this._externalTotalDuration);
   }
 
   private _getActiveClips(): ClipDetails[] {

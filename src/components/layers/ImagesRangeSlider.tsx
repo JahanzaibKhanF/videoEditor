@@ -11,8 +11,10 @@ const MIN_WIDTH_PERCENT = 1;
 export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = {}) {
   const {
     totalTime, imagesDetails, setImagesDetails, clipsDetails, textsDetails, blursDetails,
+    shapesDetails, brushesDetails,
     setSelectedImageID: setCtxImageSel, setSelectedTextId: setCtxTextSel,
     setSelectedBlurId: setCtxBlurSel, setSelectedClipId: setCtxClipSel,
+    setSelectedShapeId: setCtxShapeSel, setSelectedBrushId: setCtxBrushSel,
   } = useAppDetailsContext();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [localImages, setLocalImages] = useState(imagesDetails);
@@ -23,6 +25,7 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
   const selectInScreen = (id: string) => {
     setSelectedImageId(id);
     setCtxImageSel(id); setCtxTextSel(null); setCtxBlurSel(null); setCtxClipSel(null);
+    setCtxShapeSel(null); setCtxBrushSel(null);
   };
 
   useEffect(() => {
@@ -84,6 +87,8 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...textsDetails.map(t => t.zIndex ?? 0),
       ...blursDetails.map(b => b.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     const newZ = computeAdjacentZ(dir, curZ, others);
     const updated = localImages.map(img => img.id === id ? { ...img, zIndex: newZ } : img);
@@ -113,6 +118,8 @@ export default function ImagesRangeSlider({ onlyIds }: { onlyIds?: string[] } = 
       ...clipsDetails.map(c => c.zIndex ?? 0),
       ...textsDetails.map(t => t.zIndex ?? 0),
       ...blursDetails.map(b => b.zIndex ?? 0),
+      ...shapesDetails.map(s => s.zIndex ?? 0),
+      ...brushesDetails.map(b => b.zIndex ?? 0),
     ];
     let curZ = orig.zIndex ?? 0;
 

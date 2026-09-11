@@ -34,7 +34,7 @@ import { ROW_H, ROW_GAP } from "./Layers";
 import { transitionOptions } from "../../utils/transitionOptionsConstants";
 import { Shuffle, ChevronUp, ChevronDown } from "@/utils/icons";
 import { AudioTrackRow } from "./AudioRangeSlider";
-import { ClipDetails, ImageDetails, TextDetails, BlurDetails } from "../../types/types";
+import { ClipDetails, ImageDetails, TextDetails, BlurDetails, ShapeDetails, BrushDetails } from "../../types/types";
 import { computeAdjacentZ } from "../../utils/zStack";
 
 const MIN_W_PCT = 1;
@@ -91,16 +91,19 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
     selectedClipId,
     setSelectedClipId: setCtxSel,
     setSelectedTextId: setCtxTextSel, setSelectedImageID: setCtxImageSel, setSelectedBlurId: setCtxBlurSel,
-    imagesDetails, textsDetails, blursDetails,
+    setSelectedShapeId: setCtxShapeSel, setSelectedBrushId: setCtxBrushSel,
+    imagesDetails, textsDetails, blursDetails, shapesDetails, brushesDetails,
   } = useAppDetailsContext();
 
-  // Every image/text/blur zIndex — used so a video clip stepping up/down
-  // past the last existing track can land in a slot between/beyond those
-  // layers too (shared unified stack, see zStack.ts).
+  // Every image/text/blur/shape/brush zIndex — used so a video clip
+  // stepping up/down past the last existing track can land in a slot
+  // between/beyond those layers too (shared unified stack, see zStack.ts).
   const otherLayerZs = [
     ...imagesDetails.map((i: ImageDetails) => i.zIndex ?? 0),
     ...textsDetails.map((t: TextDetails) => t.zIndex ?? 0),
     ...blursDetails.map((b: BlurDetails) => b.zIndex ?? 0),
+    ...shapesDetails.map((s: ShapeDetails) => s.zIndex ?? 0),
+    ...brushesDetails.map((b: BrushDetails) => b.zIndex ?? 0),
   ];
 
   const ref = useRef<HTMLDivElement>(null);
@@ -111,7 +114,7 @@ export default function VideoClipsRangeSlider({ onlyTrackZs }: { onlyTrackZs?: n
   const selectInScreen = (id: string | null) => {
     setSelId(id);
     setCtxSel(id);
-    if (id) { setCtxTextSel(null); setCtxImageSel(null); setCtxBlurSel(null); }
+    if (id) { setCtxTextSel(null); setCtxImageSel(null); setCtxBlurSel(null); setCtxShapeSel(null); setCtxBrushSel(null); }
   };
 
   // Deselect on outside click

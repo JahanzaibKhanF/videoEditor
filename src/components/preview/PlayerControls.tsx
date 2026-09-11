@@ -21,11 +21,14 @@ const TBtn = ({ onClick, children, large = false, title, disabled = false }: {
 );
 
 export default function PlayerControls() {
-  const { currentTime, totalTime, fps, clipsDetails } = useAppDetailsContext();
+  const { currentTime, totalTime, fps, clipsDetails, textsDetails, imagesDetails } = useAppDetailsContext();
   const { play, pause, seekTo, isPlaying } = useEngineControls();
 
   const step = 1 / (fps || 30);
-  const hasClips = clipsDetails.length > 0;
+  // A composition doesn't need a video clip to be playable — text/image-only
+  // projects (an After Effects comp with no footage) should play too, so
+  // this now checks for ANY content instead of gating on clips specifically.
+  const hasContent = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0;
 
   const goToStart = () => seekTo(0);
   const goToEnd = () => seekTo(totalTime);
@@ -34,16 +37,16 @@ export default function PlayerControls() {
 
   return (
     <div className="flex items-center gap-1.5 flex-shrink-0">
-      <TBtn title="Go to start" onClick={goToStart} disabled={!hasClips}>
+      <TBtn title="Go to start" onClick={goToStart} disabled={!hasContent}>
         <BiSkipNext size={13} style={{ transform: "rotate(180deg)" }} />
       </TBtn>
 
-      <TBtn title="Step back" onClick={stepBack} disabled={!hasClips}>
+      <TBtn title="Step back" onClick={stepBack} disabled={!hasContent}>
         <FaPlay size={7} style={{ transform: "rotate(180deg)" }} />
       </TBtn>
 
       {!isPlaying ? (
-        <TBtn large title="Play (Space)" onClick={play} disabled={!hasClips}>
+        <TBtn large title="Play (Space)" onClick={play} disabled={!hasContent}>
           <FaPlay size={10} style={{ marginLeft: 2 }} />
         </TBtn>
       ) : (
@@ -52,11 +55,11 @@ export default function PlayerControls() {
         </TBtn>
       )}
 
-      <TBtn title="Step forward" onClick={stepForward} disabled={!hasClips}>
+      <TBtn title="Step forward" onClick={stepForward} disabled={!hasContent}>
         <FaPlay size={7} />
       </TBtn>
 
-      <TBtn title="Go to end" onClick={goToEnd} disabled={!hasClips}>
+      <TBtn title="Go to end" onClick={goToEnd} disabled={!hasContent}>
         <BiSkipNext size={13} />
       </TBtn>
 

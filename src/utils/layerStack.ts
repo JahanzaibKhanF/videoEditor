@@ -1,6 +1,6 @@
-import { ClipDetails, ImageDetails, TextDetails, BlurDetails } from "../types/types";
+import { ClipDetails, ImageDetails, TextDetails, BlurDetails, ShapeDetails, BrushDetails } from "../types/types";
 
-export type LayerKind = "video" | "image" | "text" | "blur";
+export type LayerKind = "video" | "image" | "text" | "blur" | "shape" | "brush";
 
 export interface StackEntry {
   kind: LayerKind;
@@ -38,6 +38,8 @@ export function buildMergedEntries(
   images: ImageDetails[],
   texts: TextDetails[],
   blurs: BlurDetails[],
+  shapes: ShapeDetails[] = [],
+  brushes: BrushDetails[] = [],
 ): StackEntry[] {
   const trackZs = Array.from(new Set(clips.map(c => c.zIndex ?? 0)));
   const entries: StackEntry[] = [
@@ -45,6 +47,8 @@ export function buildMergedEntries(
     ...images.map(i => ({ kind: "image" as const, z: i.zIndex ?? 0, id: i.id })),
     ...texts.map(t => ({ kind: "text" as const, z: t.zIndex ?? 0, id: t.id })),
     ...blurs.map(b => ({ kind: "blur" as const, z: b.zIndex ?? 0, id: b.id })),
+    ...shapes.map(s => ({ kind: "shape" as const, z: s.zIndex ?? 0, id: s.id })),
+    ...brushes.map(b => ({ kind: "brush" as const, z: b.zIndex ?? 0, id: b.id })),
   ];
   return entries.sort((a, b) => a.z - b.z);
 }

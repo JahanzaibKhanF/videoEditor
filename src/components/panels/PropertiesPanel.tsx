@@ -11,7 +11,7 @@
  * "Animation" / "Transition" row showing the current value with a Change
  * button that opens the matching catalog on the left (via a window event).
  */
-import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline } from "@/utils/icons";
+import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline, Shapes as ShapesIcon, PenTool } from "@/utils/icons";
 import TextEditor from "../editors/TextEditor";
 import KeyframeEditor from "../editors/KeyframeEditor";
 import { useAppDetailsContext, useEngineControls } from "../../context/useAppContext";
@@ -99,6 +99,8 @@ export default function PropertiesPanel() {
   const {
     textsDetails, blursDetails, imagesDetails, setTextsDetails,
     setBlursDetails, setImagesDetails,
+    shapesDetails, setShapesDetails, selectedShapeId,
+    brushesDetails, setBrushesDetails, selectedBrushId,
     selectedBlurId, selectedImageID, selectedTextId,
     selectedClipId, clipsDetails, setClipsDetails,
     audioDetails, setAudioDetails,
@@ -111,6 +113,8 @@ export default function PropertiesPanel() {
   const text = selectedTextId ? textsDetails.find(t => t.id === selectedTextId) : undefined;
   const image = selectedImageID ? imagesDetails.find(i => i.id === selectedImageID) : undefined;
   const blur = selectedBlurId ? blursDetails.find(b => b.id === selectedBlurId) : undefined;
+  const shape = selectedShapeId ? shapesDetails.find(s => s.id === selectedShapeId) : undefined;
+  const brush = selectedBrushId ? brushesDetails.find(b => b.id === selectedBrushId) : undefined;
 
   // When a clip property is being keyframed, its normal slider/field edits a
   // keyframe at the current playhead instead of the resting value — so the
@@ -126,14 +130,14 @@ export default function PropertiesPanel() {
     }));
   };
 
-  if (!clip && !text && !image && !blur) {
+  if (!clip && !text && !image && !blur && !shape && !brush) {
     return (
       <PanelShell>
         <PanelBody className="flex items-center justify-center">
           <EmptyState
             icon={<MousePointerClick size={19} strokeWidth={1.7} />}
             title="Nothing selected"
-            hint="Pick a clip, text, image or blur on the canvas or timeline to edit it here."
+            hint="Pick a clip, text, image, blur, shape or brush stroke on the canvas or timeline to edit it here."
           />
         </PanelBody>
       </PanelShell>
@@ -304,6 +308,98 @@ export default function PropertiesPanel() {
               tracks={blur.keyframes}
               onChange={tracks => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, keyframes: tracks } : b))}
               time={currentTime} duration={totalTime} layerStart={blur.startTime ?? 0} onSeek={seek}
+            />
+          </>
+        )}
+
+        {/* ── Shape ────────────────────────────────────────────── */}
+        {shape && (
+          <>
+            <InspectorCard accent="signal" icon={<ShapesIcon size={12} />} title={shape.kind === "polygon" ? `${shape.sides ?? 3}-sided shape` : shape.kind}>
+              <FieldRow label="Fill">
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={shape.fill && shape.fill !== "transparent" ? shape.fill : "#000000"}
+                    onChange={e => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, fill: e.target.value } : s))}
+                    className="w-8 h-8 rounded-md bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+                  <button
+                    onClick={() => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId
+                      ? { ...s, fill: s.fill && s.fill !== "transparent" ? "transparent" : "#8B5CFF" } : s))}
+                    className="text-mini font-bold text-ink-faint hover:text-signal transition-colors">
+                    {shape.fill && shape.fill !== "transparent" ? "Remove fill" : "Add fill"}
+                  </button>
+                </div>
+              </FieldRow>
+              <FieldRow label="Stroke">
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={shape.stroke && shape.stroke !== "transparent" ? shape.stroke : "#ffffff"}
+                    onChange={e => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, stroke: e.target.value, strokeWidth: s.strokeWidth || 4 } : s))}
+                    className="w-8 h-8 rounded-md bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+                  <Slider value={shape.strokeWidth ?? 0} min={0} max={40} step={1}
+                    onChange={v => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, strokeWidth: v, stroke: v > 0 ? (s.stroke && s.stroke !== "transparent" ? s.stroke : "#ffffff") : s.stroke } : s))} />
+                  <FieldValue className="min-w-[26px]">{Math.round(shape.strokeWidth ?? 0)}</FieldValue>
+                </div>
+              </FieldRow>
+              {shape.kind === "polygon" && (
+                <FieldRow label="Sides">
+                  <Slider value={shape.sides ?? 3} min={3} max={12} step={1}
+                    onChange={v => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, sides: Math.round(v) } : s))} />
+                  <FieldValue className="min-w-[20px]">{shape.sides ?? 3}</FieldValue>
+                </FieldRow>
+              )}
+              <FieldRow label="Opacity">
+                <Slider value={shape.opacity ?? 1} min={0} max={1}
+                  onChange={v => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, opacity: v } : s))} />
+                <FieldValue>{Math.round((shape.opacity ?? 1) * 100)}%</FieldValue>
+              </FieldRow>
+            </InspectorCard>
+
+            <ChangeRow
+              icon={<Wand2 size={12} />} kind="Animation"
+              value={animationName(shape.animation)}
+              catalog="animations"
+            />
+            <KfCard
+              tracks={shape.keyframes}
+              onChange={tracks => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, keyframes: tracks } : s))}
+              animation={shape.animation} animationLabel={animationName(shape.animation)}
+              onAnimationClear={() => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, animation: "none" } : s))}
+              time={currentTime} duration={totalTime} layerStart={shape.startTime ?? 0} onSeek={seek}
+            />
+          </>
+        )}
+
+        {/* ── Brush ────────────────────────────────────────────── */}
+        {brush && (
+          <>
+            <InspectorCard accent="signal" icon={<PenTool size={12} />} title="Brush Stroke">
+              <FieldRow label="Color">
+                <input type="color" value={brush.color}
+                  onChange={e => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, color: e.target.value } : b))}
+                  className="w-8 h-8 rounded-md bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+              </FieldRow>
+              <FieldRow label="Width">
+                <Slider value={brush.strokeWidth} min={1} max={60}
+                  onChange={v => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, strokeWidth: v } : b))} />
+                <FieldValue className="min-w-[30px]">{Math.round(brush.strokeWidth)}px</FieldValue>
+              </FieldRow>
+              <FieldRow label="Opacity">
+                <Slider value={brush.opacity ?? 1} min={0} max={1}
+                  onChange={v => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, opacity: v } : b))} />
+                <FieldValue>{Math.round((brush.opacity ?? 1) * 100)}%</FieldValue>
+              </FieldRow>
+            </InspectorCard>
+
+            <ChangeRow
+              icon={<Wand2 size={12} />} kind="Animation"
+              value={animationName(brush.animation)}
+              catalog="animations"
+            />
+            <KfCard
+              tracks={brush.keyframes}
+              onChange={tracks => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, keyframes: tracks } : b))}
+              animation={brush.animation} animationLabel={animationName(brush.animation)}
+              onAnimationClear={() => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, animation: "none" } : b))}
+              time={currentTime} duration={totalTime} layerStart={brush.startTime ?? 0} onSeek={seek}
             />
           </>
         )}

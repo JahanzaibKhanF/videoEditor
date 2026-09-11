@@ -40,7 +40,7 @@ export function useProjectAutosave() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
-    clipsDetails, textsDetails, imagesDetails, blursDetails, audioDetails, clipEffects,
+    clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects,
     layerOrder, selectedAspectRatio, totalTime, fps, videos, resumedProjectId,
   } = useAppDetailsContext();
 
@@ -72,6 +72,8 @@ export function useProjectAutosave() {
     texts: textsDetails,
     images: imagesDetails.map(({ src: _src, image: _image, ...rest }) => rest),
     blurs: blursDetails,
+    shapes: shapesDetails,
+    brushes: brushesDetails,
     audio: audioDetails,
     clipEffects,
     layerOrder,
@@ -80,7 +82,7 @@ export function useProjectAutosave() {
     fps,
     // Names only — used to prompt "relink these files" when a project is reopened.
     mediaNames: videos.map((v) => v.name),
-  }), [clipsDetails, textsDetails, imagesDetails, blursDetails, audioDetails, clipEffects, layerOrder, selectedAspectRatio, totalTime, fps, videos]);
+  }), [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects, layerOrder, selectedAspectRatio, totalTime, fps, videos]);
 
   const save = useCallback(async () => {
     if (!user || savingRef.current) return;
@@ -144,7 +146,8 @@ export function useProjectAutosave() {
   useEffect(() => {
     if (!user) { setStatus("signed-out"); return; }
 
-    const hasContent = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0;
+    const hasContent = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0
+      || shapesDetails.length > 0 || brushesDetails.length > 0;
     if (!hasContent) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -154,7 +157,7 @@ export function useProjectAutosave() {
     // Deliberately re-runs on every tracked field change, not just length —
     // position/timing/text edits should debounce-trigger a save too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipsDetails, textsDetails, imagesDetails, blursDetails, audioDetails, clipEffects, layerOrder, selectedAspectRatio, user, save]);
+  }, [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects, layerOrder, selectedAspectRatio, user, save]);
 
   // Save immediately when the tab is about to close, best-effort.
   useEffect(() => {

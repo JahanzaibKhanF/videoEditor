@@ -200,6 +200,63 @@ export interface BlurDetails {
   keyframes?: KeyframeTrack[];
 }
 
+// ── Shapes ───────────────────────────────────────────────────────────────
+// A vector shape layer: rectangle, ellipse, or regular polygon (sides 3..12,
+// so "triangle" is just polygon-with-3-sides). "Solid" (an After Effects
+// style flat-color layer) is a quick-add PRESET of this — a full-canvas
+// rectangle with a fill and no stroke — not a separate type. An "empty"
+// (outline-only) shape is just fill:"transparent" plus a set stroke.
+export type ShapeKind = "rectangle" | "ellipse" | "polygon";
+
+export interface ShapeDetails {
+  id: string;
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  fill?: string;         // hex, or "transparent" for a stroke-only shape
+  stroke?: string;
+  strokeWidth?: number;  // 0/undefined = no stroke
+  sides?: number;        // polygon only, 3..12
+  opacity?: number;
+  startTime: number;
+  endTime: number;
+  zIndex?: number;
+  animation?: string;
+  keyframes?: KeyframeTrack[];
+}
+
+// ── Brush ────────────────────────────────────────────────────────────────
+// A freehand-drawn stroke. Points are normalized 0..1 within the stroke's
+// OWN bounding box (x/y/width/height) — same trick a resizable image uses —
+// so resizing/scaling the layer (including via a scale keyframe) just
+// scales the box the path is drawn into, instead of needing to re-record
+// the stroke geometry.
+export interface BrushPoint {
+  x: number;
+  y: number;
+}
+
+export interface BrushDetails {
+  id: string;
+  points: BrushPoint[];
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  strokeWidth: number;
+  opacity?: number;
+  rotation?: number;
+  startTime: number;
+  endTime: number;
+  zIndex?: number;
+  animation?: string;
+  keyframes?: KeyframeTrack[];
+}
+
 export interface AudioDetails {
   id: string;
   /** which video clip this audio belongs to */
@@ -229,7 +286,7 @@ export type AspectRatio =
   | "instareels"
   | "tiktok";
 
-export type LayerType = "video" | "audio" | "image" | "text" | "blur";
+export type LayerType = "video" | "audio" | "image" | "text" | "blur" | "shape" | "brush";
 
 export interface LayerOrder {
   type: LayerType;
@@ -296,6 +353,18 @@ export interface AppContextType {
   setTextsDetails: React.Dispatch<React.SetStateAction<TextDetails[]>>;
   imagesDetails: ImageDetails[];
   setImagesDetails: React.Dispatch<React.SetStateAction<ImageDetails[]>>;
+  shapesDetails: ShapeDetails[];
+  setShapesDetails: React.Dispatch<React.SetStateAction<ShapeDetails[]>>;
+  selectedShapeId: string | null;
+  setSelectedShapeId: React.Dispatch<React.SetStateAction<string | null>>;
+  brushesDetails: BrushDetails[];
+  setBrushesDetails: React.Dispatch<React.SetStateAction<BrushDetails[]>>;
+  selectedBrushId: string | null;
+  setSelectedBrushId: React.Dispatch<React.SetStateAction<string | null>>;
+  isDrawingBrush: boolean;
+  setIsDrawingBrush: React.Dispatch<React.SetStateAction<boolean>>;
+  brushDraft: { color: string; strokeWidth: number };
+  setBrushDraft: React.Dispatch<React.SetStateAction<{ color: string; strokeWidth: number }>>;
   audioDetails: AudioDetails[];
   setAudioDetails: React.Dispatch<React.SetStateAction<AudioDetails[]>>;
   layerOrder: LayerOrder[];

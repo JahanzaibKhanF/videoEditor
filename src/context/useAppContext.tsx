@@ -2,8 +2,8 @@
 
 import React, { createContext, useState, useContext, useRef } from "react";
 import {
-  AppContextType, ActiveTemplate, AudioDetails, BlurDetails, ClipDetails, ClipEffectDetails,
-  ImageDetails, LayerOrder, RenderJob, TextDetails, TransitionFrame,
+  AppContextType, ActiveTemplate, AudioDetails, BlurDetails, BrushDetails, ClipDetails, ClipEffectDetails,
+  ImageDetails, LayerOrder, RenderJob, ShapeDetails, TextDetails, TransitionFrame,
 } from "../types/types";
 
 export const AppContext = createContext<AppContextType | null>(null);
@@ -23,6 +23,12 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
   const [imagesDetails, setImagesDetails] = useState<ImageDetails[]>([]);
   const [blursDetails, setBlursDetails] = useState<BlurDetails[]>([]);
+  const [shapesDetails, setShapesDetails] = useState<ShapeDetails[]>([]);
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [brushesDetails, setBrushesDetails] = useState<BrushDetails[]>([]);
+  const [selectedBrushId, setSelectedBrushId] = useState<string | null>(null);
+  const [isDrawingBrush, setIsDrawingBrush] = useState(false);
+  const [brushDraft, setBrushDraft] = useState({ color: "#FF4D6D", strokeWidth: 10 });
   const [audioDetails, setAudioDetails] = useState<AudioDetails[]>([]);
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>([]);
   const [transitionsFrames, setTransitionsFrames] = useState<TransitionFrame[]>([]);
@@ -69,6 +75,12 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
       selectedBlurId, setSelectedBlurId,
       imagesDetails, setImagesDetails,
       blursDetails, setBlursDetails,
+      shapesDetails, setShapesDetails,
+      selectedShapeId, setSelectedShapeId,
+      brushesDetails, setBrushesDetails,
+      selectedBrushId, setSelectedBrushId,
+      isDrawingBrush, setIsDrawingBrush,
+      brushDraft, setBrushDraft,
       audioDetails, setAudioDetails,
       layerOrder, setLayerOrder,
       canvasEl, canvasElForAnimations,

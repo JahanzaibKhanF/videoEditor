@@ -23,8 +23,8 @@ interface Props {
 
 export default function CompositorCanvas({ width, height, onTimeUpdate, onEngineReady, onEnded }: Props) {
   const {
-    clipsDetails, textsDetails, imagesDetails, blursDetails, clipEffects,
-    audioDetails, layerOrder, currentTime, fps, imageRefs,
+    clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, clipEffects,
+    audioDetails, layerOrder, currentTime, fps, imageRefs, totalTime,
   } = useAppDetailsContext();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,11 +43,14 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
   const textsRef = useRef(textsDetails);
   const imagesRef = useRef(imagesDetails);
   const blursRef = useRef(blursDetails);
+  const shapesRef = useRef(shapesDetails);
+  const brushesRef = useRef(brushesDetails);
   const clipEffectsRef = useRef(clipEffects);
   const imageRefsRef = useRef(imageRefs);
   const audioDetailsRef = useRef(audioDetails);
   const layerOrderRef = useRef(layerOrder);
   const fpsRef = useRef(fps ?? 30);
+  const totalTimeRef = useRef(totalTime);
   const timeRef = useRef(currentTime);
   const widthRef = useRef(width);
   const heightRef = useRef(height);
@@ -60,11 +63,14 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
   useEffect(() => { textsRef.current = textsDetails; }, [textsDetails]);
   useEffect(() => { imagesRef.current = imagesDetails; }, [imagesDetails]);
   useEffect(() => { blursRef.current = blursDetails; }, [blursDetails]);
+  useEffect(() => { shapesRef.current = shapesDetails; }, [shapesDetails]);
+  useEffect(() => { brushesRef.current = brushesDetails; }, [brushesDetails]);
   useEffect(() => { clipEffectsRef.current = clipEffects; }, [clipEffects]);
   useEffect(() => { imageRefsRef.current = imageRefs; }, [imageRefs]);
   useEffect(() => { audioDetailsRef.current = audioDetails; }, [audioDetails]);
   useEffect(() => { layerOrderRef.current = layerOrder; }, [layerOrder]);
   useEffect(() => { fpsRef.current = fps ?? 30; engineRef.current?.setTargetFps(fps ?? 30); }, [fps]);
+  useEffect(() => { totalTimeRef.current = totalTime; engineRef.current?.setTotalDuration(totalTime); }, [totalTime]);
   useEffect(() => { timeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { widthRef.current = width; }, [width]);
   useEffect(() => { heightRef.current = height; }, [height]);
@@ -87,6 +93,8 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
       texts: textsRef.current,
       images: imagesRef.current,
       blurs: blursRef.current,
+      shapes: shapesRef.current,
+      brushes: brushesRef.current,
       clipEffects: clipEffectsRef.current,
       imageEls: imageRefsRef.current,
       layerOrder: layerOrderRef.current,
@@ -156,6 +164,7 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
     };
 
     if (clipsRef.current.length > 0) engine.load(clipsRef.current);
+    engine.setTotalDuration(totalTimeRef.current);
     onEngineReadyRef.current(engine);
     drawFrame();
 
@@ -190,7 +199,7 @@ export default function CompositorCanvas({ width, height, onTimeUpdate, onEngine
   useEffect(() => {
     drawFrame();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [textsDetails, imagesDetails, blursDetails]);
+  }, [textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails]);
 
   return (
     <canvas
