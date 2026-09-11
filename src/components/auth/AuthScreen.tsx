@@ -23,7 +23,7 @@ const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
  * so any component can trigger it without prop drilling.
  */
 export default function AuthScreen() {
-  const { authModalOpen, authModalReason, closeAuthModal, signup, login, error, clearError } = useAuth();
+  const { authModalOpen, authModalReason, authModalMode, closeAuthModal, signup, login, error, clearError } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,8 +50,9 @@ export default function AuthScreen() {
       setEmail("");
       setPassword("");
       setDisplayName("");
-      setMode("login");
+      setMode(authModalMode);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authModalOpen]);
 
   if (!authModalOpen && !googleError) return null;
@@ -75,7 +76,16 @@ export default function AuthScreen() {
 
   return (
     <div
-      className="fixed inset-0 z-[2000] bg-black/65 backdrop-blur-sm flex items-center justify-center px-4"
+      // Must outrank EVERY other fixed full-screen layer in the app — most
+      // notably .startup-overlay's z-index:9999 (globals.css). AuthScreen is
+      // mounted globally as a SIBLING of the startup screen, not nested
+      // inside it, so without a higher z-index here the modal renders fully
+      // present in the DOM (Chrome's password-manager icon still reacts to
+      // its email/password fields) but completely hidden behind the startup
+      // screen — which is exactly why "Sign in" from the startup screen
+      // looked like it did nothing, while the same modal worked fine once
+      // already inside the editor (startup screen unmounted by then).
+      className="fixed inset-0 z-[10000] bg-black/65 backdrop-blur-sm flex items-center justify-center px-4"
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       <div className="relative w-full max-w-[400px] animate-fade-in">

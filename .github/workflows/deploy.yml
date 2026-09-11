@@ -34,6 +34,8 @@ jobs:
           netlify env:set CLOUDINARY_API_KEY "$CLOUDINARY_API_KEY" --context production
           netlify env:set CLOUDINARY_API_SECRET "$CLOUDINARY_API_SECRET" --context production
           netlify env:set NEXT_PUBLIC_APP_URL "$NEXT_PUBLIC_APP_URL" --context production
+          netlify env:set GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID" --context production
+          netlify env:set GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET" --context production
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
@@ -44,6 +46,8 @@ jobs:
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
       - name: Build and deploy to Netlify
         run: |
@@ -62,3 +66,5 @@ jobs:
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}

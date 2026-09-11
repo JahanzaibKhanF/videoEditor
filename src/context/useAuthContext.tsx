@@ -20,7 +20,9 @@ interface AuthContextValue {
   clearError: () => void;
   authModalOpen: boolean;
   authModalReason: string | null;
-  promptLogin: (reason?: string) => void;
+  authModalMode: "login" | "signup";
+  /** `mode` picks which tab the modal opens on — e.g. a dedicated "Sign up" entry point. */
+  promptLogin: (reason?: string, mode?: "login" | "signup") => void;
   closeAuthModal: () => void;
 }
 
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalReason, setAuthModalReason] = useState<string | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "signup">("login");
 
   useEffect(() => {
     let cancelled = false;
@@ -112,9 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearError = useCallback(() => setError(null), []);
 
-  const promptLogin = useCallback((reason?: string) => {
+  const promptLogin = useCallback((reason?: string, mode?: "login" | "signup") => {
     setError(null);
     setAuthModalReason(reason ?? null);
+    setAuthModalMode(mode ?? "login");
     setAuthModalOpen(true);
   }, []);
 
@@ -128,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user, loading, error, signup, login, logout, clearError,
-        authModalOpen, authModalReason, promptLogin, closeAuthModal,
+        authModalOpen, authModalReason, authModalMode, promptLogin, closeAuthModal,
       }}
     >
       {children}

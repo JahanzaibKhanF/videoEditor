@@ -189,16 +189,25 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
             Sign out
           </button>
         ) : (
-          <button
-            onClick={() => promptLogin()}
-            className="px-4 py-2 rounded-full text-[12.5px] font-bold text-white transition-transform hover:scale-[1.03] active:scale-95"
-            style={{
-              background: "linear-gradient(135deg,#8B5CFF 0%,#A47CFF 100%)",
-              boxShadow: "0 4px 18px rgba(139,92,255,.5)",
-            }}
-          >
-            Sign in / Sign up
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => promptLogin(undefined, "login")}
+              className="px-4 py-2 rounded-full text-[12.5px] font-bold text-white/85 hover:text-white transition-colors"
+              style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", backdropFilter: "blur(8px)" }}
+            >
+              Sign in
+            </button>
+            <button
+              onClick={() => promptLogin(undefined, "signup")}
+              className="px-4 py-2 rounded-full text-[12.5px] font-bold text-white transition-transform hover:scale-[1.03] active:scale-95"
+              style={{
+                background: "linear-gradient(135deg,#8B5CFF 0%,#A47CFF 100%)",
+                boxShadow: "0 4px 18px rgba(139,92,255,.5)",
+              }}
+            >
+              Sign up
+            </button>
+          </div>
         )}
       </div>
 
