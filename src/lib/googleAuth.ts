@@ -37,9 +37,28 @@ export function getGoogleOAuthCredentials(): GoogleOAuthCredentials | null {
   return { clientId, clientSecret };
 }
 
-/** The callback URL for THIS request's own host — see the note above. */
+/**
+ * The PUBLIC origin this request actually arrived on — read from the
+ * standard reverse-proxy forwarded-host headers first. Netlify (like
+ * Vercel and most edge/CDN setups) terminates the real public request at
+ * its edge and forwards it inward to the Next.js function over an internal
+ * hop; `req.nextUrl.origin` reflects THAT internal hop's host, not
+ * `videoeditor53.netlify.app` — using it directly is what produced Google's
+ * `redirect_uri_mismatch` (the URI we sent didn't match either registered
+ * one). `x-forwarded-host`/`x-forwarded-proto` are what the edge sets to
+ * the ORIGINAL public request, so they're read first; falling back to
+ * `req.nextUrl` covers plain `npm run dev` locally, which has no proxy.
+ */
+function getRequestOrigin(req: NextRequest): string {
+  const forwardedHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const forwardedProto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
+  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
+  return req.nextUrl.origin;
+}
+
+/** The callback URL for THIS request's own (public) host — see the note above. */
 export function getGoogleRedirectUri(req: NextRequest): string {
-  return `${req.nextUrl.origin}/api/auth/google/callback`;
+  return `${getRequestOrigin(req)}/api/auth/google/callback`;
 }
 
 export const GOOGLE_OAUTH_STATE_COOKIE = "clipflow_oauth_state";
