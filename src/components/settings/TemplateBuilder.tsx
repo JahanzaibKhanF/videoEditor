@@ -27,6 +27,7 @@ import {
   validateTemplateJson, speedPresetKey,
 } from "../../utils/templateSchema";
 import { adminApi } from "../../utils/adminApi";
+import { generateTemplateAnimationKeyframes } from "../../utils/templateAnimationRecipes";
 import TemplatePreviewStage from "./TemplatePreviewStage";
 
 export interface AdminTemplate {
@@ -123,6 +124,22 @@ export function TemplateBuilderModal({
       next[i] = { ...next[i], ...p };
       return { ...j, texts: next };
     }), []);
+
+  // Picking an animation generates real, ready-made keyframes for it right
+  // away (see templateAnimationRecipes.ts) instead of leaving it as an
+  // opaque label — and picking a DIFFERENT one replaces whatever keyframes
+  // are there, generated or hand-tuned, with a fresh set for the new
+  // animation. Switching to "None" clears them entirely.
+  const applyTextAnimation = (i: number, animation: string) => {
+    const t = texts[i];
+    if (!t) return;
+    const startTime = t.startTime ?? 0;
+    const endTime = t.endTime ?? totalDur;
+    patchText(i, {
+      animation,
+      keyframes: generateTemplateAnimationKeyframes(animation, { startTime, endTime, totalDur }),
+    });
+  };
   const addText = () => {
     setJson((j) => ({ ...j, texts: [...arr<TemplateJsonText>(j.texts), { ...DEFAULT_TEXT_LAYER }] }));
     const n = texts.length;
@@ -433,7 +450,7 @@ export function TemplateBuilderModal({
                                 </select>
                               </Labeled>
                               <Labeled label="Animation">
-                                <select value={t.animation ?? "none"} onChange={(e) => patchText(i, { animation: e.target.value })} className={inputCls}>
+                                <select value={t.animation ?? "none"} onChange={(e) => applyTextAnimation(i, e.target.value)} className={inputCls}>
                                   {TEMPLATE_ANIMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                 </select>
                               </Labeled>
@@ -501,7 +518,7 @@ export function TemplateBuilderModal({
                                 onChange={(kf) => patchText(i, { keyframes: kf })}
                                 animation={t.animation}
                                 animationLabel={TEMPLATE_ANIMATIONS.find((a) => a.value === t.animation)?.label}
-                                onAnimationClear={() => patchText(i, { animation: "none" })}
+                                onAnimationClear={() => applyTextAnimation(i, "none")}
                               />
                             </div>
                           </div>

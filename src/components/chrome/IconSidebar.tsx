@@ -1,5 +1,5 @@
 "use client";
-import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Scissors, Wand2 } from "@/utils/icons";
+import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Scissors, Wand2, Pipette } from "@/utils/icons";
 
 interface Tab { id: string; label: string; icon: React.ReactNode; badge?: string; }
 
@@ -22,6 +22,7 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
       { id: "transitions", label: "Transitions", icon: <TbTransitionRight size={20} /> },
       { id: "animations",  label: "Animate",     icon: <Wand2 size={20} /> },
       { id: "bgremove",    label: "BG Remove",   icon: <Scissors size={20} />, badge: "AI" },
+      { id: "chromakey",   label: "Chroma Key",  icon: <Pipette size={20} /> },
     ],
   },
   {

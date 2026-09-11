@@ -290,14 +290,25 @@ export default function InteractionOverlay({ width, height }: Props) {
 
   const commit = useCallback((drag: DragState, base: Rect, anim: Rect) => {
     const { kind, id, mode, resizeMode } = drag;
+    // Pure on-screen displacement since drag-start, with scale/animation bias
+    // cancelled out (both `anim` and `drag.startRect` share the same scale +
+    // preset-animation offset baked in via getXRect(), evaluated at the same
+    // playhead instant, so subtracting them leaves only the drag itself). A
+    // keyframed x/y write MUST go through this delta — writing `anim.x`
+    // directly double-counts a centred-scale layer's (dim/2)*(1-scale) bias
+    // and any active preset-animation offset into the keyframe, which is
+    // exactly what made dragging jump/snap back once a scale keyframe (or a
+    // preset animation) was active alongside a position keyframe.
+    const dx = anim.x - drag.startRect.x;
+    const dy = anim.y - drag.startRect.y;
     switch (kind) {
       case "clip":
         setClipsDetails(prev => prev.map(c => {
           if (c.id !== id) return c;
           const baseW = c.width ?? width, baseH = c.height ?? height;
           let kfs = c.keyframes; const next = { ...c };
-          if (kfActive(c.keyframes, "x")) kfs = writeKf(kfs, "x", anim.x - (c.x ?? 0)); else next.x = base.x;
-          if (kfActive(c.keyframes, "y")) kfs = writeKf(kfs, "y", anim.y - (c.y ?? 0)); else next.y = base.y;
+          if (kfActive(c.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(c.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
+          if (kfActive(c.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(c.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
           if (mode === "resize") {
             if (kfActive(c.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos((anim.w / baseW) / (c.scale ?? 1)));
             else next.scale = Math.max(0.05, Math.min(base.w / baseW, base.h / baseH) || (c.scale ?? 1));
@@ -309,8 +320,8 @@ export default function InteractionOverlay({ width, height }: Props) {
         setImagesDetails(prev => prev.map(i => {
           if (i.id !== id) return i;
           let kfs = i.keyframes; const next = { ...i };
-          if (kfActive(i.keyframes, "x")) kfs = writeKf(kfs, "x", anim.x - i.imageX); else next.imageX = base.x;
-          if (kfActive(i.keyframes, "y")) kfs = writeKf(kfs, "y", anim.y - i.imageY); else next.imageY = base.y;
+          if (kfActive(i.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(i.keyframes, currentTime).x ?? 0) + dx); else next.imageX = base.x;
+          if (kfActive(i.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(i.keyframes, currentTime).y ?? 0) + dy); else next.imageY = base.y;
           if (mode === "resize") {
             if (kfActive(i.keyframes, "scale")) {
               const baseSc = Math.min(i.scaleX, i.scaleY) || 1;
@@ -338,8 +349,8 @@ export default function InteractionOverlay({ width, height }: Props) {
             measureWrappedTextHeight(t.text, fs, t.fontFamily, t.lineHeight, w, t.isBold, t.isItalic);
 
           if (mode === "move") {
-            if (kfActive(t.keyframes, "x")) kfs = writeKf(kfs, "x", anim.x - t.textX); else next.textX = base.x;
-            if (kfActive(t.keyframes, "y")) kfs = writeKf(kfs, "y", anim.y - t.textY); else next.textY = base.y;
+            if (kfActive(t.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(t.keyframes, currentTime).x ?? 0) + dx); else next.textX = base.x;
+            if (kfActive(t.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(t.keyframes, currentTime).y ?? 0) + dy); else next.textY = base.y;
           } else if (resizeMode === "width") {
             // Edit mode — change wrap width only; height auto-fits.
             const w = Math.max(24, base.w);
@@ -356,8 +367,8 @@ export default function InteractionOverlay({ width, height }: Props) {
               // exactly like clips/images. Base font size stays put.
               const startScale = evalKeyframes(t.keyframes, currentTime).scale ?? 1;
               kfs = writeKf(kfs, "scale", clampPos(startScale * r));
-              if (kfActive(t.keyframes, "x")) kfs = writeKf(kfs, "x", anim.x - t.textX);
-              if (kfActive(t.keyframes, "y")) kfs = writeKf(kfs, "y", anim.y - t.textY);
+              if (kfActive(t.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(t.keyframes, currentTime).x ?? 0) + dx);
+              if (kfActive(t.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(t.keyframes, currentTime).y ?? 0) + dy);
             } else {
               // Not keyframed → bake into font size + wrap width; top-left
               // follows the resized box.

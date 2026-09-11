@@ -15,6 +15,7 @@ import { computeAnimState, computeTransition } from "./AnimationEngine";
 import { evalKeyframes, applyKfOverride } from "./keyframes";
 import { wrapTextLines } from "./measureText";
 import { buildCanvasFilterString } from "./colorAdjustments";
+import { applyChromaKey, applyEdgeThin } from "./chromaKey";
 
 export interface CompositeFrameInput {
   ctx: CanvasRenderingContext2D;
@@ -127,7 +128,7 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
   if (anim.blur > 0) ctx.filter = `blur(${anim.blur}px)`;
   ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity * (text.opacity ?? 1)));
   ctx.translate(anim.tx + tw2 / 2, anim.ty + th2 / 2);
-  ctx.rotate((anim.rotation * Math.PI) / 180);
+  ctx.rotate(((anim.rotation + (text.rotation ?? 0)) * Math.PI) / 180);
   ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
   ctx.font = `${text.isItalic ? "italic" : "normal"} ${text.isBold ? "bold" : "normal"} ${text.fontSize}px "${text.fontFamily ?? "Arial"}", sans-serif`;
   ctx.textBaseline = "top";
@@ -236,7 +237,26 @@ function drawVideoClip(
     ctx.translate(-centerX, -centerY);
   }
 
-  try { ctx.drawImage(vid, cx0, cy0, cw, ch); } catch {}
+  if (clip.chromaKey?.enabled) {
+    // Key on the RAW frame (before color grading/blur, applied via ctx.filter
+    // below when drawing the result) so grading never shifts the key color
+    // out from under the similarity threshold.
+    const ow = Math.max(1, Math.round(cw)), oh = Math.max(1, Math.round(ch));
+    try {
+      const off = new OffscreenCanvas(ow, oh);
+      const offCtx = off.getContext("2d")!;
+      offCtx.drawImage(vid, 0, 0, ow, oh);
+      const imgData = offCtx.getImageData(0, 0, ow, oh);
+      applyChromaKey(imgData, clip.chromaKey.color, clip.chromaKey.tolerance, clip.chromaKey.edgeFeather);
+      applyEdgeThin(imgData, clip.chromaKey.edgeThin);
+      offCtx.putImageData(imgData, 0, 0);
+      ctx.drawImage(off, cx0, cy0, cw, ch);
+    } catch {
+      try { ctx.drawImage(vid, cx0, cy0, cw, ch); } catch {}
+    }
+  } else {
+    try { ctx.drawImage(vid, cx0, cy0, cw, ch); } catch {}
+  }
   ctx.filter = "none";
 
   for (const fx of overlayFx) drawClipEffectOverlay(ctx, fx, localT, cx0, cy0, cw, ch);
@@ -282,7 +302,7 @@ function drawImageLayer(
   if (combinedFilter) ctx.filter = combinedFilter;
   ctx.globalAlpha = Math.max(0, Math.min(1, anim.opacity)) * (img.opacity ?? 1);
   ctx.translate(anim.tx + dw / 2, anim.ty + dh / 2);
-  ctx.rotate((anim.rotation * Math.PI) / 180);
+  ctx.rotate(((anim.rotation + (img.rotation ?? 0)) * Math.PI) / 180);
   ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
   try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
   ctx.filter = "none";

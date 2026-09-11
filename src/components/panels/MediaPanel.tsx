@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle } from "@/utils/icons";
+import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle, Pipette } from "@/utils/icons";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -15,6 +15,7 @@ import TemplatesPanel from "./TemplatesPanel";
 import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
 import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
+import ChromaKeyPanel from "../editors/ChromaKeyPanel";
 import { useProjectMedia } from "../../hooks/useProjectMedia";
 import { pickMediaFiles } from "../../utils/pickMediaFiles";
 import type { Template } from "../../utils/templates";
@@ -371,6 +372,35 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
             <EmptyState
               compact
               icon={<Scissors size={18} strokeWidth={1.7} />}
+              title="No clip selected"
+              hint="Tap a video clip on the timeline, then come back here."
+            />
+          )}
+        </PanelBody>
+      </PanelShell>
+    );
+  }
+
+  /* ─── CHROMA KEY TAB ─── */
+  if (activeTab === "chromakey") {
+    const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
+    return (
+      <PanelShell>
+        <PanelHeader
+          icon={<Pipette size={13} />}
+          title="Chroma Key"
+          subtitle={selectedClip ? "Manual green/blue-screen removal" : "Select a clip on the timeline first"}
+        />
+        <PanelBody padded>
+          {selectedClip ? (
+            <ChromaKeyPanel
+              chromaKey={selectedClip.chromaKey}
+              onChange={ck => setClipsDetails(prev => prev.map(cl => cl.id === selectedClip.id ? { ...cl, chromaKey: ck } : cl))}
+            />
+          ) : (
+            <EmptyState
+              compact
+              icon={<Pipette size={18} strokeWidth={1.7} />}
               title="No clip selected"
               hint="Tap a video clip on the timeline, then come back here."
             />

@@ -1,4 +1,5 @@
 import React from "react";
+import { ChromaKeySettings } from "../utils/chromaKey";
 
 // ── Keyframes ────────────────────────────────────────────────────────────
 // User-authored per-property animation, layered ON TOP of the preset
@@ -151,6 +152,11 @@ export interface ClipDetails {
     url?: string;      // Cloudinary secure_url (cross-device copy)
     publicId?: string; // Cloudinary public_id — needed to delete the asset
   };
+  // Manual green/blue-screen removal — a live per-frame color-distance
+  // filter (see utils/chromaKey.ts), distinct from `bgRemoved` above (which
+  // is AI segmentation baked into a re-encoded transparent file). No re-encode,
+  // instant sliders, works on any solid-color backdrop.
+  chromaKey?: ChromaKeySettings;
 }
 
 // A single control point in a speed ramp: at `atFraction` (0..1 through the

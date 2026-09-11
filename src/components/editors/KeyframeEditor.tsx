@@ -31,11 +31,15 @@ interface Props {
   layerStart?: number;
   onSeek?: (t: number) => void;
   mode?: "editor" | "template";
-  /** The layer's preset entrance/exit animation ("none"/undefined = off) —
-   * shown as its own row here so it reads as "this layer has motion" right
-   * alongside the real keyframe tracks, and can be cleared from one place.
-   * Retiming it (when it happens where a timeline exists) is a drag on the
-   * KeyframeLane diamond, not here — this list has no time axis of its own. */
+  /** The layer's preset entrance/exit animation ("none"/undefined = off).
+   * Only ever rendered as a row here in `mode="template"` (the builder) —
+   * animations and manual keyframes are independent systems that both apply
+   * at once in the editor (see applyKfOverride in compositeFrame.ts), so the
+   * editor doesn't show a marker for it here or in KeyframeLane; showing one
+   * only ever displayed a single static point and read as confusing/broken.
+   * In the template builder, picking an animation instead generates real
+   * keyframe tracks up front (see TemplateBuilder.tsx), so this row there is
+   * just the "which animation seeded these keys" label + a way to clear it. */
   animation?: string;
   animationLabel?: string;
   onAnimationClear?: () => void;
@@ -94,7 +98,7 @@ export default function KeyframeEditor({
   const unitLabel = (p: KfProp) =>
     mode === "template" && (p === "x" || p === "y") ? "%" : propMeta(p).unit;
 
-  const hasAnimation = !!animation && animation !== "none";
+  const hasAnimation = mode === "template" && !!animation && animation !== "none";
 
   return (
     <div className="flex flex-col gap-1.5">
