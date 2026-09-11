@@ -7,18 +7,19 @@
  *
  * One row per animatable property: a stopwatch toggle, the live interpolated
  * value, and (when the track is on) a value field + "add key at playhead"
- * button. Expanding a row lists its keys with a per-key CurveField for the
- * outgoing ease. A footer button opens the full GraphEditorModal.
+ * button. Expanding a row lists its keys (time, value, ease label, delete) —
+ * curve shaping itself happens in the "Open graph editor" modal, not inline
+ * here (an inline mini-curve per key made this list too tall for what it's
+ * for: seeing and retiming keys, not shaping bezier handles).
  */
 import { useState } from "react";
 import { KeyframeTrack, KfProp } from "../../types/types";
 import {
   KF_PROPS, propMeta, evalTrack, makeTrack, upsertKey, removeKey, setKeyValue,
-  setKeyEase, upsertTrack, removeTrack, easePresetOf,
+  upsertTrack, removeTrack, easePresetOf,
 } from "../../utils/keyframes";
-import { Clock, Diamond, Trash2, ChevronRight, Spline } from "@/utils/icons";
+import { Clock, Diamond, Trash2, ChevronRight, Spline, Sparkles, X } from "@/utils/icons";
 import NumberInput from "../ui/NumberInput";
-import CurveField from "../ui/CurveField";
 import GraphEditorModal from "../timeline/GraphEditorModal";
 
 interface Props {
@@ -30,6 +31,14 @@ interface Props {
   layerStart?: number;
   onSeek?: (t: number) => void;
   mode?: "editor" | "template";
+  /** The layer's preset entrance/exit animation ("none"/undefined = off) —
+   * shown as its own row here so it reads as "this layer has motion" right
+   * alongside the real keyframe tracks, and can be cleared from one place.
+   * Retiming it (when it happens where a timeline exists) is a drag on the
+   * KeyframeLane diamond, not here — this list has no time axis of its own. */
+  animation?: string;
+  animationLabel?: string;
+  onAnimationClear?: () => void;
 }
 
 // value <-> field display. In template mode X/Y are fractions of the canvas,
@@ -43,7 +52,10 @@ function fromField(prop: KfProp, v: number, mode: "editor" | "template") {
   return v;
 }
 
-export default function KeyframeEditor({ tracks, onChange, time, duration, layerStart = 0, onSeek, mode = "editor" }: Props) {
+export default function KeyframeEditor({
+  tracks, onChange, time, duration, layerStart = 0, onSeek, mode = "editor",
+  animation, animationLabel, onAnimationClear,
+}: Props) {
   const [expanded, setExpanded] = useState<KfProp | null>(null);
   const [graphOpen, setGraphOpen] = useState(false);
 
@@ -82,8 +94,26 @@ export default function KeyframeEditor({ tracks, onChange, time, duration, layer
   const unitLabel = (p: KfProp) =>
     mode === "template" && (p === "x" || p === "y") ? "%" : propMeta(p).unit;
 
+  const hasAnimation = !!animation && animation !== "none";
+
   return (
     <div className="flex flex-col gap-1.5">
+      {hasAnimation && (
+        <div className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg border border-warning/30 bg-warning/10">
+          <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 bg-warning/20 text-warning">
+            <Sparkles size={12} />
+          </span>
+          <span className="flex-1 min-w-0 text-[11px] font-semibold text-ink-primary truncate">
+            Animation: {animationLabel ?? animation}
+          </span>
+          {onAnimationClear && (
+            <button onClick={onAnimationClear} title="Remove this animation"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-danger/70 hover:bg-danger/12 hover:text-danger flex-shrink-0">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
       {KF_PROPS.map((meta) => {
         const tr = trackFor(meta.prop);
         const on = active.has(meta.prop);
@@ -123,31 +153,24 @@ export default function KeyframeEditor({ tracks, onChange, time, duration, layer
 
             {on && isExp && tr && (
               <div className="px-2 pb-2 pt-1 flex flex-col gap-1.5 border-t border-studio-border">
-                {[...tr.keys].sort((a, b) => a.t - b.t).map((k, i, allK) => (
-                  <div key={k.id} className="flex items-start gap-2">
+                {[...tr.keys].sort((a, b) => a.t - b.t).map((k) => (
+                  <div key={k.id} className="flex items-center gap-2">
                     <button onClick={() => onSeek?.(k.t)} title="Go to keyframe"
-                      className="text-[9.5px] font-mono text-ink-faint hover:text-signal pt-0.5 flex-shrink-0 w-10 text-right">
+                      className="text-[9.5px] font-mono text-ink-faint hover:text-signal flex-shrink-0 w-10 text-right">
                       {k.t.toFixed(2)}s
                     </button>
-                    <div className="flex-1 min-w-0 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <NumberInput value={toField(meta.prop, k.value, mode)}
-                          step={meta.step} min={meta.min} max={meta.max} suffix={unitLabel(meta.prop)} width={64}
-                          onChange={(v) => onChange(upsertTrack(tracks, setKeyValue(tr, k.id, fromField(meta.prop, v, mode))))} />
-                        <span className="text-[9px] text-ink-faint">{easePresetOf(k.ease)}</span>
-                        <button onClick={() => onChange(upsertTrack(tracks, removeKey(tr, k.id)))}
-                          disabled={tr.keys.length <= 1}
-                          className="ml-auto text-danger/60 hover:text-danger disabled:opacity-30 flex-shrink-0">
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                      {i < allK.length - 1 && (
-                        <CurveField ease={k.ease} size={104}
-                          onChange={(ease) => onChange(upsertTrack(tracks, setKeyEase(tr, k.id, ease)))} />
-                      )}
-                    </div>
+                    <NumberInput value={toField(meta.prop, k.value, mode)}
+                      step={meta.step} min={meta.min} max={meta.max} suffix={unitLabel(meta.prop)} width={64}
+                      onChange={(v) => onChange(upsertTrack(tracks, setKeyValue(tr, k.id, fromField(meta.prop, v, mode))))} />
+                    <span className="text-[9px] text-ink-faint flex-1">{easePresetOf(k.ease)}</span>
+                    <button onClick={() => onChange(upsertTrack(tracks, removeKey(tr, k.id)))}
+                      disabled={tr.keys.length <= 1}
+                      className="text-danger/60 hover:text-danger disabled:opacity-30 flex-shrink-0">
+                      <Trash2 size={11} />
+                    </button>
                   </div>
                 ))}
+                <p className="text-[9px] text-ink-faint">Full curve editing — presets, bezier handles — lives in "Open graph editor" below.</p>
               </div>
             )}
           </div>

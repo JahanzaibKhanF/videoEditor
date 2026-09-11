@@ -185,13 +185,18 @@ function drawVideoClip(
 ) {
   const vid = getVideoDrawable(clip.id);
   if (!vid) return;
-  // User keyframes (position/scale/rotation/opacity) layered on top of the
+  // Entrance/exit preset (same computeAnimState engine as text/image) plus
+  // user keyframes (position/scale/rotation/opacity) layered on top of the
   // clip's resting transform — same evaluator the preview and export share.
-  const kf = evalKeyframes(clip.keyframes, t);
-  const kfScale = kf.scale ?? 1;
-  const cw = (clip.width ?? w) * (clip.scale ?? 1) * kfScale;
-  const ch = (clip.height ?? h) * (clip.scale ?? 1) * kfScale;
-  const cx0 = (clip.x ?? 0) + (kf.x ?? 0), cy0 = (clip.y ?? 0) + (kf.y ?? 0);
+  const a = applyKfOverride(
+    computeAnimState(clip.animation ?? "none", t, clip.startPosition ?? 0, clip.endPosition ?? 0, fps, clip.x ?? 0, clip.y ?? 0, w, h, 100),
+    evalKeyframes(clip.keyframes, t),
+  );
+  if (!a.visible) { return; }
+  const totalRotation = a.rotation + (clip.rotation ?? 0);
+  const cw = (clip.width ?? w) * (clip.scale ?? 1) * a.scale * a.scaleX;
+  const ch = (clip.height ?? h) * (clip.scale ?? 1) * a.scale * a.scaleY;
+  const cx0 = a.tx, cy0 = a.ty;
   const localT = t - (clip.startPosition ?? 0);
   const activeFx = clipEffects.filter(fx => fx.clipId === clip.id && localT >= fx.startTime && localT <= fx.endTime);
   const shakeFx = activeFx.filter(f => f.type === "shake");
@@ -199,14 +204,17 @@ function drawVideoClip(
   const overlayFx = activeFx.filter(f => f.type === "colorBurst" || f.type === "particles" || f.type === "gradientOverlay");
 
   ctx.save();
-  ctx.filter = buildCanvasFilterString(clip.colorAdjustments);
-  if (kf.opacity !== undefined) ctx.globalAlpha = Math.max(0, Math.min(1, kf.opacity));
+  const colorFilter = buildCanvasFilterString(clip.colorAdjustments);
+  const blurFilter = a.blur > 0 ? `blur(${a.blur}px)` : "";
+  const combinedFilter = [colorFilter !== "none" ? colorFilter : "", blurFilter].filter(Boolean).join(" ");
+  ctx.filter = combinedFilter || "none";
+  ctx.globalAlpha = Math.max(0, Math.min(1, a.opacity));
 
-  // Keyframed rotation spins the clip around its own centre before drawing.
-  if (kf.rotation) {
+  // Animation/keyframe rotation spins the clip around its own centre before drawing.
+  if (totalRotation) {
     const rcx = cx0 + cw / 2, rcy = cy0 + ch / 2;
     ctx.translate(rcx, rcy);
-    ctx.rotate((kf.rotation * Math.PI) / 180);
+    ctx.rotate((totalRotation * Math.PI) / 180);
     ctx.translate(-rcx, -rcy);
   }
 

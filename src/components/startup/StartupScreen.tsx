@@ -218,9 +218,14 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
           </h1>
         </div>
 
+        {/* The ClipFlow title above stays put on every screen size — only
+            this area (tabs + template grid) scrolls, in a height-bounded
+            box, instead of the title getting carried away with the page
+            scroll on mobile (where this used to be overflow-visible and
+            let the whole overlay scroll as one unit). */}
         <div className="
           relative w-full
-          overflow-visible sm:overflow-y-auto sm:max-h-[80dvh] scrollbar-thin
+          overflow-y-auto max-h-[70dvh] scrollbar-thin
           p-0 sm:p-2">
 
         {/* ── Tab row ─────────────────────────────────── */}

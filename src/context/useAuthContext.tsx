@@ -43,19 +43,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // The startup screen is blocked on `loading` until this resolves — a
+    // slow/cold DB connection behind /api/auth/me (Neon serverless cold
+    // starts can take several seconds, longer under load) used to leave the
+    // whole app stuck on "Starting ClipFlow…" indefinitely. Cap it: if it
+    // doesn't answer in time, fall back to signed-out (the app already
+    // works fully as a guest) instead of blocking forever. The user can
+    // still sign in manually once the app is up.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
     (async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await fetch("/api/auth/me", { signal: controller.signal });
         const data = await parseJsonSafe(res);
         if (!cancelled) setUser(data.user ?? null);
       } catch {
         if (!cancelled) setUser(null);
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 

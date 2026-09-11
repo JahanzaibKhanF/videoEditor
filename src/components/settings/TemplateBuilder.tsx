@@ -499,6 +499,9 @@ export function TemplateBuilderModal({
                                 time={time}
                                 onSeek={(s) => { setPlaying(false); setTime(s); }}
                                 onChange={(kf) => patchText(i, { keyframes: kf })}
+                                animation={t.animation}
+                                animationLabel={TEMPLATE_ANIMATIONS.find((a) => a.value === t.animation)?.label}
+                                onAnimationClear={() => patchText(i, { animation: "none" })}
                               />
                             </div>
                           </div>
@@ -552,13 +555,16 @@ export function TemplateBuilderModal({
 //    template mode the editor shows X/Y as % and keeps their track `value`
 //    as a canvas fraction — matches TemplateJsonKeyframeTrack exactly.
 function TemplateTextKeyframes({
-  kf, totalDur, time, onChange, onSeek,
+  kf, totalDur, time, onChange, onSeek, animation, animationLabel, onAnimationClear,
 }: {
   kf: TemplateJsonKeyframeTrack[] | undefined;
   totalDur: number;
   time: number;
   onChange: (kf: TemplateJsonKeyframeTrack[] | undefined) => void;
   onSeek: (s: number) => void;
+  animation?: string;
+  animationLabel?: string;
+  onAnimationClear?: () => void;
 }) {
   const tracks: KeyframeTrack[] = (kf ?? []).map((tr) => ({
     prop: tr.prop,
@@ -590,6 +596,9 @@ function TemplateTextKeyframes({
       duration={totalDur}
       onSeek={onSeek}
       mode="template"
+      animation={animation}
+      animationLabel={animationLabel}
+      onAnimationClear={onAnimationClear}
     />
   );
 }

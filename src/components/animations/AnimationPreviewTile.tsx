@@ -50,7 +50,7 @@ interface Props {
   animationKey: string;
   label: string;
   active: boolean;
-  mode: "text" | "image";
+  mode: "text" | "image" | "clip";
   accentColor?: string;
   onClick: () => void;
 }

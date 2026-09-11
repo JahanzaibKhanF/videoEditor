@@ -35,6 +35,7 @@ import { measureWrappedTextHeight, measureTextBlock } from "../../utils/measureT
 import { computeAnimState } from "../../utils/AnimationEngine";
 import { evalKeyframes, evalTrack, applyKfOverride, upsertKey, makeTrack, upsertTrack } from "../../utils/keyframes";
 import { KeyframeTrack, KfProp } from "../../types/types";
+import { RotateCw } from "@/utils/icons";
 
 interface Props {
   width: number;
@@ -90,6 +91,14 @@ export default function InteractionOverlay({ width, height }: Props) {
 
   const [liveRect, setLiveRect] = useState<{ id: string; rect: Rect } | null>(null);
   const liveRectRef = useRef(liveRect);
+  // Rotate is a separate, lightweight interaction from move/resize: it never
+  // changes the box's rect, only an angle, so it gets its own drag ref/state
+  // rather than being shoehorned into DragState.
+  interface RotateState { kind: Kind; id: string; centerX: number; centerY: number; startAngle: number; startDeg: number; }
+  const rotateRef = useRef<RotateState | null>(null);
+  const [liveRotation, setLiveRotation] = useState<{ id: string; deg: number } | null>(null);
+  const liveRotationRef = useRef(liveRotation);
+  useEffect(() => { liveRotationRef.current = liveRotation; }, [liveRotation]);
   useEffect(() => { liveRectRef.current = liveRect; }, [liveRect]);
   const [guides, setGuides] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -135,11 +144,14 @@ export default function InteractionOverlay({ width, height }: Props) {
     return { x: cx - w / 2, y: cy - h / 2, w, h };
   };
 
+  // Clips scale top-left-anchored (not centred) so an "se" corner-drag keeps
+  // the opposite corner fixed — matches the resize/commit math below exactly.
   const getClipRect = (c: typeof clipsDetails[number]): Rect => {
     if (liveRect?.id === c.id) return liveRect.rect;
-    const kf = evalKeyframes(c.keyframes, currentTime);
-    const s = (c.scale ?? 1) * (kf.scale ?? 1);
-    return { x: (c.x ?? 0) + (kf.x ?? 0), y: (c.y ?? 0) + (kf.y ?? 0), w: (c.width ?? width) * s, h: (c.height ?? height) * s };
+    const a = animOf(c.animation, c.x ?? 0, c.y ?? 0, c.startPosition, c.endPosition, 100, c.keyframes);
+    const sx = (c.scale ?? 1) * a.scale * a.scaleX;
+    const sy = (c.scale ?? 1) * a.scale * a.scaleY;
+    return { x: a.tx, y: a.ty, w: (c.width ?? width) * sx, h: (c.height ?? height) * sy };
   };
   const getImageRect = (i: typeof imagesDetails[number]): Rect => {
     if (liveRect?.id === i.id) return liveRect.rect;
@@ -170,6 +182,51 @@ export default function InteractionOverlay({ width, height }: Props) {
     const fcx = a.tx + fullW / 2, fcy = a.ty + fullH / 2;
     // box-local (0,0) → canvas, scaling about the full-box centre
     return { x: fcx - (fullW / 2) * sx, y: fcy - (fullH / 2) * sy, w: cw * sx, h: ch * sy };
+  };
+
+  // Current total rotation (deg) for the selection chrome — preset animation
+  // + base rotation (set via the rotate handle) + any active rotation
+  // keyframe, exactly what the compositor draws with. Blur has no rotation.
+  const getRotationFor = (kind: Kind, id: string): number => {
+    if (liveRotation?.id === id) return liveRotation.deg;
+    if (kind === "text") {
+      const t = textsDetails.find(x => x.id === id);
+      if (!t) return 0;
+      return animOf(t.animation, t.textX, t.textY, t.startTime, t.endTime, t.fontSize, t.keyframes).rotation + (t.rotation ?? 0);
+    }
+    if (kind === "image") {
+      const i = imagesDetails.find(x => x.id === id);
+      if (!i) return 0;
+      return animOf(i.animation, i.imageX, i.imageY, i.startTime, i.endTime, 100, i.keyframes).rotation + (i.rotation ?? 0);
+    }
+    if (kind === "clip") {
+      const c = clipsDetails.find(x => x.id === id);
+      if (!c) return 0;
+      return animOf(c.animation, c.x ?? 0, c.y ?? 0, c.startPosition, c.endPosition, 100, c.keyframes).rotation + (c.rotation ?? 0);
+    }
+    return 0;
+  };
+
+  // Commit a finished rotate drag: `delta` is how many degrees the handle
+  // was actually spun (screen-space, so it's independent of any base/preset/
+  // keyframe rotation already in effect). Writes a rotation KEYFRAME at the
+  // playhead if this layer is keyframing rotation, otherwise adds the delta
+  // onto the static base `rotation` field — same base-vs-keyframe branch
+  // every other property uses.
+  const commitRotation = (kind: Kind, id: string, delta: number) => {
+    if (kind === "text") {
+      setTextsDetails(prev => prev.map(t => t.id !== id ? t : kfActive(t.keyframes, "rotation")
+        ? { ...t, keyframes: writeKf(t.keyframes, "rotation", (evalKeyframes(t.keyframes, currentTime).rotation ?? 0) + delta) }
+        : { ...t, rotation: (t.rotation ?? 0) + delta }));
+    } else if (kind === "image") {
+      setImagesDetails(prev => prev.map(i => i.id !== id ? i : kfActive(i.keyframes, "rotation")
+        ? { ...i, keyframes: writeKf(i.keyframes, "rotation", (evalKeyframes(i.keyframes, currentTime).rotation ?? 0) + delta) }
+        : { ...i, rotation: (i.rotation ?? 0) + delta }));
+    } else if (kind === "clip") {
+      setClipsDetails(prev => prev.map(c => c.id !== id ? c : kfActive(c.keyframes, "rotation")
+        ? { ...c, keyframes: writeKf(c.keyframes, "rotation", (evalKeyframes(c.keyframes, currentTime).rotation ?? 0) + delta) }
+        : { ...c, rotation: (c.rotation ?? 0) + delta }));
+    }
   };
 
   // Resting rect — un-keyframed commits write deltas onto this.
@@ -369,6 +426,22 @@ export default function InteractionOverlay({ width, height }: Props) {
     selectOnly(kind, id);
   };
 
+  const beginRotate = (kind: Kind, id: string, rect: Rect, clientX: number, clientY: number, pointerId?: number) => {
+    if (pointerId !== undefined && rootRef.current) {
+      try { rootRef.current.setPointerCapture(pointerId); } catch { /* noop */ }
+    }
+    const el = rootRef.current;
+    const r = el ? el.getBoundingClientRect() : null;
+    const scale = r ? r.width / width : 1;
+    // Handle centre in the SAME screen-pixel space as pointer events.
+    const centerX = r ? r.left + (rect.x + rect.w / 2) * scale : clientX;
+    const centerY = r ? r.top + (rect.y + rect.h / 2) * scale : clientY;
+    const startAngle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
+    rotateRef.current = { kind, id, centerX, centerY, startAngle, startDeg: getRotationFor(kind, id) };
+    setLiveRotation({ id, deg: getRotationFor(kind, id) });
+    selectOnly(kind, id);
+  };
+
   const rectForHandles = (l: HitLayer): Rect => {
     if (l.kind === "text") {
       const t = textsDetails.find(x => x.id === l.id)!;
@@ -424,6 +497,12 @@ export default function InteractionOverlay({ width, height }: Props) {
   // ── Drag move / up ─────────────────────────────────────────────────────
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      const rot = rotateRef.current;
+      if (rot) {
+        const angle = Math.atan2(e.clientY - rot.centerY, e.clientX - rot.centerX) * (180 / Math.PI);
+        setLiveRotation({ id: rot.id, deg: rot.startDeg + (angle - rot.startAngle) });
+        return;
+      }
       const drag = dragRef.current;
       if (!drag) return;
       const el = rootRef.current;
@@ -475,6 +554,14 @@ export default function InteractionOverlay({ width, height }: Props) {
     };
 
     const onUp = () => {
+      const rot = rotateRef.current;
+      if (rot) {
+        const finalRot = liveRotationRef.current;
+        if (finalRot && finalRot.id === rot.id) commitRotation(rot.kind, rot.id, finalRot.deg - rot.startDeg);
+        rotateRef.current = null;
+        setLiveRotation(null);
+        return;
+      }
       const drag = dragRef.current;
       if (!drag) return;
       const finalRect = liveRectRef.current;
@@ -501,7 +588,7 @@ export default function InteractionOverlay({ width, height }: Props) {
       window.removeEventListener("pointerup", onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height, commit]);
+  }, [width, height, commit, currentTime]);
 
   // ── Keyboard delete ────────────────────────────────────────────────────
   useEffect(() => {
@@ -559,7 +646,7 @@ export default function InteractionOverlay({ width, height }: Props) {
     ));
   };
 
-  const box = (rect: Rect, color: string, opts: { selected: boolean; editing?: boolean; fill?: string }): React.CSSProperties => ({
+  const box = (rect: Rect, color: string, opts: { selected: boolean; editing?: boolean; fill?: string; rotateDeg?: number }): React.CSSProperties => ({
     position: "absolute",
     left: rect.x, top: rect.y, width: rect.w, height: rect.h,
     boxSizing: "border-box",
@@ -569,7 +656,39 @@ export default function InteractionOverlay({ width, height }: Props) {
     background: opts.fill ?? "transparent",
     pointerEvents: "none",
     touchAction: "none",
+    transform: opts.rotateDeg ? `rotate(${opts.rotateDeg}deg)` : undefined,
+    transformOrigin: "center center",
   });
+
+  // A small handle above the box, connected by a thin line, that spins the
+  // layer around its own centre — the same "rotate stick" every editor from
+  // PowerPoint to After Effects to Canva uses. Lives inside the (possibly
+  // already-rotated) box div, so it rotates along with the box for free.
+  const ROTATE_OFFSET = 26;
+  const renderRotateHandle = (kind: Kind, id: string, rect: Rect, color: string) => (
+    <div
+      onPointerDown={(e) => { e.stopPropagation(); beginRotate(kind, id, rect, e.clientX, e.clientY, e.pointerId); }}
+      style={{
+        position: "absolute", left: "50%", top: -ROTATE_OFFSET, width: 22, height: 22,
+        transform: "translate(-50%, 0)", cursor: "grab", touchAction: "none",
+        pointerEvents: "auto", zIndex: 3,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      title="Drag to rotate"
+    >
+      <div style={{
+        position: "absolute", top: 22, left: "50%", width: 1, height: ROTATE_OFFSET - 22,
+        background: color, opacity: 0.6, transform: "translateX(-50%)",
+      }} />
+      <div style={{
+        width: 16, height: 16, borderRadius: "50%", background: "#fff",
+        border: `1.5px solid ${color}`, boxShadow: "0 1px 3px rgba(0,0,0,.35)",
+        display: "flex", alignItems: "center", justifyContent: "center", color,
+      }}>
+        <RotateCw size={9} />
+      </div>
+    </div>
+  );
 
   // ── Render every layer's chrome, ordered so the SELECTED box is on top ──
   type OverlayItem = { key: string; z: number; sel: boolean; node: React.ReactNode };
@@ -578,11 +697,13 @@ export default function InteractionOverlay({ width, height }: Props) {
   clipsDetails.filter(c => currentTime >= c.startPosition && currentTime <= c.endPosition).forEach(c => {
     const rect = getClipRect(c);
     const selected = selectedClipId === c.id;
+    const rotateDeg = getRotationFor("clip", c.id);
     items.push({
       key: `clip-${c.id}`, z: c.zIndex ?? 0, sel: selected,
       node: (
-        <div key={`clip-${c.id}`} style={box(rect, ACCENT.clip, { selected })}>
+        <div key={`clip-${c.id}`} style={box(rect, ACCENT.clip, { selected, rotateDeg })}>
           {selected && renderHandles("clip", c.id, rect, ACCENT.clip, "scale")}
+          {selected && renderRotateHandle("clip", c.id, rect, ACCENT.clip)}
         </div>
       ),
     });
@@ -591,11 +712,13 @@ export default function InteractionOverlay({ width, height }: Props) {
   imagesDetails.filter(i => currentTime >= i.startTime && currentTime <= i.endTime).forEach(img => {
     const rect = getImageRect(img);
     const selected = selectedImageID === img.id;
+    const rotateDeg = getRotationFor("image", img.id);
     items.push({
       key: `image-${img.id}`, z: img.zIndex ?? 0, sel: selected,
       node: (
-        <div key={`image-${img.id}`} style={box(rect, ACCENT.image, { selected })}>
+        <div key={`image-${img.id}`} style={box(rect, ACCENT.image, { selected, rotateDeg })}>
           {selected && renderHandles("image", img.id, rect, ACCENT.image, "scale")}
+          {selected && renderRotateHandle("image", img.id, rect, ACCENT.image)}
         </div>
       ),
     });
@@ -618,10 +741,11 @@ export default function InteractionOverlay({ width, height }: Props) {
     const editing = editingTextId === t.id;
     const selected = selectedTextId === t.id;
     const rect = getTextRect(t, editing);
+    const rotateDeg = getRotationFor("text", t.id);
     items.push({
       key: `text-${t.id}`, z: t.zIndex ?? 0, sel: selected || editing,
       node: (
-        <div key={`text-${t.id}`} style={box(rect, ACCENT.text, { selected: selected || editing, editing })}>
+        <div key={`text-${t.id}`} style={box(rect, ACCENT.text, { selected: selected || editing, editing, rotateDeg })}>
           {editing && (
             <textarea
               autoFocus
@@ -651,6 +775,7 @@ export default function InteractionOverlay({ width, height }: Props) {
           )}
           {editing && renderHandles("text", t.id, rect, ACCENT.text, "width")}
           {selected && !editing && renderHandles("text", t.id, rect, ACCENT.text, "scale")}
+          {selected && !editing && renderRotateHandle("text", t.id, rect, ACCENT.text)}
         </div>
       ),
     });

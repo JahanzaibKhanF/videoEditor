@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
     }
 
+    // Google-only accounts have no password_hash — bcrypt.compare would
+    // throw on a null hash, and there's no password to check against anyway.
+    if (!user.password_hash) {
+      return NextResponse.json({ error: "This account uses Google sign-in — continue with Google instead." }, { status: 401 });
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });

@@ -79,14 +79,18 @@ function ChangeRow({
 }
 
 /** Shared "Motion / Keyframes" card. */
-function KfCard({ tracks, onChange, time, duration, layerStart, onSeek }: {
+function KfCard({
+  tracks, onChange, time, duration, layerStart, onSeek, animation, animationLabel, onAnimationClear,
+}: {
   tracks: KeyframeTrack[] | undefined;
   onChange: (t: KeyframeTrack[] | undefined) => void;
   time: number; duration: number; layerStart: number; onSeek: (t: number) => void;
+  animation?: string; animationLabel?: string; onAnimationClear?: () => void;
 }) {
   return (
     <InspectorCard accent="signal" icon={<Spline size={12} />} title="Motion / Keyframes">
-      <KeyframeEditor tracks={tracks} onChange={onChange} time={time} duration={duration} layerStart={layerStart} onSeek={onSeek} />
+      <KeyframeEditor tracks={tracks} onChange={onChange} time={time} duration={duration} layerStart={layerStart} onSeek={onSeek}
+        animation={animation} animationLabel={animationLabel} onAnimationClear={onAnimationClear} />
     </InspectorCard>
   );
 }
@@ -216,9 +220,17 @@ export default function PropertiesPanel() {
                 catalog="transitions"
               />
 
+              <ChangeRow
+                icon={<Wand2 size={12} />} kind="Animation"
+                value={animationName(clip.animation)}
+                catalog="animations"
+              />
+
               <KfCard
                 tracks={clip.keyframes}
                 onChange={tracks => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, keyframes: tracks } : cl))}
+                animation={clip.animation} animationLabel={animationName(clip.animation)}
+                onAnimationClear={() => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId ? { ...cl, animation: "none" } : cl))}
                 time={currentTime} duration={totalTime} layerStart={clip.startPosition ?? 0} onSeek={seek}
               />
             </>
@@ -237,6 +249,8 @@ export default function PropertiesPanel() {
             <KfCard
               tracks={text.keyframes}
               onChange={tracks => setTextsDetails(prev => prev.map(tx => tx.id === selectedTextId ? { ...tx, keyframes: tracks } : tx))}
+              animation={text.animation} animationLabel={animationName(text.animation)}
+              onAnimationClear={() => setTextsDetails(prev => prev.map(tx => tx.id === selectedTextId ? { ...tx, animation: "none" } : tx))}
               time={currentTime} duration={totalTime} layerStart={text.startTime ?? 0} onSeek={seek}
             />
           </>
@@ -268,6 +282,8 @@ export default function PropertiesPanel() {
             <KfCard
               tracks={image.keyframes}
               onChange={tracks => setImagesDetails(prev => prev.map(i => i.id === selectedImageID ? { ...i, keyframes: tracks } : i))}
+              animation={image.animation} animationLabel={animationName(image.animation)}
+              onAnimationClear={() => setImagesDetails(prev => prev.map(i => i.id === selectedImageID ? { ...i, animation: "none" } : i))}
               time={currentTime} duration={totalTime} layerStart={image.startTime ?? 0} onSeek={seek}
             />
           </>

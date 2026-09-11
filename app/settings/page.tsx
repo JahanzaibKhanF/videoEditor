@@ -3,7 +3,7 @@
 import { useEffect, useState, FormEvent, DragEvent } from "react";
 import {
   LayoutTemplate, Plus, Code2, LayoutGrid, GripVertical, Eye, EyeOff,
-  Trash2, Pencil, Check, X, Sparkles, ShieldAlert, Copy,
+  Trash2, Pencil, Check, X, Sparkles, ShieldAlert, Copy, Users, Mail, Calendar, FolderOpen,
 } from "@/utils/icons";
 import * as Icons from "@/utils/icons";
 import { DEFAULT_TEMPLATE_RECORDS } from "@/utils/templates";
@@ -58,7 +58,11 @@ const SPEED_RAMP_HINT = `Optional per-slot "speed" — a number (constant speed;
 Text "animation" also supports "wiggle" and "shake" for continuous motion.`;
 
 export default function SettingsPage() {
-  const [section, setSection] = useState<"templates" | "motion">("templates");
+  // Top level: Studio (content creation — templates/animations/transitions/
+  // filters, each with its own dedicated settings) vs Users (who has an
+  // account). `studioTab` is the second-level nav, only shown under Studio.
+  const [section, setSection] = useState<"studio" | "users">("studio");
+  const [studioTab, setStudioTab] = useState<"templates" | "animation" | "transition" | "filter">("templates");
   const [authed, setAuthed] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [password, setPassword] = useState("");
@@ -272,14 +276,17 @@ export default function SettingsPage() {
   const orderedTemplates = [...templates].sort((a, b) => a.sort_order - b.sort_order);
 
   return (
-    <div className="min-h-[100dvh] bg-studio-void bg-aperture-radial">
+    // `html,body,#root{overflow:hidden}` (globals.css) is there for the
+    // fixed-viewport editor app — this page needs its OWN scroll container
+    // or a template/user list longer than one screen is simply unreachable.
+    <div className="h-[100dvh] overflow-y-auto scrollbar-thin bg-studio-void bg-aperture-radial">
       <div className="max-w-[1100px] mx-auto px-6 py-8">
 
-        {/* Top-level section switcher — Templates vs Motion Presets are separate admin areas */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-studio-surface border border-studio-border w-fit mb-6">
+        {/* Top-level: Studio (content creation) vs Users (accounts) */}
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-studio-surface border border-studio-border w-fit mb-4">
           {([
-            { key: "templates", label: "Templates" },
-            { key: "motion", label: "Motion Presets" },
+            { key: "studio", label: "Studio" },
+            { key: "users", label: "Users" },
           ] as const).map(s => (
             <button key={s.key} onClick={() => setSection(s.key)}
               className={`px-4 py-1.5 rounded-lg text-[12.5px] font-bold transition-colors ${
@@ -290,7 +297,31 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        {section === "motion" ? <MotionPresetsSection /> : (
+        {/* Second level, Studio only: Templates / Animations / Transitions /
+            Filters each get their own dedicated settings below. */}
+        {section === "studio" && (
+          <div className="flex items-center gap-1.5 mb-6 flex-wrap">
+            {([
+              { key: "templates", label: "Templates" },
+              { key: "animation", label: "Animations" },
+              { key: "transition", label: "Transitions" },
+              { key: "filter", label: "Filters" },
+            ] as const).map(s => (
+              <button key={s.key} onClick={() => setStudioTab(s.key)}
+                className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+                  studioTab === s.key
+                    ? "border-signal/50 bg-signal/12 text-signal"
+                    : "border-studio-border text-ink-secondary hover:text-ink-primary hover:border-signal/30"
+                }`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {section === "users" ? <UsersSection /> : studioTab !== "templates" ? (
+          <MotionPresetsSection kind={studioTab} setKind={setStudioTab} />
+        ) : (
         <>
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -586,8 +617,12 @@ const TRANSITION_ENGINE_KEYS = [
 ];
 const MOTION_ICON_CHOICES = ["Sparkles", "ArrowUp", "Zap", "ZoomIn", "Activity", "Type", "Blend", "Moon", "ArrowRight", "ArrowLeftRight"];
 
-function MotionPresetsSection() {
-  const [kind, setKind] = useState<"animation" | "transition" | "filter">("animation");
+function MotionPresetsSection({
+  kind, setKind,
+}: {
+  kind: "animation" | "transition" | "filter";
+  setKind: (k: "animation" | "transition" | "filter") => void;
+}) {
   const [presets, setPresets] = useState<AdminMotionPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -673,16 +708,6 @@ function MotionPresetsSection() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-studio-surface border border-studio-border rounded-lg p-0.5">
-            {(["animation", "transition", "filter"] as const).map((k) => (
-              <button key={k} onClick={() => setKind(k)}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-semibold capitalize transition-colors ${
-                  kind === k ? "bg-signal text-studio-void" : "text-ink-secondary hover:text-ink-primary"
-                }`}>
-                {k}s
-              </button>
-            ))}
-          </div>
           <button
             onClick={handleImportDefaults}
             disabled={importing || missingDefaults.length === 0}
@@ -910,6 +935,83 @@ function MotionPresetEditorModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Users — read-only roster of registered accounts ────────────────────────
+interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string | null;
+  created_at: string;
+  project_count: number;
+}
+
+function UsersSection() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setListError(null);
+    api("/api/admin/users")
+      .then((data) => setUsers(data.users))
+      .catch((err) => setListError((err as Error).message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-9 h-9 rounded-xl bg-signal/15 border border-signal/30 flex items-center justify-center flex-shrink-0">
+          <Users size={16} className="text-signal" />
+        </div>
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink-primary">Registered users</h1>
+          <p className="text-[12.5px] text-ink-muted mt-0.5">
+            {loading ? "Loading…" : `${users.length} account${users.length !== 1 ? "s" : ""}`} · read-only, no password data ever leaves the database.
+          </p>
+        </div>
+      </div>
+
+      {listError && (
+        <div className="text-[12.5px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2 mb-4">{listError}</div>
+      )}
+
+      {loading ? (
+        <div className="text-ink-muted text-[13px] py-10 text-center">Loading users…</div>
+      ) : users.length === 0 ? (
+        <div className="border border-dashed border-studio-borderLight rounded-xl py-14 text-center">
+          <p className="text-ink-secondary text-[13px]">No one has signed up yet.</p>
+          <p className="text-ink-faint text-[12px] mt-1">Accounts created via Sign up (or Google, once configured) will show up here.</p>
+        </div>
+      ) : (
+        <div className="bg-studio-surface border border-studio-border rounded-xl overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 border-b border-studio-border text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
+            <span>Account</span>
+            <span>Projects</span>
+            <span>Joined</span>
+          </div>
+          {users.map((u) => (
+            <div key={u.id} className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-3 border-b border-studio-border last:border-b-0 items-center">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-ink-primary truncate">{u.display_name || u.email}</div>
+                <div className="flex items-center gap-1 text-[11px] text-ink-faint truncate">
+                  <Mail size={10} className="flex-shrink-0" /> {u.email}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-[12px] text-ink-secondary font-mono">
+                <FolderOpen size={12} className="text-ink-faint" /> {u.project_count}
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-ink-faint whitespace-nowrap">
+                <Calendar size={11} /> {new Date(u.created_at).toLocaleDateString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

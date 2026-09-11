@@ -102,8 +102,13 @@ function ClipFlowAppInner() {
   const handleResumeProject = async (projectId: string) => {
     setResuming(true);
     setResumeError(null);
+    // Same reasoning as the auth check: a cold/slow DB connection here used
+    // to leave the "Opening your project…" loader spinning forever. Cap it
+    // so a timeout surfaces as a real, retryable error instead.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch(`/api/projects/${projectId}`);
+      const res = await fetch(`/api/projects/${projectId}`, { signal: controller.signal });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not load that project.");
       const project = data.project;
@@ -122,8 +127,11 @@ function ClipFlowAppInner() {
         router.replace(`/?project=${projectId}`, { scroll: false });
       }
     } catch (err) {
-      setResumeError((err as Error).message);
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      setResumeError(isAbort ? "Taking too long to load that project. Please try again." : (err as Error).message);
       setResuming(false);
+    } finally {
+      clearTimeout(timeout);
     }
   };
 

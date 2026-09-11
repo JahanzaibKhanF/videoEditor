@@ -19,12 +19,18 @@ import AnimationPreviewTile from "./AnimationPreviewTile";
 import SectionLabel from "../ui/SectionLabel";
 
 export default function AnimationSelection() {
-  const { selectedImageID, selectedTextId, imagesDetails, textsDetails, setImagesDetails, setTextsDetails } = useAppDetailsContext();
-  const showAnimationOptionsFor = selectedImageID ? "image" : "text";
-  const selectedAnimation = showAnimationOptionsFor === "image"
+  const {
+    selectedImageID, selectedTextId, selectedClipId,
+    imagesDetails, textsDetails, clipsDetails,
+    setImagesDetails, setTextsDetails, setClipsDetails,
+  } = useAppDetailsContext();
+  const showAnimationOptionsFor = selectedClipId ? "clip" : selectedImageID ? "image" : "text";
+  const selectedAnimation = showAnimationOptionsFor === "clip"
+    ? clipsDetails.find(c => c.id === selectedClipId)?.animation
+    : showAnimationOptionsFor === "image"
     ? imagesDetails.find(img => img.id === selectedImageID)?.animation
     : textsDetails.find(txt => txt.id === selectedTextId)?.animation;
-  const isObjectSelected = selectedImageID !== null || selectedTextId !== null;
+  const isObjectSelected = selectedImageID !== null || selectedTextId !== null || selectedClipId !== null;
 
   const [dbPresets, setDbPresets] = useState<MotionPreset[]>([]);
   const [search, setSearch] = useState("");
@@ -71,9 +77,9 @@ export default function AnimationSelection() {
   const filtered = q ? allItems.filter(i => i.label.toLowerCase().includes(q)) : allItems;
 
   const handleAnimationChange = (key: string) => {
-    if (textsDetails.length === 0 && imagesDetails.length === 0) return;
     if (!isObjectSelected) return;
-    if (showAnimationOptionsFor === "image") setImagesDetails(prev => prev.map(img => img.id === selectedImageID ? { ...img, animation: key } : img));
+    if (showAnimationOptionsFor === "clip") setClipsDetails(prev => prev.map(c => c.id === selectedClipId ? { ...c, animation: key } : c));
+    else if (showAnimationOptionsFor === "image") setImagesDetails(prev => prev.map(img => img.id === selectedImageID ? { ...img, animation: key } : img));
     else setTextsDetails(prev => prev.map(txt => txt.id === selectedTextId ? { ...txt, animation: key } : txt));
   };
 
@@ -89,7 +95,7 @@ export default function AnimationSelection() {
 
       {!isObjectSelected && (
         <div className="mb-2.5 rounded-lg border border-dashed border-studio-border px-2.5 py-1.5 text-mini text-ink-faint text-center leading-snug">
-          Select a text or image layer first, then tap an animation.
+          Select a text, image, or video layer first, then tap an animation.
         </div>
       )}
 

@@ -48,6 +48,10 @@ export interface TextDetails {
   startTime: number;
   endTime: number;
   animation: string;
+  // Static rotation (degrees), set via the on-canvas rotate handle. Additive
+  // with any animation/keyframe rotation, same "base + offset" pattern as
+  // keyframes.ts (0 = unrotated).
+  rotation?: number;
   zIndex?: number;
   keyframes?: KeyframeTrack[];
 }
@@ -66,6 +70,7 @@ export interface ImageDetails {
   startTime: number;
   endTime: number;
   animation: string;
+  rotation?: number;
   zIndex?: number;
   keyframes?: KeyframeTrack[];
   colorAdjustments?: ColorAdjustments;
@@ -108,9 +113,14 @@ export interface ClipDetails {
   x: number;
   y: number;
   scale: number;
+  rotation?: number;
   width: number;
   height: number;
   muted?: boolean;
+  // Entrance/exit preset — same engine + field as text/image
+  // (computeAnimState), so a clip can fade/slide/zoom in exactly like a
+  // text or image layer. Omitted/"none" = no animation.
+  animation?: string;
   zIndex?: number;
   keyframes?: KeyframeTrack[];
   colorAdjustments?: ColorAdjustments;

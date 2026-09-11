@@ -38,23 +38,29 @@ async function ensureSchemaOnce(client: NeonQueryFunction<false, false>): Promis
   schemaEnsuring = (async () => {
     const rows = await client("SELECT to_regclass('public.users') AS tbl");
     const alreadyExists = (rows as Array<{ tbl: string | null }>)[0]?.tbl;
-    if (alreadyExists) {
-      schemaEnsured = true;
-      return;
+    if (!alreadyExists) {
+      console.log("[db] Core tables not found — running db/schema.sql automatically...");
+      const schemaPath = path.join(process.cwd(), "db", "schema.sql");
+      const raw = fs.readFileSync(schemaPath, "utf-8");
+      // Not a general-purpose SQL parser — schema.sql is plain DDL
+      // (CREATE TABLE/INDEX) with no semicolons inside string literals or
+      // function bodies, so stripping line comments and splitting on `;`
+      // is safe here specifically.
+      const statements = raw.replace(/--.*$/gm, "").split(";").map(s => s.trim()).filter(Boolean);
+      for (const statement of statements) {
+        await client(statement);
+      }
+      console.log(`[db] Auto-migration complete — ran ${statements.length} schema statements.`);
     }
 
-    console.log("[db] Core tables not found — running db/schema.sql automatically...");
-    const schemaPath = path.join(process.cwd(), "db", "schema.sql");
-    const raw = fs.readFileSync(schemaPath, "utf-8");
-    // Not a general-purpose SQL parser — schema.sql is plain DDL
-    // (CREATE TABLE/INDEX) with no semicolons inside string literals or
-    // function bodies, so stripping line comments and splitting on `;`
-    // is safe here specifically.
-    const statements = raw.replace(/--.*$/gm, "").split(";").map(s => s.trim()).filter(Boolean);
-    for (const statement of statements) {
-      await client(statement);
-    }
-    console.log(`[db] Auto-migration complete — ran ${statements.length} schema statements.`);
+    // Small additive migrations for a database that already had `users`
+    // before Google sign-in existed — schema.sql's CREATE TABLE only runs
+    // against a brand-new database, so an existing one needs these applied
+    // directly. Both are safe to run every time this branch executes
+    // (once per cold start, per the `schemaEnsured` gate below).
+    await client("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL");
+    await client("ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE");
+
     schemaEnsured = true;
   })();
 
