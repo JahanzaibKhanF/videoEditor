@@ -212,10 +212,15 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
               <path d="M9 8.5l5 2.5-5 2.5V8.5z" fill="white" />
             </svg>
           </div>
-          <h1 className="text-white font-extrabold tracking-tight leading-none text-[30px] sm:text-[64px] md:text-[76px]"
-            style={{ textShadow: "0 6px 40px rgba(139,92,255,.55), 0 2px 10px rgba(0,0,0,.5)" }}>
-            ClipFlow
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-white font-extrabold tracking-tight leading-none text-[30px] sm:text-[64px] md:text-[76px]"
+              style={{ textShadow: "0 6px 40px rgba(139,92,255,.55), 0 2px 10px rgba(0,0,0,.5)" }}>
+              ClipFlow
+            </h1>
+            <div className="text-[10px] sm:text-[11.5px] font-semibold uppercase tracking-wide mt-1 sm:mt-2" style={{ color: "rgba(255,255,255,.35)" }}>
+              Professional Video Editor
+            </div>
+          </div>
         </div>
 
         {/* The ClipFlow title above stays put on every screen size — only
@@ -229,11 +234,7 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
           p-0 sm:p-2">
 
         {/* ── Tab row ─────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-4 sm:mb-8 gap-3 flex-wrap">
-          <div className="text-[10px] sm:text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: "rgba(255,255,255,.35)" }}>
-            Professional Video Editor
-          </div>
-
+        <div className="flex items-center justify-end mb-4 sm:mb-8 gap-3 flex-wrap">
           {/* "Recent" is the only real tab — Create (blank + templates together) is the default screen */}
           {user && (
             <div className="flex gap-1.5 p-1 rounded-xl" style={{ background: "rgba(255,255,255,.06)" }}>
@@ -285,7 +286,7 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
                 return (
                   <button key={tpl.id} onClick={() => goTemplate(tpl)}
                     className="group relative rounded-2xl overflow-hidden text-left transition-all aspect-video"
-                    style={{ border: "1.5px solid rgba(255,255,255,.1)" }}
+                    style={{ border: `1.5px solid ${color}55` }}
                   >
                     {tpl.coverImage ? (
                       // eslint-disable-next-line @next/next/no-img-element
