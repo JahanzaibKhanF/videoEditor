@@ -95,6 +95,20 @@ function KfCard({
   );
 }
 
+/** Shared "Fit to composition" button — resizes/repositions a layer to
+ * exactly fill the canvas, stretching/shrinking non-uniformly if needed. */
+function FitToCompButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      title="Resize and reposition to exactly fill the composition — stretches/shrinks non-uniformly if the aspect ratios don't match"
+      onClick={onClick}
+      className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-signal/35 text-signal text-[11.5px] font-bold hover:bg-signal/10 transition-colors"
+    >
+      <Maximize2 size={12} /> Fit to composition
+    </button>
+  );
+}
+
 export default function PropertiesPanel() {
   const {
     textsDetails, blursDetails, imagesDetails, setTextsDetails,
@@ -210,15 +224,9 @@ export default function PropertiesPanel() {
                   );
                 })()}
 
-                <button
-                  title="Resize and reposition this clip to exactly fill the composition — stretches/shrinks non-uniformly if the aspect ratios don't match"
-                  onClick={() => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId
-                    ? { ...cl, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height, scale: 1 }
-                    : cl))}
-                  className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-signal/35 text-signal text-[11.5px] font-bold hover:bg-signal/10 transition-colors"
-                >
-                  <Maximize2 size={12} /> Fit to composition
-                </button>
+                <FitToCompButton onClick={() => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId
+                  ? { ...cl, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height, scale: 1 }
+                  : cl))} />
 
                 <div className="pt-1 border-t border-studio-border">
                   <ColorAdjustPanel
@@ -255,6 +263,9 @@ export default function PropertiesPanel() {
         {text && (
           <>
             <TextEditor />
+            <FitToCompButton onClick={() => setTextsDetails(prev => prev.map(tx => tx.id === selectedTextId
+              ? { ...tx, textX: 0, textY: 0, width: containerDimenions.width, height: containerDimenions.height }
+              : tx))} />
             <ChangeRow
               icon={<Wand2 size={12} />} kind="Animation"
               value={animationName(text.animation)}
@@ -279,6 +290,10 @@ export default function PropertiesPanel() {
                   onChange={v => setImagesDetails(prev => prev.map(i => i.id === selectedImageID ? { ...i, opacity: v } : i))} />
                 <FieldValue>{Math.round((image.opacity ?? 1) * 100)}%</FieldValue>
               </FieldRow>
+
+              <FitToCompButton onClick={() => setImagesDetails(prev => prev.map(i => i.id === selectedImageID
+                ? { ...i, imageX: 0, imageY: 0, scaleX: containerDimenions.width / i.width, scaleY: containerDimenions.height / i.height }
+                : i))} />
 
               <div className="pt-1 border-t border-studio-border">
                 <ColorAdjustPanel
@@ -313,6 +328,9 @@ export default function PropertiesPanel() {
                 <NumberInput value={blur.blurAmount ?? 10} min={0} max={100} step={1}
                   onChange={v => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId ? { ...b, blurAmount: v } : b))} />
               </FieldRow>
+              <FitToCompButton onClick={() => setBlursDetails(prev => prev.map(b => b.id === selectedBlurId
+                ? { ...b, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height }
+                : b))} />
             </InspectorCard>
             <KfCard
               tracks={blur.keyframes}
@@ -361,6 +379,9 @@ export default function PropertiesPanel() {
                   onChange={v => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId ? { ...s, opacity: v } : s))} />
                 <FieldValue>{Math.round((shape.opacity ?? 1) * 100)}%</FieldValue>
               </FieldRow>
+              <FitToCompButton onClick={() => setShapesDetails(prev => prev.map(s => s.id === selectedShapeId
+                ? { ...s, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height }
+                : s))} />
             </InspectorCard>
 
             <ChangeRow
@@ -397,6 +418,9 @@ export default function PropertiesPanel() {
                   onChange={v => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, opacity: v } : b))} />
                 <FieldValue>{Math.round((brush.opacity ?? 1) * 100)}%</FieldValue>
               </FieldRow>
+              <FitToCompButton onClick={() => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId
+                ? { ...b, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height }
+                : b))} />
             </InspectorCard>
 
             <ChangeRow

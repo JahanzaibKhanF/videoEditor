@@ -41,8 +41,11 @@ export default function CompositionSettingsModal() {
 
   const locked = !!activeTemplate;
 
-  // Can't shrink duration below whatever content already extends to —
-  // trimming content itself happens on the timeline, not here.
+  // Purely informational now — shrinking duration below existing content's
+  // end is ALLOWED (the user explicitly wants to go to 1s or less
+  // regardless); content past the new duration just sits outside the
+  // visible/playable/exported range rather than being deleted, and comes
+  // back into range if duration is raised again later.
   const maxContentEnd = Math.max(
     0,
     ...clipsDetails.map(c => c.endPosition ?? 0),
@@ -54,11 +57,12 @@ export default function CompositionSettingsModal() {
   );
 
   const [durationInput, setDurationInput] = useState(() => totalTime.toFixed(1));
+  const MIN_DURATION = 0.1;
 
   const commitDuration = () => {
     const v = parseFloat(durationInput);
     if (!Number.isFinite(v) || v <= 0) { setDurationInput(totalTime.toFixed(1)); return; }
-    const next = Math.max(v, maxContentEnd, 0.5);
+    const next = Math.max(v, MIN_DURATION);
     setTotalTime(next);
     setDurationInput(next.toFixed(1));
   };
@@ -103,7 +107,7 @@ export default function CompositionSettingsModal() {
             <SettingRow label="Duration">
               <div className="flex items-center gap-1.5">
                 <input
-                  type="number" min={maxContentEnd || 0.5} step={0.5} value={durationInput}
+                  type="number" min={MIN_DURATION} step={0.5} value={durationInput}
                   onChange={e => setDurationInput(e.target.value)}
                   onBlur={commitDuration}
                   onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}

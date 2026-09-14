@@ -156,6 +156,30 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // A video-less project's duration auto-fits to its content's own latest
+  // end — both growing (already true, add-handlers already bump totalTime
+  // up) AND shrinking as content is trimmed shorter, so trimming a text/
+  // shape/blur/brush's end time is reflected immediately without a trip to
+  // Composition Settings. Video-based projects keep the existing
+  // grow-only behavior (never auto-shrinks) — trimming a CLIP is a much
+  // more deliberate, frequent editing action there, and silently shortening
+  // the whole timeline every time would be surprising.
+  useEffect(() => {
+    if (clipsDetails.length > 0) return;
+    const maxEnd = Math.max(
+      0,
+      ...textsDetails.map(t => t.endTime ?? 0),
+      ...imagesDetails.map(i => i.endTime ?? 0),
+      ...blursDetails.map(b => b.endTime ?? 0),
+      ...shapesDetails.map(s => s.endTime ?? 0),
+      ...brushesDetails.map(b => b.endTime ?? 0),
+    );
+    if (maxEnd > 0) {
+      setTotalTime(prev => (Math.abs(prev - maxEnd) > 0.001 ? maxEnd : prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipsDetails.length, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails]);
+
   return (
     <AppContext.Provider value={{
       previewScale, setPreviewScale,

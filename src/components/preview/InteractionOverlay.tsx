@@ -362,8 +362,25 @@ export default function InteractionOverlay({ width, height }: Props) {
           if (kfActive(c.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(c.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
           if (kfActive(c.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(c.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
           if (mode === "resize") {
-            if (kfActive(c.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos((anim.w / baseW) / (c.scale ?? 1)));
-            else next.scale = Math.max(0.05, Math.min(base.w / baseW, base.h / baseH) || (c.scale ?? 1));
+            // Ctrl/Cmd-drag = free/non-uniform stretch — independent x/y
+            // instead of one locked-aspect "scale". Clip has no base
+            // scaleX/scaleY field (only `scale`), so the non-keyframed case
+            // bakes straight into width/height instead (dividing out the
+            // current `scale` so the rendered size still lands exactly on
+            // the dragged rect: rendered = width * scale).
+            if (resizeMode === "free") {
+              if (kfActive(c.keyframes, "scaleX") || kfActive(c.keyframes, "scaleY")) {
+                kfs = writeKf(kfs, "scaleX", clampPos((anim.w / baseW) / (c.scale ?? 1)));
+                kfs = writeKf(kfs, "scaleY", clampPos((anim.h / baseH) / (c.scale ?? 1)));
+              } else {
+                next.width = Math.max(MIN_SIZE, base.w) / (c.scale ?? 1);
+                next.height = Math.max(MIN_SIZE, base.h) / (c.scale ?? 1);
+              }
+            } else if (kfActive(c.keyframes, "scale")) {
+              kfs = writeKf(kfs, "scale", clampPos((anim.w / baseW) / (c.scale ?? 1)));
+            } else {
+              next.scale = Math.max(0.05, Math.min(base.w / baseW, base.h / baseH) || (c.scale ?? 1));
+            }
           }
           return { ...next, keyframes: kfs };
         }));
@@ -375,7 +392,12 @@ export default function InteractionOverlay({ width, height }: Props) {
           if (kfActive(i.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(i.keyframes, currentTime).x ?? 0) + dx); else next.imageX = base.x;
           if (kfActive(i.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(i.keyframes, currentTime).y ?? 0) + dy); else next.imageY = base.y;
           if (mode === "resize") {
-            if (kfActive(i.keyframes, "scale")) {
+            if (resizeMode === "free") {
+              if (kfActive(i.keyframes, "scaleX") || kfActive(i.keyframes, "scaleY")) {
+                kfs = writeKf(kfs, "scaleX", clampPos(anim.w / i.width));
+                kfs = writeKf(kfs, "scaleY", clampPos(anim.h / i.height));
+              } else { next.scaleX = base.w / i.width; next.scaleY = base.h / i.height; }
+            } else if (kfActive(i.keyframes, "scale")) {
               const baseSc = Math.min(i.scaleX, i.scaleY) || 1;
               kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / i.width, anim.h / i.height) / baseSc));
             } else { next.scaleX = base.w / i.width; next.scaleY = base.h / i.height; }
@@ -400,8 +422,14 @@ export default function InteractionOverlay({ width, height }: Props) {
           if (kfActive(s.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(s.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
           if (kfActive(s.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(s.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
           if (mode === "resize") {
-            if (kfActive(s.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / s.width, anim.h / s.height)));
-            else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+            if (resizeMode === "free") {
+              if (kfActive(s.keyframes, "scaleX") || kfActive(s.keyframes, "scaleY")) {
+                kfs = writeKf(kfs, "scaleX", clampPos(anim.w / s.width));
+                kfs = writeKf(kfs, "scaleY", clampPos(anim.h / s.height));
+              } else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+            } else if (kfActive(s.keyframes, "scale")) {
+              kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / s.width, anim.h / s.height)));
+            } else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
           }
           return { ...next, keyframes: kfs };
         }));
@@ -413,8 +441,14 @@ export default function InteractionOverlay({ width, height }: Props) {
           if (kfActive(b.keyframes, "x")) kfs = writeKf(kfs, "x", (evalKeyframes(b.keyframes, currentTime).x ?? 0) + dx); else next.x = base.x;
           if (kfActive(b.keyframes, "y")) kfs = writeKf(kfs, "y", (evalKeyframes(b.keyframes, currentTime).y ?? 0) + dy); else next.y = base.y;
           if (mode === "resize") {
-            if (kfActive(b.keyframes, "scale")) kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / b.width, anim.h / b.height)));
-            else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+            if (resizeMode === "free") {
+              if (kfActive(b.keyframes, "scaleX") || kfActive(b.keyframes, "scaleY")) {
+                kfs = writeKf(kfs, "scaleX", clampPos(anim.w / b.width));
+                kfs = writeKf(kfs, "scaleY", clampPos(anim.h / b.height));
+              } else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
+            } else if (kfActive(b.keyframes, "scale")) {
+              kfs = writeKf(kfs, "scale", clampPos(Math.min(anim.w / b.width, anim.h / b.height)));
+            } else { next.width = Math.max(MIN_SIZE, base.w); next.height = Math.max(MIN_SIZE, base.h); }
           }
           return { ...next, keyframes: kfs };
         }));
@@ -782,7 +816,12 @@ export default function InteractionOverlay({ width, height }: Props) {
       <div key={dir}
         onPointerDown={(e) => {
           e.stopPropagation();
-          beginDrag(kind, id, "resize", mode, dir, rect, e.clientX, e.clientY, e.pointerId);
+          // Ctrl/Cmd + drag on a corner handle switches a uniform "scale"
+          // resize to a free, non-uniform stretch (independent x/y) —
+          // reuses the exact same free-resize math blur's own handles
+          // already use, just armed conditionally here instead of always.
+          const rm = mode === "scale" && (e.ctrlKey || e.metaKey) ? "free" : mode;
+          beginDrag(kind, id, "resize", rm, dir, rect, e.clientX, e.clientY, e.pointerId);
         }}
         style={{
           position: "absolute", width: HANDLE_HIT, height: HANDLE_HIT,
