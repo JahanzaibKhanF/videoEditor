@@ -154,8 +154,31 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
     ctx.shadowColor = text.shadowColor; ctx.shadowBlur = text.shadowBlur ?? 0;
     ctx.shadowOffsetX = text.shadowOffsetX ?? 0; ctx.shadowOffsetY = text.shadowOffsetY ?? 0;
   }
-  ctx.fillStyle = text.textColor ?? "#fff";
-  drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2));
+
+  if (text.fillMode === "gradient" && text.gradientColorStart && text.gradientColorEnd) {
+    const rad = ((text.gradientAngle ?? 0) * Math.PI) / 180;
+    const dx = (Math.cos(rad) * tw2) / 2, dy = (Math.sin(rad) * th2) / 2;
+    const grad = ctx.createLinearGradient(-dx, -dy, dx, dy);
+    grad.addColorStop(0, text.gradientColorStart);
+    grad.addColorStop(1, text.gradientColorEnd);
+    ctx.fillStyle = grad;
+  } else {
+    ctx.fillStyle = text.textColor ?? "#fff";
+  }
+
+  const hasStroke = !!text.strokeColor && text.strokeColor !== "transparent" && (text.strokeWidth ?? 0) > 0;
+  if (hasStroke) {
+    ctx.strokeStyle = text.strokeColor!;
+    ctx.lineWidth = text.strokeWidth!;
+    ctx.lineJoin = "round";
+  }
+
+  const curve = text.curve ?? 0;
+  if (curve !== 0) {
+    drawCurvedText(ctx, text.text.replace(/\n/g, " "), curve, hasStroke);
+  } else {
+    drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2), hasStroke);
+  }
   ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.filter = "none";
   ctx.restore();
 }
@@ -493,13 +516,56 @@ function drawClipEffectOverlay(
   ctx.restore();
 }
 
-function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number) {
+function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number, stroke?: boolean) {
   const lines = wrapTextLines(ctx, text, maxW);
   let ly = y;
   for (const line of lines) {
-    if (line) ctx.fillText(line, x, ly);
+    if (line) {
+      if (stroke) ctx.strokeText(line, x, ly);
+      ctx.fillText(line, x, ly);
+    }
     ly += lineH;
   }
+}
+
+// Arcs a single line of text along a circle instead of wrapping it. `pct`
+// is -100 (full smile, bows downward, circle center above the text) .. 0
+// (unused here, caller skips curved drawing) .. 100 (full arch, bows
+// upward, circle center below the text). Each character is placed like a
+// clock hand: rotate to its angle on the circle, then step outward by the
+// radius — the same construction used to draw text around a circular logo.
+function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number, stroke: boolean) {
+  const chars = [...text];
+  if (!chars.length) return;
+  const prevAlign = ctx.textAlign, prevBaseline = ctx.textBaseline;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const sweep = (Math.min(100, Math.max(-100, pct)) / 100) * Math.PI * 0.9;
+  const upward = sweep >= 0;
+  const absSweep = Math.abs(sweep);
+  const widths = chars.map(c => ctx.measureText(c).width || 1);
+  const totalWidth = widths.reduce((a, b) => a + b, 0);
+  const radius = totalWidth / absSweep;
+
+  ctx.save();
+  ctx.translate(0, upward ? radius : -radius);
+  let cursor = -absSweep / 2;
+  for (let i = 0; i < chars.length; i++) {
+    const charAngle = (widths[i] / totalWidth) * absSweep;
+    const mid = cursor + charAngle / 2;
+    ctx.save();
+    ctx.rotate(upward ? mid : -mid);
+    ctx.translate(0, upward ? -radius : radius);
+    if (stroke) ctx.strokeText(chars[i], 0, 0);
+    ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
+    cursor += charAngle;
+  }
+  ctx.restore();
+
+  ctx.textAlign = prevAlign;
+  ctx.textBaseline = prevBaseline;
 }
 
 export function applyTransition(

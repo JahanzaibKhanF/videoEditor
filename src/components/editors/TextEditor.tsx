@@ -59,6 +59,13 @@ export default function TextEditor() {
   const [fontSize, setFontSize] = useState(16);
   const [lineHeight, setLineHeight] = useState(1);
   const [colorMode, setColorMode] = useState<"text" | "background" | "shadow">("text");
+  const [fillMode, setFillMode] = useState<"solid" | "gradient">("solid");
+  const [gradientColorStart, setGradientColorStart] = useState("#8b5cff");
+  const [gradientColorEnd, setGradientColorEnd] = useState("#ff6b81");
+  const [gradientAngle, setGradientAngle] = useState(0);
+  const [strokeColor, setStrokeColor] = useState("transparent");
+  const [strokeWidth, setStrokeWidth] = useState(0);
+  const [curve, setCurve] = useState(0);
   const isUpdating = useRef(false);
 
   useEffect(() => {
@@ -70,6 +77,11 @@ export default function TextEditor() {
         setShadowColor(t.shadowColor || "transparent"); setShadowBlur(t.shadowBlur); setShadowOffsetX(t.shadowOffsetX);
         setShadowOffsetY(t.shadowOffsetY); setIsBold(t.isBold); setIsItalic(t.isItalic); setIsUnderline(t.isUnderline);
         setOpacity(t.opacity); setFontSize(Math.trunc(t.fontSize)); setLineHeight(t.lineHeight);
+        setFillMode(t.fillMode ?? "solid");
+        setGradientColorStart(t.gradientColorStart ?? "#8b5cff"); setGradientColorEnd(t.gradientColorEnd ?? "#ff6b81");
+        setGradientAngle(t.gradientAngle ?? 0);
+        setStrokeColor(t.strokeColor ?? "transparent"); setStrokeWidth(t.strokeWidth ?? 0);
+        setCurve(t.curve ?? 0);
         setTimeout(() => { isUpdating.current = false; }, 0);
       }
     }
@@ -83,9 +95,12 @@ export default function TextEditor() {
       // wraps to at a fixed width — keep the box tall enough to still
       // fully contain it (same measurement CompositorCanvas draws with).
       const neededH = measureWrappedTextHeight(t.text, fontSize, fontFamily, lineHeight, t.width, isBold, isItalic);
-      return { ...t, fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight, height: Math.max(t.height, neededH) };
+      return {
+        ...t, fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight, height: Math.max(t.height, neededH),
+        fillMode, gradientColorStart, gradientColorEnd, gradientAngle, strokeColor, strokeWidth, curve,
+      };
     }));
-  }, [fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight]);
+  }, [fontFamily, textColor, backgroundColor, shadowColor, shadowBlur, shadowOffsetX, shadowOffsetY, isBold, isItalic, isUnderline, opacity, fontSize, lineHeight, fillMode, gradientColorStart, gradientColorEnd, gradientAngle, strokeColor, strokeWidth, curve]);
 
   const divider = "h-px bg-studio-border my-2.5";
 
@@ -199,6 +214,58 @@ export default function TextEditor() {
           </div>
         </div>
       )}
+
+      <div className={divider} />
+      <SectionLabel inset={false} className="mb-2">Stylize</SectionLabel>
+
+      {/* Fill mode */}
+      <div className="mb-2.5">
+        <Segmented
+          size="sm"
+          value={fillMode}
+          onChange={setFillMode}
+          options={[
+            { value: "solid", label: "Solid Fill" },
+            { value: "gradient", label: "Gradient Fill" },
+          ]}
+        />
+      </div>
+
+      {fillMode === "gradient" && (
+        <div className="flex flex-col gap-2 mb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-mini text-ink-secondary font-medium">Start</span>
+            <input type="color" value={gradientColorStart} onChange={e => setGradientColorStart(e.target.value)}
+              className="w-8 h-8 rounded-lg bg-studio-void border border-studio-border cursor-pointer" />
+            <span className="text-mini text-ink-secondary font-medium">End</span>
+            <input type="color" value={gradientColorEnd} onChange={e => setGradientColorEnd(e.target.value)}
+              className="w-8 h-8 rounded-lg bg-studio-void border border-studio-border cursor-pointer" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-mini text-ink-secondary font-medium min-w-[48px]">Angle</span>
+            <div className="flex-1"><Slider min={0} max={360} step={1} value={gradientAngle} onChange={setGradientAngle} /></div>
+            <span className="text-mini text-ink-faint w-8 text-right font-mono">{gradientAngle}°</span>
+          </div>
+        </div>
+      )}
+
+      {/* Outline / stroke */}
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-mini text-ink-secondary font-medium min-w-[48px]">Outline</span>
+        <input type="color" value={strokeColor === "transparent" ? "#000000" : strokeColor}
+          onChange={e => setStrokeColor(e.target.value)}
+          className="w-8 h-8 rounded-lg bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+        <div className="flex-1"><Slider min={0} max={20} step={0.5} value={strokeWidth}
+          onChange={v => { setStrokeWidth(v); if (v > 0 && strokeColor === "transparent") setStrokeColor("#000000"); }} /></div>
+        <span className="text-mini text-ink-faint w-8 text-right font-mono">{strokeWidth}</span>
+      </div>
+
+      {/* Curve */}
+      <div className="flex items-center gap-2">
+        <span className="text-mini text-ink-secondary font-medium min-w-[48px]">Curve</span>
+        <div className="flex-1"><Slider min={-100} max={100} step={1} value={curve} onChange={setCurve} /></div>
+        <span className="text-mini text-ink-faint w-8 text-right font-mono">{curve}</span>
+      </div>
     </InspectorCard>
   );
 }

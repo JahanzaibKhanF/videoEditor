@@ -55,6 +55,24 @@ export interface TextDetails {
   rotation?: number;
   zIndex?: number;
   keyframes?: KeyframeTrack[];
+  // ── Stylized text ────────────────────────────────────────────────────
+  // Undefined/"solid" = plain `textColor` fill, same as always. "gradient"
+  // fills the glyphs with a two-stop linear gradient instead — `textColor`
+  // stays as the fallback for any place that doesn't understand gradients
+  // (e.g. thumbnails), so it's never cleared when switching modes.
+  fillMode?: "solid" | "gradient";
+  gradientColorStart?: string;
+  gradientColorEnd?: string;
+  gradientAngle?: number; // degrees, 0 = left→right
+  // Outline, separate from the drop-shadow fields above. 0/undefined width
+  // or a "transparent" color = no outline.
+  strokeColor?: string;
+  strokeWidth?: number;
+  // Arcs the whole line along a circle instead of wrapping normally: -100
+  // (full smile, bows downward) .. 0 (flat, default) .. 100 (full arch,
+  // bows upward). Non-zero disables wrapping — curved text is always drawn
+  // as one line.
+  curve?: number;
 }
 
 export interface ImageDetails {
