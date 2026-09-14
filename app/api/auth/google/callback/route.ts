@@ -10,7 +10,7 @@ import { getGoogleOAuthCredentials, getGoogleRedirectUri, GOOGLE_OAUTH_STATE_COO
 // exact same session cookie the password login flow does.
 export async function GET(req: NextRequest) {
   const cfg = getGoogleOAuthCredentials();
-  if (!cfg) return NextResponse.redirect(new URL("/?authError=google_not_configured", req.url));
+  if (!cfg) return NextResponse.redirect(new URL("/editor?authError=google_not_configured", req.url));
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const cookieState = req.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)?.value;
 
   const fail = (reason: string) => {
-    const res = NextResponse.redirect(new URL(`/?authError=${reason}`, req.url));
+    const res = NextResponse.redirect(new URL(`/editor?authError=${reason}`, req.url));
     res.cookies.delete(GOOGLE_OAUTH_STATE_COOKIE);
     return res;
   };
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
       VALUES (${userId}, ${hashToken(token)}, ${req.headers.get("user-agent") ?? ""}, ${expiresAt.toISOString()})
     `;
 
-    const res = NextResponse.redirect(new URL("/", req.url));
+    const res = NextResponse.redirect(new URL("/editor", req.url));
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

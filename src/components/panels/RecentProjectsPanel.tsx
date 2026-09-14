@@ -58,7 +58,7 @@ export default function RecentProjectsPanel() {
   const switchToProject = (id: string) => {
     if (id === resumedProjectId) return; // already open
     // Full navigation on purpose — see the file-level comment above.
-    window.location.href = `/?project=${id}`;
+    window.location.href = `/editor?project=${id}`;
   };
 
   const deleteProject = async (e: MouseEvent, id: string) => {
@@ -75,7 +75,7 @@ export default function RecentProjectsPanel() {
       setProjects((prev) => prev.filter((p) => p.id !== id));
       // Deleted the project we're currently sitting in — nothing left to
       // show here, so go back to a clean start instead of a dead editor.
-      if (id === resumedProjectId) { window.location.href = "/"; return; }
+      if (id === resumedProjectId) { window.location.href = "/editor"; return; }
       // Freed a slot — let autosave retry now if it was blocked at the cap.
       window.dispatchEvent(new Event("clipflow:project-slot-freed"));
     } catch (err) {

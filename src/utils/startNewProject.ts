@@ -1,8 +1,9 @@
 /**
  * startNewProject — leave the current editor and go back to the create /
- * project-picker screen (StartupScreen). A full navigation to "/" with no
- * ?project= param is the intended way to reset the editor's hydrate-once
- * state tree (see RecentProjectsPanel's file comment).
+ * project-picker screen (StartupScreen). A full navigation to "/editor" with
+ * no ?project= param is the intended way to reset the editor's hydrate-once
+ * state tree (see RecentProjectsPanel's file comment). "/" itself is the
+ * public marketing landing page, not the app shell.
  *
  * `hasUnsavedWork` gates a confirm so an accidental click doesn't drop an
  * in-progress project. Signed-in projects autosave (and save again on
@@ -15,5 +16,5 @@ export function startNewProject(hasUnsavedWork: boolean) {
     );
     if (!ok) return;
   }
-  window.location.href = "/";
+  window.location.href = "/editor";
 }

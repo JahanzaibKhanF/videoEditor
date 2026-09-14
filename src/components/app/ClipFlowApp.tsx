@@ -131,7 +131,7 @@ function ClipFlowAppInner() {
       // replace, not push, so this doesn't pollute browser history on
       // every resume.
       if (searchParams.get("project") !== projectId) {
-        router.replace(`/?project=${projectId}`, { scroll: false });
+        router.replace(`/editor?project=${projectId}`, { scroll: false });
       }
     } catch (err) {
       const isAbort = err instanceof DOMException && err.name === "AbortError";
@@ -187,7 +187,7 @@ function ClipFlowAppInner() {
               setResumeError(null);
               setTemplate(tpl);
               setInitialAspect(tpl ? tpl.aspectRatio : aspect);
-              if (searchParams.get("project")) router.replace("/", { scroll: false });
+              if (searchParams.get("project")) router.replace("/editor", { scroll: false });
             }}
             onResumeProject={handleResumeProject}
             resuming={resuming}

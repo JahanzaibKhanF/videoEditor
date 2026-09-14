@@ -40,7 +40,7 @@ export default function AuthScreen() {
     const err = searchParams.get("authError");
     if (err) {
       setGoogleError(err);
-      router.replace("/", { scroll: false });
+      router.replace("/editor", { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);

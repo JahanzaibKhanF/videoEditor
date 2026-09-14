@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import ClipFlowApp from "@/components/app/ClipFlowApp";
+
+// This is the app itself, not content — keep it out of search results so
+// Google indexes the marketing page at "/" instead of a bare editor shell.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 // This page reads `?project=<id>` via useSearchParams() and depends on a
 // live session (auth cookie) — it's inherently per-request, not something

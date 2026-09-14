@@ -118,7 +118,7 @@ export function useProjectAutosave() {
         setProjectId(data.project.id);
         migrateUntitledHandles(data.project.id);
         if (searchParams.get("project") !== data.project.id) {
-          router.replace(`/?project=${data.project.id}`, { scroll: false });
+          router.replace(`/editor?project=${data.project.id}`, { scroll: false });
         }
       } else {
         const res = await fetch(`/api/projects/${currentId}`, {
