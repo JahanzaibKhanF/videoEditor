@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useState, useContext, useRef } from "react";
+import React, { createContext, useState, useContext, useRef, useCallback, useEffect } from "react";
 import {
   AppContextType, ActiveTemplate, AudioDetails, BlurDetails, BrushDetails, ClipDetails, ClipEffectDetails,
   ImageDetails, LayerOrder, RenderJob, ShapeDetails, TextDetails, TransitionFrame,
@@ -46,7 +46,15 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [mediaImportError, setMediaImportError] = useState("");
   const [isShowProcessedVideo, setIsShowProcessedVideo] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [totalTime, setTotalTime] = useState(0);
+  // A brand-new, completely empty project still gets a real, playable
+  // timeline (5s) from the start — matches the "empty layer defaults to 5s"
+  // behavior everywhere content gets added (MediaPanel/ShapesPanel/
+  // InteractionOverlay), and lets Composition Settings / Play work before
+  // anything has been added at all. Loading a saved project or applying a
+  // template always overwrites this with the real value right after. The
+  // Composition Settings duration field can both raise and lower this
+  // (lowering is floored at the current content's own end, if any).
+  const [totalTime, setTotalTime] = useState(5);
   const [seekTime, setSeekTime] = useState(0);
   const [fps, setFps] = useState<number | null>(null);
   const [jumpTo, setJumpTo] = useState(0);
@@ -58,6 +66,95 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [activeTemplate, setActiveTemplate] = useState<ActiveTemplate | null>(null);
   const [missingMediaNames, setMissingMediaNames] = useState<string[]>([]);
   const [resumedProjectId, setResumedProjectId] = useState<string | null>(null);
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────────
+  // Lightweight, session-only undo: not a per-action command stack (that
+  // would mean threading a "record this change" call through every single
+  // setClipsDetails/setTextsDetails/etc. call site across the whole app —
+  // dozens of files). Instead, this watches the same "document" fields
+  // useProjectAutosave already tracks and debounce-snapshots them, coalescing
+  // a burst of rapid changes (a drag, a slider scrub) into one undo step —
+  // same trade-off most editors make for continuous-value edits. Snapshots
+  // hold the live array/object references directly (not serialized), which
+  // is safe because every mutation in this codebase already replaces arrays
+  // immutably (`prev.map/filter/[...prev, x]`), never mutates in place.
+  interface DocSnapshot {
+    clips: ClipDetails[]; texts: TextDetails[]; images: ImageDetails[]; blurs: BlurDetails[];
+    shapes: ShapeDetails[]; brushes: BrushDetails[]; audio: AudioDetails[];
+  }
+  const snapshot = useCallback((): DocSnapshot => ({
+    clips: clipsDetails, texts: textsDetails, images: imagesDetails, blurs: blursDetails,
+    shapes: shapesDetails, brushes: brushesDetails, audio: audioDetails,
+  }), [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails]);
+
+  const applySnapshot = useCallback((s: DocSnapshot) => {
+    setClipsDetails(s.clips); setTextsDetails(s.texts); setImagesDetails(s.images);
+    setBlursDetails(s.blurs); setShapesDetails(s.shapes); setBrushesDetails(s.brushes);
+    setAudioDetails(s.audio);
+  }, []);
+
+  const historyRef = useRef<{ past: DocSnapshot[]; future: DocSnapshot[] }>({ past: [], future: [] });
+  const lastCommittedRef = useRef<DocSnapshot | null>(null);
+  const restoringRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const HISTORY_LIMIT = 100;
+
+  // Debounce-commit a history step whenever the tracked document actually
+  // changes — skipped right after an undo/redo applies its own snapshot, so
+  // restoring history doesn't get recorded as a NEW change.
+  useEffect(() => {
+    if (lastCommittedRef.current === null) { lastCommittedRef.current = snapshot(); return; }
+    if (restoringRef.current) { restoringRef.current = false; lastCommittedRef.current = snapshot(); return; }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const prev = lastCommittedRef.current;
+    debounceRef.current = setTimeout(() => {
+      historyRef.current.past.push(prev);
+      if (historyRef.current.past.length > HISTORY_LIMIT) historyRef.current.past.shift();
+      historyRef.current.future = [];
+      lastCommittedRef.current = snapshot();
+    }, 600);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails]);
+
+  const undo = useCallback(() => {
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    const { past, future } = historyRef.current;
+    if (past.length === 0) return;
+    const prevSnap = past.pop()!;
+    future.push(snapshot());
+    restoringRef.current = true;
+    lastCommittedRef.current = prevSnap;
+    applySnapshot(prevSnap);
+  }, [snapshot, applySnapshot]);
+
+  const redo = useCallback(() => {
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    const { past, future } = historyRef.current;
+    if (future.length === 0) return;
+    const nextSnap = future.pop()!;
+    past.push(snapshot());
+    restoringRef.current = true;
+    lastCommittedRef.current = nextSnap;
+    applySnapshot(nextSnap);
+  }, [snapshot, applySnapshot]);
+
+  // Ctrl/Cmd+Z to undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) to redo — ignored while
+  // typing in an input/textarea/contentEditable so it doesn't fight a text
+  // field's own native undo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.key.toLowerCase() !== "z" && e.key.toLowerCase() !== "y") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const isRedo = (e.key.toLowerCase() === "z" && e.shiftKey) || e.key.toLowerCase() === "y";
+      e.preventDefault();
+      if (isRedo) redo(); else undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   return (
     <AppContext.Provider value={{
@@ -105,6 +202,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
       activeTemplate, setActiveTemplate,
       missingMediaNames, setMissingMediaNames,
       resumedProjectId, setResumedProjectId,
+      undo, redo,
     }}>
       {children}
     </AppContext.Provider>

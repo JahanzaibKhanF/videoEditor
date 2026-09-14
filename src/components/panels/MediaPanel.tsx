@@ -404,12 +404,13 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
   /* ─── CHROMA KEY TAB ─── */
   if (activeTab === "chromakey") {
     const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
+    const selectedImg = imagesDetails.find(i => i.id === selectedImageID);
     return (
       <PanelShell>
         <PanelHeader
           icon={<Pipette size={13} />}
           title="Chroma Key"
-          subtitle={selectedClip ? "Manual green/blue-screen removal" : "Select a clip on the timeline first"}
+          subtitle={selectedClip || selectedImg ? "Manual green/blue-screen removal" : "Select a clip or image on the timeline first"}
         />
         <PanelBody padded>
           {selectedClip ? (
@@ -417,12 +418,17 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
               chromaKey={selectedClip.chromaKey}
               onChange={ck => setClipsDetails(prev => prev.map(cl => cl.id === selectedClip.id ? { ...cl, chromaKey: ck } : cl))}
             />
+          ) : selectedImg ? (
+            <ChromaKeyPanel
+              chromaKey={selectedImg.chromaKey}
+              onChange={ck => setImagesDetails(prev => prev.map(i => i.id === selectedImg.id ? { ...i, chromaKey: ck } : i))}
+            />
           ) : (
             <EmptyState
               compact
               icon={<Pipette size={18} strokeWidth={1.7} />}
-              title="No clip selected"
-              hint="Tap a video clip on the timeline, then come back here."
+              title="Nothing selected"
+              hint="Tap a video clip or image on the timeline, then come back here."
             />
           )}
         </PanelBody>

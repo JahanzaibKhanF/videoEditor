@@ -42,7 +42,11 @@ export default function RenderButton() {
     a.remove();
   };
 
-  const disabled = videos.length < 1;
+  // Render only needs SOMETHING to composite — video is not required
+  // (compositeFrame.ts happily draws a text/shape/blur/brush-only
+  // composition; the WebCodecs export path just encodes whatever it draws).
+  const disabled = clipsDetails.length === 0 && textsDetails.length === 0 && imagesDetails.length === 0
+    && blursDetails.length === 0 && shapesDetails.length === 0 && brushesDetails.length === 0;
   const activeJob = activeJobId ? renderJobs.find(j => j.jobId === activeJobId) : null;
   const isDone = activeJob?.processName === "Completed" || activeJob?.processName === "Failed" || activeJob?.processName === "Cancelled";
 

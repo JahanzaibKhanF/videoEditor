@@ -1,23 +1,34 @@
 /**
- * Motion presets — curated animation + transition menu entries.
+ * Motion presets — animation + transition catalog for the admin
+ * (Settings → Studio) UI and the app's pickers.
  *
- * IMPORTANT — what's actually JSON-configurable here vs. what isn't:
- * The underlying MATH for each animation (AnimationEngine.ts's
- * computeAnimState switch) and the FFmpeg xfade mapping for each transition
- * (clientRender.ts's FFMPEG_XFADE_MAP) both stay in code — real canvas
- * interpolation and FFmpeg filter graphs aren't things you can safely
- * reinvent from arbitrary admin-authored JSON without a much bigger,
- * riskier engine rewrite. What's genuinely JSON-configurable, the same way
- * a template's JSON doesn't reinvent FFmpeg either: WHICH curated presets
- * show up in the app's animation/transition pickers, their labels, their
- * grouping, and their order. Each preset's `engineKey` just has to name one
- * of the animation/transition keys the engine already knows how to compute.
+ * `DEFAULT_ANIMATION_RECORDS`/`DEFAULT_TRANSITION_RECORDS` now cover the
+ * FULL engine set (every key `animationOptionsConstants.ts`/
+ * `transitionOptionsConstants.ts` list — ~50 animations, 16 transitions),
+ * not a short curated subset — every one of them is importable in Settings
+ * and gets real keyframes baked in (see the UPDATE note below). `engineKey`
+ * is kept only as a fixed reference id (which original engine entry a
+ * preset's keyframes were seeded from) — it is NOT a live, re-pickable
+ * control in the editor UI (MotionPresetEditorModal has no engine-key
+ * dropdown); once a preset exists, its `keyframes` ARE its definition, and
+ * `engineKey` is just a label showing where it started from.
  *
- * This is deliberately a SHORT curated list (5-6 each), not the full
- * 50-animation/16-transition legacy set those pickers used to show — same
- * "a few polished options, not an overwhelming grid" philosophy as the
- * template rebuild.
+ * UPDATE: BOTH animation and transition presets now carry real, editable
+ * keyframe data (`keyframes` below) — an animation preset's is baked exactly
+ * from `computeAnimState` by sampling it (see templateAnimationRecipes.ts —
+ * genuinely faithful, not hand-approximated); a transition preset's is a
+ * best-effort single-object approximation (see transitionRecipes.ts — a
+ * transition is fundamentally a two-clip compositing operation, so its
+ * REAL two-clip math still lives in code, this is a representative x/y/
+ * scale/opacity/blur approximation for viewing/editing purposes). Both are
+ * Settings-side authoring/preview data, NOT consumed by the main editor's
+ * pickers (AnimationSelection.tsx / ClipTransitionSelector.tsx), which
+ * still just apply `engineKey` directly.
  */
+import { TemplateJsonKeyframeTrack } from "./templateInterpreter";
+import { animationOptions } from "./animationOptionsConstants";
+import { transitionOptions } from "./transitionOptionsConstants";
+
 export type MotionIconName =
   | "Sparkles" | "ArrowUp" | "Zap" | "ZoomIn" | "Activity" | "Type"
   | "Blend" | "Moon" | "ArrowRight" | "ArrowLeftRight";
@@ -29,13 +40,22 @@ export interface MotionPreset {
   engineKey: string;      // must match a case in AnimationEngine.ts / FFMPEG_XFADE_MAP
   description: string;
   icon: MotionIconName;
+  // Real, editable keyframe data (same shape templates use, see
+  // templateInterpreter.ts) auto-seeded from `engineKey` — faithfully for
+  // animations (templateAnimationRecipes.ts samples computeAnimState
+  // directly), approximately for transitions (transitionRecipes.ts — see
+  // its file comment for why an exact reproduction isn't possible).
+  // Settings-side authoring/preview data only — the main editor's pickers
+  // still apply `engineKey` directly (AnimationSelection.tsx /
+  // ClipTransitionSelector.tsx), neither reads this.
+  keyframes?: TemplateJsonKeyframeTrack[];
 }
 
 export interface MotionPresetRecord {
   id: string;
   kind: "animation" | "transition";
   name: string;
-  preset_json: { engineKey: string; description?: string; icon?: string };
+  preset_json: { engineKey: string; description?: string; icon?: string; keyframes?: TemplateJsonKeyframeTrack[] };
   is_active?: boolean;
   sort_order?: number;
 }
@@ -48,56 +68,40 @@ export function buildMotionPresetFromRecord(record: MotionPresetRecord): MotionP
     engineKey: record.preset_json?.engineKey ?? "none",
     description: record.preset_json?.description ?? "",
     icon: (record.preset_json?.icon as MotionIconName) ?? "Sparkles",
+    keyframes: record.preset_json?.keyframes,
   };
 }
 
-export const DEFAULT_ANIMATION_RECORDS: MotionPresetRecord[] = [
-  { id: "anim-fade-in", kind: "animation", name: "Fade In",
-    preset_json: { engineKey: "fadeIn", description: "Simple, clean opacity fade", icon: "Sparkles" },
-    is_active: true, sort_order: 0 },
-  { id: "anim-slide-up", kind: "animation", name: "Slide Up",
-    preset_json: { engineKey: "slideUp", description: "Rises in from below", icon: "ArrowUp" },
-    is_active: true, sort_order: 1 },
-  { id: "anim-pop-in", kind: "animation", name: "Pop In",
-    preset_json: { engineKey: "popInUp", description: "Punchy scale-in with overshoot", icon: "Zap" },
-    is_active: true, sort_order: 2 },
-  { id: "anim-zoom-in", kind: "animation", name: "Zoom In",
-    preset_json: { engineKey: "zoomIn", description: "Grows from center", icon: "ZoomIn" },
-    is_active: true, sort_order: 3 },
-  { id: "anim-bounce-in", kind: "animation", name: "Bounce In",
-    preset_json: { engineKey: "bounceIn", description: "Playful spring bounce", icon: "Activity" },
-    is_active: true, sort_order: 4 },
-  { id: "anim-typewriter", kind: "animation", name: "Typewriter",
-    preset_json: { engineKey: "typewriter", description: "Characters reveal one at a time", icon: "Type" },
-    is_active: true, sort_order: 5 },
-  { id: "anim-shake", kind: "animation", name: "Shake",
-    preset_json: { engineKey: "shake", description: "Energetic continuous jitter", icon: "Zap" },
-    is_active: true, sort_order: 6 },
-  { id: "anim-wiggle", kind: "animation", name: "Wiggle",
-    preset_json: { engineKey: "wiggle", description: "Playful continuous rotation, TikTok-style", icon: "Activity" },
-    is_active: true, sort_order: 7 },
-  { id: "anim-sparkle", kind: "animation", name: "Sparkle",
-    preset_json: { engineKey: "sparkle", description: "Twinkling shimmer pulse", icon: "Sparkles" },
-    is_active: true, sort_order: 8 },
-];
+// Every animation/transition the engine has, not a short curated subset —
+// the user wants the FULL catalog visible/importable in Settings, each one
+// convertible to real keyframes (see templateAnimationRecipes.ts /
+// transitionRecipes.ts). Derived straight from the same option lists the
+// (legacy, full) editor pickers use, so this can never drift out of sync
+// with "every key computeAnimState/applyTransition actually supports" —
+// `name` is EXACTLY the engine key's label, `engineKey` is a fixed
+// reference id only (see the "no engine-key dropdown" note on
+// MotionPresetEditorModal — it's not a live, re-pickable control anymore).
+export const DEFAULT_ANIMATION_RECORDS: MotionPresetRecord[] = animationOptions
+  .filter((a) => a.key !== "none")
+  .map((a, i) => ({
+    id: `anim-${a.key}`,
+    kind: "animation" as const,
+    name: a.name,
+    preset_json: { engineKey: a.key, description: `Built-in "${a.name}" animation.`, icon: "Sparkles" },
+    is_active: true,
+    sort_order: i,
+  }));
 
-export const DEFAULT_TRANSITION_RECORDS: MotionPresetRecord[] = [
-  { id: "trans-cross-dissolve", kind: "transition", name: "Cross Dissolve",
-    preset_json: { engineKey: "crossDissolve", description: "Classic smooth crossfade", icon: "Blend" },
-    is_active: true, sort_order: 0 },
-  { id: "trans-dip-black", kind: "transition", name: "Dip to Black",
-    preset_json: { engineKey: "dipToBlack", description: "Fades through black", icon: "Moon" },
-    is_active: true, sort_order: 1 },
-  { id: "trans-wipe", kind: "transition", name: "Wipe",
-    preset_json: { engineKey: "wipeLeftToRight", description: "Sweeps left to right", icon: "ArrowRight" },
-    is_active: true, sort_order: 2 },
-  { id: "trans-slide", kind: "transition", name: "Slide",
-    preset_json: { engineKey: "slideIn", description: "Next clip slides in over current", icon: "ArrowLeftRight" },
-    is_active: true, sort_order: 3 },
-  { id: "trans-zoom", kind: "transition", name: "Zoom",
-    preset_json: { engineKey: "zoom", description: "Zooms through into the next clip", icon: "ZoomIn" },
-    is_active: true, sort_order: 4 },
-];
+export const DEFAULT_TRANSITION_RECORDS: MotionPresetRecord[] = transitionOptions
+  .filter((t) => t.key !== "none")
+  .map((t, i) => ({
+    id: `trans-${t.key}`,
+    kind: "transition" as const,
+    name: t.name,
+    preset_json: { engineKey: t.key, description: `Built-in "${t.name}" transition.`, icon: "Blend" },
+    is_active: true,
+    sort_order: i,
+  }));
 
 export const DEFAULT_ANIMATION_PRESETS: MotionPreset[] = DEFAULT_ANIMATION_RECORDS.map(buildMotionPresetFromRecord);
 export const DEFAULT_TRANSITION_PRESETS: MotionPreset[] = DEFAULT_TRANSITION_RECORDS.map(buildMotionPresetFromRecord);

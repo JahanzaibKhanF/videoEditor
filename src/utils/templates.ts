@@ -1,4 +1,4 @@
-import { TextDetails, BlurDetails, AspectRatio, SpeedRampPoint, ClipEffectType } from "../types/types";
+import { TextDetails, BlurDetails, ShapeDetails, BrushDetails, AspectRatio, SpeedRampPoint, ClipEffectType } from "../types/types";
 import { buildTemplateFromRecord, TemplateRecord, TemplateJson } from "./templateInterpreter";
 import { SPEED_PRESETS } from "./speedRamp";
 
@@ -40,6 +40,8 @@ export interface Template {
   // buildTexts receives canvas W/H and total duration (sum of all slots)
   buildTexts: (w: number, h: number, duration: number) => TextDetails[];
   buildBlurs: (w: number, h: number, duration: number) => BlurDetails[];
+  buildShapes: (w: number, h: number, duration: number) => ShapeDetails[];
+  buildBrushes: (w: number, h: number, duration: number) => BrushDetails[];
 }
 
 // Helper: derive total duration from slots

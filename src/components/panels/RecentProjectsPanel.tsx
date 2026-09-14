@@ -31,9 +31,10 @@ interface RecentProject {
 }
 
 export default function RecentProjectsPanel() {
-  const { resumedProjectId, clipsDetails, textsDetails, imagesDetails } = useAppDetailsContext();
+  const { resumedProjectId, clipsDetails, textsDetails, imagesDetails, shapesDetails, brushesDetails } = useAppDetailsContext();
   const { user, promptLogin } = useAuth();
-  const hasWork = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0;
+  const hasWork = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0
+    || shapesDetails.length > 0 || brushesDetails.length > 0;
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

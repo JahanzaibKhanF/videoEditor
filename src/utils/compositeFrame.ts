@@ -395,7 +395,23 @@ function drawImageLayer(
   ctx.translate(anim.tx + dw / 2, anim.ty + dh / 2);
   ctx.rotate(((anim.rotation + (img.rotation ?? 0)) * Math.PI) / 180);
   ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
-  try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
+  if (img.chromaKey?.enabled) {
+    const ow = Math.max(1, Math.round(dw)), oh = Math.max(1, Math.round(dh));
+    try {
+      const off = new OffscreenCanvas(ow, oh);
+      const offCtx = off.getContext("2d")!;
+      offCtx.drawImage(el, 0, 0, ow, oh);
+      const imgData = offCtx.getImageData(0, 0, ow, oh);
+      applyChromaKey(imgData, img.chromaKey.color, img.chromaKey.tolerance, img.chromaKey.edgeFeather);
+      applyEdgeThin(imgData, img.chromaKey.edgeThin);
+      offCtx.putImageData(imgData, 0, 0);
+      ctx.drawImage(off, -dw / 2, -dh / 2, dw, dh);
+    } catch {
+      try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
+    }
+  } else {
+    try { ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh); } catch {}
+  }
   ctx.filter = "none";
   ctx.restore();
 }

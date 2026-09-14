@@ -1,11 +1,13 @@
 "use client";
-import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Scissors, Wand2, Pipette, Shapes, PenTool } from "@/utils/icons";
+import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Scissors, Wand2, Pipette, Shapes, PenTool, FolderOpen } from "@/utils/icons";
 
 interface Tab { id: string; label: string; icon: React.ReactNode; badge?: string; }
 
 // Grouped by intent — Add (bring something in) · Apply (treat the selection)
-// · Manage. "Recent" left the rail: switching projects isn't an editing
-// tool, it lives in the profile menu now.
+// · Manage. "Recent" used to live only in the profile menu dropdown (the
+// idea being "switching projects isn't an editing tool") — moved back onto
+// the rail because that made it too easy to miss entirely while already
+// inside a project; it's still reachable from the profile menu too.
 const GROUPS: { cap: string; tabs: Tab[] }[] = [
   {
     cap: "Add",
@@ -31,6 +33,7 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
     cap: "Manage",
     tabs: [
       { id: "layers", label: "Layers", icon: <FiLayers size={20} /> },
+      { id: "recent", label: "Recent", icon: <FolderOpen size={20} /> },
     ],
   },
 ];

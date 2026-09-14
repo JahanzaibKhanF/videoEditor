@@ -1,17 +1,23 @@
 "use client";
 
 /**
- * CompositionSettingsModal — read-only composition info.
+ * CompositionSettingsModal — composition info, editable when no template is
+ * active.
  *
- * Aspect ratio is a one-time decision made on the startup screen, not
- * something you flip mid-edit (that used to live here as an interactive
- * ratio grid). The one exception is "Original", which isn't a fixed ratio
- * at all — it continuously re-derives from whatever video is primary right
- * now (see Screen.tsx), so it already "changes" on its own without any
- * control needed here.
+ * Aspect ratio and duration used to be pure info here (a decision made once
+ * on the startup screen). That's still true WHILE a template is active — a
+ * template's slots/text layout are authored for one specific aspect ratio
+ * and duration, so changing either out from under it would silently break
+ * the layout (same reason Layers.tsx/TimeLine.tsx lock the timeline in
+ * template mode). Outside a template, though, there's no such constraint,
+ * so both become editable here — same as After Effects' Composition
+ * Settings dialog.
  */
+import { useState } from "react";
 import { X, Info } from "@/utils/icons";
 import { useAppDetailsContext } from "../../context/useAppContext";
+import { ASPECT_RATIO_OPTIONS } from "../../utils/aspectRatios";
+import { AspectRatio } from "../../types/types";
 
 const RATIO_LABELS: Record<string, string> = {
   "original": "Original (matches source video)",
@@ -27,7 +33,35 @@ const RATIO_LABELS: Record<string, string> = {
 };
 
 export default function CompositionSettingsModal() {
-  const { setIsCompositionSettingsOpen, selectedAspectRatio, containerDimenions, fps } = useAppDetailsContext();
+  const {
+    setIsCompositionSettingsOpen, selectedAspectRatio, setSelectedAspectRatio,
+    containerDimenions, fps, activeTemplate, totalTime, setTotalTime,
+    clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails,
+  } = useAppDetailsContext();
+
+  const locked = !!activeTemplate;
+
+  // Can't shrink duration below whatever content already extends to —
+  // trimming content itself happens on the timeline, not here.
+  const maxContentEnd = Math.max(
+    0,
+    ...clipsDetails.map(c => c.endPosition ?? 0),
+    ...textsDetails.map(t => t.endTime ?? 0),
+    ...imagesDetails.map(i => i.endTime ?? 0),
+    ...blursDetails.map(b => b.endTime ?? 0),
+    ...shapesDetails.map(s => s.endTime ?? 0),
+    ...brushesDetails.map(b => b.endTime ?? 0),
+  );
+
+  const [durationInput, setDurationInput] = useState(() => totalTime.toFixed(1));
+
+  const commitDuration = () => {
+    const v = parseFloat(durationInput);
+    if (!Number.isFinite(v) || v <= 0) { setDurationInput(totalTime.toFixed(1)); return; }
+    const next = Math.max(v, maxContentEnd, 0.5);
+    setTotalTime(next);
+    setDurationInput(next.toFixed(1));
+  };
 
   return (
     <div className="fixed inset-0 z-[9000] bg-black/40 backdrop-blur-sm flex items-center justify-center"
@@ -46,17 +80,51 @@ export default function CompositionSettingsModal() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <InfoRow label="Aspect ratio" value={RATIO_LABELS[selectedAspectRatio] ?? selectedAspectRatio} />
+          {locked ? (
+            <InfoRow label="Aspect ratio" value={RATIO_LABELS[selectedAspectRatio] ?? selectedAspectRatio} />
+          ) : (
+            <SettingRow label="Aspect ratio">
+              <select
+                value={selectedAspectRatio}
+                onChange={e => setSelectedAspectRatio(e.target.value as AspectRatio)}
+                className="bg-studio-void border border-studio-border rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink-primary outline-none focus:border-signal transition-colors"
+              >
+                <option value="original">{RATIO_LABELS.original}</option>
+                {ASPECT_RATIO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </SettingRow>
+          )}
+
           <InfoRow label="Resolution" value={`${containerDimenions.width || 0} × ${containerDimenions.height || 0}px`} />
+
+          {locked ? (
+            <InfoRow label="Duration" value={`${totalTime.toFixed(1)}s`} />
+          ) : (
+            <SettingRow label="Duration">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number" min={maxContentEnd || 0.5} step={0.5} value={durationInput}
+                  onChange={e => setDurationInput(e.target.value)}
+                  onBlur={commitDuration}
+                  onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  className="w-20 bg-studio-void border border-studio-border rounded-lg px-2.5 py-1.5 text-[12.5px] text-ink-primary outline-none focus:border-signal transition-colors font-mono"
+                />
+                <span className="text-[11.5px] text-ink-faint">sec</span>
+              </div>
+            </SettingRow>
+          )}
+
           {fps != null && <InfoRow label="Frame rate" value={`${fps.toFixed(2)} fps`} />}
         </div>
 
         <div className="flex items-start gap-2 mt-5 px-3 py-2.5 rounded-lg bg-signal/8 border border-signal/20">
           <Info size={13} className="text-signal flex-shrink-0 mt-0.5" />
           <p className="text-[11.5px] text-ink-secondary leading-snug">
-            Aspect ratio is set when a project is created and can't be changed here — start a new
-            project to use a different ratio. If this project uses "Original", it already adapts
-            automatically to whatever video you set as primary.
+            {locked
+              ? "This project uses a template, so aspect ratio and duration are locked to its layout — start a non-template project to change them."
+              : selectedAspectRatio === "original"
+                ? "\"Original\" adapts automatically to whatever video you set as primary — pick a fixed ratio above to set one manually instead."
+                : "Duration can't go shorter than your current content's end — trim clips/layers on the timeline first if you need to shrink further."}
           </p>
         </div>
       </div>
@@ -69,6 +137,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-studio-base">
       <span className="text-[12px] text-ink-muted">{label}</span>
       <span className="text-[12.5px] font-semibold text-ink-primary font-mono">{value}</span>
+    </div>
+  );
+}
+
+function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-studio-base">
+      <span className="text-[12px] text-ink-muted">{label}</span>
+      {children}
     </div>
   );
 }

@@ -14,7 +14,10 @@ import { useTheme } from "../../hooks/useTheme";
 import { startNewProject } from "../../utils/startNewProject";
 
 export default function Header() {
-  const { totalTime, videos, clipsDetails, setIsCompositionSettingsOpen, fps } = useAppDetailsContext();
+  const {
+    totalTime, videos, clipsDetails, setIsCompositionSettingsOpen, fps,
+    textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails,
+  } = useAppDetailsContext();
   const { user, promptLogin } = useAuth();
   const { status: saveStatus, errorMessage: saveErrorMessage, limitReached } = useProjectAutosave();
   const { theme, toggleTheme, mounted } = useTheme();
@@ -25,7 +28,9 @@ export default function Header() {
 
       {/* Logo — click to leave for the project picker / new project */}
       <button
-        onClick={() => startNewProject((clipsDetails.length > 0 || videos.length > 0) && saveStatus !== "saved")}
+        onClick={() => startNewProject((clipsDetails.length > 0 || videos.length > 0 || textsDetails.length > 0
+          || imagesDetails.length > 0 || blursDetails.length > 0 || shapesDetails.length > 0 || brushesDetails.length > 0)
+          && saveStatus !== "saved")}
         title="New project / switch projects"
         className="group flex items-center gap-2 mr-0.5 sm:mr-1 flex-shrink-0 cursor-pointer"
       >
@@ -109,7 +114,6 @@ export default function Header() {
         <Button
           size="sm"
           variant="secondary"
-          disabled={videos.length === 0}
           onClick={() => setIsCompositionSettingsOpen(true)}
           title="Composition settings"
           icon={<SlidersHorizontal size={12} strokeWidth={2.2} />}

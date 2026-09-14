@@ -12,10 +12,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   X, Plus, Trash2, Copy, ChevronUp, ChevronDown, Play, Pause, Upload,
-  Code2, Type, Film, Sparkles, AlertOctagon,
+  Code2, Type, Film, Sparkles, AlertOctagon, Shapes as ShapesIcon, PenTool,
 } from "@/utils/icons";
 import { v4 as uuidv4 } from "uuid";
-import { TemplateJson, TemplateJsonText, TemplateJsonKeyframeTrack } from "../../utils/templateInterpreter";
+import { TemplateJson, TemplateJsonText, TemplateJsonShape, TemplateJsonBrush, TemplateJsonKeyframeTrack } from "../../utils/templateInterpreter";
 import { TemplateVideoSlot } from "../../utils/templates";
 import { KeyframeTrack } from "../../types/types";
 import KeyframeEditor from "../editors/KeyframeEditor";
@@ -23,8 +23,8 @@ import { SPEED_PRESETS } from "../../utils/speedRamp";
 import { aspectRatioDimensions, ASPECT_RATIO_OPTIONS } from "../../utils/aspectRatios";
 import {
   TEMPLATE_CATEGORIES, TEMPLATE_ANIMATIONS, TEMPLATE_TRANSITIONS, SPEED_PRESET_OPTIONS,
-  DEFAULT_TEXT_LAYER, DEFAULT_VIDEO_SLOT, emptyTemplateJson, templateJsonDuration,
-  validateTemplateJson, speedPresetKey,
+  DEFAULT_TEXT_LAYER, DEFAULT_VIDEO_SLOT, DEFAULT_SHAPE_LAYER, DEFAULT_BRUSH_LAYER, SHAPE_KIND_OPTIONS,
+  emptyTemplateJson, templateJsonDuration, validateTemplateJson, speedPresetKey,
 } from "../../utils/templateSchema";
 import { adminApi } from "../../utils/adminApi";
 import { generateTemplateAnimationKeyframes } from "../../utils/templateAnimationRecipes";
@@ -42,6 +42,17 @@ export interface AdminTemplate {
 }
 
 const FONT_CHOICES = ["Arial", "Georgia", "Garamond", "Times New Roman", "Trebuchet MS", "Verdana", "Courier New", "Impact", "Brush Script MT"];
+
+// No canvas to freehand-draw on in this DOM-based builder, so a brush layer
+// picks its path from a small set of presets instead — position/size/color/
+// width/keyframes are still fully editable, only the raw point shape isn't.
+const BRUSH_PRESETS: { label: string; points: { x: number; y: number }[] }[] = [
+  { label: "Line", points: [{ x: 0, y: 0.5 }, { x: 1, y: 0.5 }] },
+  { label: "Wave", points: [{ x: 0, y: 0.5 }, { x: 0.25, y: 0 }, { x: 0.5, y: 0.5 }, { x: 0.75, y: 1 }, { x: 1, y: 0.5 }] },
+  { label: "Zigzag", points: [{ x: 0, y: 1 }, { x: 0.2, y: 0 }, { x: 0.4, y: 1 }, { x: 0.6, y: 0 }, { x: 0.8, y: 1 }, { x: 1, y: 0 }] },
+  { label: "Circle", points: Array.from({ length: 33 }, (_, i) => { const a = (i / 32) * 2 * Math.PI; return { x: 0.5 + 0.5 * Math.cos(a), y: 0.5 + 0.5 * Math.sin(a) }; }) },
+  { label: "Swoosh", points: [{ x: 0, y: 0.8 }, { x: 0.3, y: 0.2 }, { x: 0.7, y: 1 }, { x: 1, y: 0.3 }] },
+];
 
 function arr<T>(v: unknown, fallback: T[] = []): T[] {
   return Array.isArray(v) ? (v as T[]) : fallback;
@@ -83,6 +94,8 @@ export function TemplateBuilderModal({
   );
   const [selectedText, setSelectedText] = useState<number | null>(0);
   const [expandedText, setExpandedText] = useState<number | null>(0);
+  const [expandedShape, setExpandedShape] = useState<number | null>(null);
+  const [expandedBrush, setExpandedBrush] = useState<number | null>(null);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [showJson, setShowJson] = useState(false);
@@ -94,6 +107,8 @@ export function TemplateBuilderModal({
 
   const totalDur = templateJsonDuration(json);
   const texts = arr<TemplateJsonText>(json.texts);
+  const shapes = arr<TemplateJsonShape>(json.shapes);
+  const brushStrokes = arr<TemplateJsonBrush>(json.brushes);
   const slots = arr<TemplateVideoSlot>(json.videoSlots);
   const { errors, warnings } = validateTemplateJson(json, name);
 
@@ -160,6 +175,74 @@ export function TemplateBuilderModal({
       if (t < 0 || t >= list.length) return j;
       [list[i], list[t]] = [list[t], list[i]];
       return { ...j, texts: list };
+    });
+
+  // ── shape layers ─────────────────────────────────────────────────────────
+  const patchShape = useCallback((i: number, p: Partial<TemplateJsonShape>) =>
+    setJson((j) => {
+      const next = [...arr<TemplateJsonShape>(j.shapes)];
+      next[i] = { ...next[i], ...p };
+      return { ...j, shapes: next };
+    }), []);
+  const applyShapeAnimation = (i: number, animation: string) => {
+    const s = shapes[i];
+    if (!s) return;
+    const startTime = s.startTime ?? 0, endTime = s.endTime ?? totalDur;
+    patchShape(i, { animation, keyframes: generateTemplateAnimationKeyframes(animation, { startTime, endTime, totalDur }) });
+  };
+  const addShape = () => {
+    setJson((j) => ({ ...j, shapes: [...arr<TemplateJsonShape>(j.shapes), { ...DEFAULT_SHAPE_LAYER }] }));
+    setExpandedShape(shapes.length);
+  };
+  const removeShape = (i: number) =>
+    setJson((j) => ({ ...j, shapes: arr<TemplateJsonShape>(j.shapes).filter((_, k) => k !== i) }));
+  const dupShape = (i: number) =>
+    setJson((j) => {
+      const list = [...arr<TemplateJsonShape>(j.shapes)];
+      list.splice(i + 1, 0, { ...list[i], yFrac: Math.min(0.9, (list[i].yFrac ?? 0) + 0.06) });
+      return { ...j, shapes: list };
+    });
+  const moveShape = (i: number, dir: -1 | 1) =>
+    setJson((j) => {
+      const list = [...arr<TemplateJsonShape>(j.shapes)];
+      const t = i + dir;
+      if (t < 0 || t >= list.length) return j;
+      [list[i], list[t]] = [list[t], list[i]];
+      return { ...j, shapes: list };
+    });
+
+  // ── brush strokes ────────────────────────────────────────────────────────
+  const patchBrush = useCallback((i: number, p: Partial<TemplateJsonBrush>) =>
+    setJson((j) => {
+      const next = [...arr<TemplateJsonBrush>(j.brushes)];
+      next[i] = { ...next[i], ...p };
+      return { ...j, brushes: next };
+    }), []);
+  const applyBrushAnimation = (i: number, animation: string) => {
+    const b = brushStrokes[i];
+    if (!b) return;
+    const startTime = b.startTime ?? 0, endTime = b.endTime ?? totalDur;
+    patchBrush(i, { animation, keyframes: generateTemplateAnimationKeyframes(animation, { startTime, endTime, totalDur }) });
+  };
+  const addBrush = () => {
+    setJson((j) => ({ ...j, brushes: [...arr<TemplateJsonBrush>(j.brushes), { ...DEFAULT_BRUSH_LAYER }] }));
+    setExpandedBrush(brushStrokes.length);
+  };
+  const removeBrush = (i: number) =>
+    setJson((j) => ({ ...j, brushes: arr<TemplateJsonBrush>(j.brushes).filter((_, k) => k !== i) }));
+  const dupBrush = (i: number) =>
+    setJson((j) => {
+      const list = [...arr<TemplateJsonBrush>(j.brushes)];
+      list.splice(i + 1, 0, { ...list[i], yFrac: Math.min(0.9, (list[i].yFrac ?? 0) + 0.06) });
+      return { ...j, brushes: list };
+    });
+  const moveBrush = (i: number, dir: -1 | 1) =>
+    setJson((j) => {
+      const list = [...arr<TemplateJsonBrush>(j.brushes)];
+      const t = i + dir;
+      if (t < 0 || t >= list.length) return j;
+      [list[i], list[t]] = [list[t], list[i]];
+      return { ...j, brushes: list };
     });
 
   const patchSlot = (i: number, p: Partial<TemplateVideoSlot>) =>
@@ -528,6 +611,198 @@ export function TemplateBuilderModal({
                   })}
                 </div>
               </section>
+
+              {/* shape layers */}
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-[12px] font-bold text-ink-primary">
+                    <ShapesIcon size={13} /> Shapes <span className="text-ink-faint font-normal">({shapes.length})</span>
+                  </div>
+                  <button onClick={addShape} className="flex items-center gap-1 text-[11px] font-semibold text-signal hover:text-signal-hover">
+                    <Plus size={12} /> Add shape
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {shapes.map((s, i) => {
+                    const open = expandedShape === i;
+                    return (
+                      <div key={i} className="rounded-lg border bg-studio-void/50 border-studio-border">
+                        <div className="flex items-center gap-2 p-2">
+                          <button onClick={() => setExpandedShape(open ? null : i)} className="flex-1 flex items-center gap-2 text-left min-w-0">
+                            <span className="text-[11px] font-mono text-ink-faint">S{i + 1}</span>
+                            <span className="text-[12px] text-ink-primary capitalize truncate">
+                              {s.kind === "polygon" ? `${s.sides ?? 3}-sided polygon` : s.kind}
+                            </span>
+                          </button>
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button onClick={() => moveShape(i, -1)} disabled={i === 0} className="p-1 text-ink-faint hover:text-ink-primary disabled:opacity-30"><ChevronUp size={13} /></button>
+                            <button onClick={() => moveShape(i, 1)} disabled={i === shapes.length - 1} className="p-1 text-ink-faint hover:text-ink-primary disabled:opacity-30"><ChevronDown size={13} /></button>
+                            <button onClick={() => dupShape(i)} className="p-1 text-ink-faint hover:text-ink-primary"><Copy size={12} /></button>
+                            <button onClick={() => removeShape(i)} className="p-1 text-danger/70 hover:text-danger"><Trash2 size={12} /></button>
+                          </div>
+                        </div>
+                        {open && (
+                          <div className="border-t border-studio-border p-2.5 flex flex-col gap-2.5">
+                            <div className="grid grid-cols-3 gap-2">
+                              <Labeled label="Kind">
+                                <select value={s.kind} onChange={(e) => patchShape(i, { kind: e.target.value as TemplateJsonShape["kind"] })} className={inputCls}>
+                                  {SHAPE_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              </Labeled>
+                              {s.kind === "polygon" && (
+                                <Labeled label="Sides">
+                                  <NumberField value={s.sides ?? 3} step={1} min={3} max={12} onChange={(n) => patchShape(i, { sides: Math.round(n) })} />
+                                </Labeled>
+                              )}
+                              <Labeled label="Animation">
+                                <select value={s.animation ?? "none"} onChange={(e) => applyShapeAnimation(i, e.target.value)} className={inputCls}>
+                                  {TEMPLATE_ANIMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              </Labeled>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Labeled label="Fill">
+                                <div className="flex items-center gap-1.5">
+                                  <input type="color" value={toHex(s.fill)} onChange={(e) => patchShape(i, { fill: e.target.value })}
+                                    className="w-8 h-8 rounded-md bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+                                  <button onClick={() => patchShape(i, { fill: s.fill && s.fill !== "transparent" ? "transparent" : "#8B5CFF" })}
+                                    className="text-mini font-bold text-ink-faint hover:text-signal transition-colors">
+                                    {s.fill && s.fill !== "transparent" ? "Remove" : "Add"}
+                                  </button>
+                                </div>
+                              </Labeled>
+                              <Labeled label={`Stroke (${s.strokeWidth ?? 0}px)`}>
+                                <div className="flex items-center gap-1.5">
+                                  <input type="color" value={toHex(s.stroke)} onChange={(e) => patchShape(i, { stroke: e.target.value, strokeWidth: s.strokeWidth || 4 })}
+                                    className="w-8 h-8 rounded-md bg-studio-void border border-studio-border cursor-pointer flex-shrink-0" />
+                                  <input type="range" min={0} max={40} step={1} value={s.strokeWidth ?? 0}
+                                    onChange={(e) => patchShape(i, { strokeWidth: Number(e.target.value) })} className="flex-1 accent-signal" />
+                                </div>
+                              </Labeled>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                              <Labeled label="X %"><NumberField value={pct(s.xFrac)} step={1} onChange={(n) => patchShape(i, { xFrac: n / 100 })} /></Labeled>
+                              <Labeled label="Y %"><NumberField value={pct(s.yFrac)} step={1} onChange={(n) => patchShape(i, { yFrac: n / 100 })} /></Labeled>
+                              <Labeled label="W %"><NumberField value={pct(s.wFrac)} step={1} onChange={(n) => patchShape(i, { wFrac: n / 100 })} /></Labeled>
+                              <Labeled label="H %"><NumberField value={pct(s.hFrac)} step={1} onChange={(n) => patchShape(i, { hFrac: n / 100 })} /></Labeled>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Labeled label="Start time (s)">
+                                <NumberField value={s.startTime ?? 0} step={0.1} min={0} onChange={(n) => patchShape(i, { startTime: n })} />
+                              </Labeled>
+                              <Labeled label="End time (s) — blank = whole template">
+                                <input type="number" className={inputCls} value={s.endTime ?? ""} step={0.1} min={0}
+                                  onChange={(e) => patchShape(i, { endTime: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                              </Labeled>
+                            </div>
+                            <div className="border-t border-studio-border pt-2">
+                              <div className="text-[10.5px] font-bold text-ink-secondary mb-1.5">Motion keyframes</div>
+                              <TemplateTextKeyframes
+                                kf={s.keyframes} totalDur={totalDur} time={time}
+                                onSeek={(t) => { setPlaying(false); setTime(t); }}
+                                onChange={(kf) => patchShape(i, { keyframes: kf })}
+                                animation={s.animation}
+                                animationLabel={TEMPLATE_ANIMATIONS.find((a) => a.value === s.animation)?.label}
+                                onAnimationClear={() => applyShapeAnimation(i, "none")}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* brush strokes */}
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-[12px] font-bold text-ink-primary">
+                    <PenTool size={13} /> Brush strokes <span className="text-ink-faint font-normal">({brushStrokes.length})</span>
+                  </div>
+                  <button onClick={addBrush} className="flex items-center gap-1 text-[11px] font-semibold text-signal hover:text-signal-hover">
+                    <Plus size={12} /> Add stroke
+                  </button>
+                </div>
+                <p className="text-[10.5px] text-ink-faint mb-2">No canvas to draw on here — pick a path preset, then position/style/animate it below.</p>
+                <div className="flex flex-col gap-2">
+                  {brushStrokes.map((b, i) => {
+                    const open = expandedBrush === i;
+                    const presetLabel = BRUSH_PRESETS.find((p) => JSON.stringify(p.points) === JSON.stringify(b.points))?.label ?? "Custom";
+                    return (
+                      <div key={i} className="rounded-lg border bg-studio-void/50 border-studio-border">
+                        <div className="flex items-center gap-2 p-2">
+                          <button onClick={() => setExpandedBrush(open ? null : i)} className="flex-1 flex items-center gap-2 text-left min-w-0">
+                            <span className="text-[11px] font-mono text-ink-faint">B{i + 1}</span>
+                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: b.color }} />
+                            <span className="text-[12px] text-ink-primary truncate">{presetLabel}</span>
+                          </button>
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button onClick={() => moveBrush(i, -1)} disabled={i === 0} className="p-1 text-ink-faint hover:text-ink-primary disabled:opacity-30"><ChevronUp size={13} /></button>
+                            <button onClick={() => moveBrush(i, 1)} disabled={i === brushStrokes.length - 1} className="p-1 text-ink-faint hover:text-ink-primary disabled:opacity-30"><ChevronDown size={13} /></button>
+                            <button onClick={() => dupBrush(i)} className="p-1 text-ink-faint hover:text-ink-primary"><Copy size={12} /></button>
+                            <button onClick={() => removeBrush(i)} className="p-1 text-danger/70 hover:text-danger"><Trash2 size={12} /></button>
+                          </div>
+                        </div>
+                        {open && (
+                          <div className="border-t border-studio-border p-2.5 flex flex-col gap-2.5">
+                            <div className="grid grid-cols-3 gap-2">
+                              <Labeled label="Path preset">
+                                <select value={presetLabel} onChange={(e) => {
+                                  const preset = BRUSH_PRESETS.find((p) => p.label === e.target.value);
+                                  if (preset) patchBrush(i, { points: preset.points });
+                                }} className={inputCls}>
+                                  {presetLabel === "Custom" && <option value="Custom">Custom</option>}
+                                  {BRUSH_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+                                </select>
+                              </Labeled>
+                              <Labeled label="Color">
+                                <input type="color" value={toHex(b.color)} onChange={(e) => patchBrush(i, { color: e.target.value })}
+                                  className="w-full h-[34px] rounded-lg bg-studio-void border border-studio-border cursor-pointer" />
+                              </Labeled>
+                              <Labeled label="Animation">
+                                <select value={b.animation ?? "none"} onChange={(e) => applyBrushAnimation(i, e.target.value)} className={inputCls}>
+                                  {TEMPLATE_ANIMATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              </Labeled>
+                            </div>
+                            <Labeled label={`Width (${b.strokeWidth}px)`}>
+                              <input type="range" min={1} max={60} step={1} value={b.strokeWidth}
+                                onChange={(e) => patchBrush(i, { strokeWidth: Number(e.target.value) })} className="w-full accent-signal" />
+                            </Labeled>
+                            <div className="grid grid-cols-4 gap-2">
+                              <Labeled label="X %"><NumberField value={pct(b.xFrac)} step={1} onChange={(n) => patchBrush(i, { xFrac: n / 100 })} /></Labeled>
+                              <Labeled label="Y %"><NumberField value={pct(b.yFrac)} step={1} onChange={(n) => patchBrush(i, { yFrac: n / 100 })} /></Labeled>
+                              <Labeled label="W %"><NumberField value={pct(b.wFrac)} step={1} onChange={(n) => patchBrush(i, { wFrac: n / 100 })} /></Labeled>
+                              <Labeled label="H %"><NumberField value={pct(b.hFrac)} step={1} onChange={(n) => patchBrush(i, { hFrac: n / 100 })} /></Labeled>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Labeled label="Start time (s)">
+                                <NumberField value={b.startTime ?? 0} step={0.1} min={0} onChange={(n) => patchBrush(i, { startTime: n })} />
+                              </Labeled>
+                              <Labeled label="End time (s) — blank = whole template">
+                                <input type="number" className={inputCls} value={b.endTime ?? ""} step={0.1} min={0}
+                                  onChange={(e) => patchBrush(i, { endTime: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                              </Labeled>
+                            </div>
+                            <div className="border-t border-studio-border pt-2">
+                              <div className="text-[10.5px] font-bold text-ink-secondary mb-1.5">Motion keyframes</div>
+                              <TemplateTextKeyframes
+                                kf={b.keyframes} totalDur={totalDur} time={time}
+                                onSeek={(t) => { setPlaying(false); setTime(t); }}
+                                onChange={(kf) => patchBrush(i, { keyframes: kf })}
+                                animation={b.animation}
+                                animationLabel={TEMPLATE_ANIMATIONS.find((a) => a.value === b.animation)?.label}
+                                onAnimationClear={() => applyBrushAnimation(i, "none")}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
             </div>
           </div>
         )}
@@ -551,7 +826,7 @@ export function TemplateBuilderModal({
           {saveError && <div className="text-[12px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2">{saveError}</div>}
           <div className="flex items-center gap-2">
             <span className="text-[10.5px] text-ink-faint mr-auto">
-              {aspectRatioDimensions((json.aspectRatio as string) ?? "16:9").join("×")} · {slots.length} slot{slots.length !== 1 ? "s" : ""} · {texts.length} text
+              {aspectRatioDimensions((json.aspectRatio as string) ?? "16:9").join("×")} · {slots.length} slot{slots.length !== 1 ? "s" : ""} · {texts.length} text · {shapes.length} shape{shapes.length !== 1 ? "s" : ""} · {brushStrokes.length} brush{brushStrokes.length !== 1 ? "es" : ""}
             </span>
             <button onClick={onClose} className="px-4 py-2 rounded-lg border border-studio-border text-ink-secondary text-[12.5px] font-semibold hover:bg-studio-hover transition-colors">
               Cancel
@@ -571,7 +846,7 @@ export function TemplateBuilderModal({
 //    shared KeyframeEditor (which works in seconds + real KeyframeTrack). In
 //    template mode the editor shows X/Y as % and keeps their track `value`
 //    as a canvas fraction — matches TemplateJsonKeyframeTrack exactly.
-function TemplateTextKeyframes({
+export function TemplateTextKeyframes({
   kf, totalDur, time, onChange, onSeek, animation, animationLabel, onAnimationClear,
 }: {
   kf: TemplateJsonKeyframeTrack[] | undefined;

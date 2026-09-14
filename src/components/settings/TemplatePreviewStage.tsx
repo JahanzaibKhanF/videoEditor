@@ -15,33 +15,10 @@
  *    the timing controls feel real.
  */
 import { useRef, PointerEvent as ReactPointerEvent } from "react";
-import { TemplateJson, TemplateJsonText, TemplateJsonKeyframeTrack } from "../../utils/templateInterpreter";
+import { TemplateJson, TemplateJsonText, TemplateJsonShape, TemplateJsonBrush } from "../../utils/templateInterpreter";
 import { aspectRatioDimensions } from "../../utils/aspectRatios";
 import { templateJsonDuration } from "../../utils/templateSchema";
-import { cubicBezier, EASING_PRESETS, KfOverride } from "../../utils/keyframes";
-
-// Evaluate a template's fractional keyframe tracks at a time-fraction.
-function evalTemplateKf(tracks: TemplateJsonKeyframeTrack[] | undefined, tFrac: number): KfOverride {
-  const o: KfOverride = {};
-  for (const tr of tracks ?? []) {
-    const keys = [...(tr.keys ?? [])].sort((a, b) => a.tFrac - b.tFrac);
-    if (keys.length === 0) continue;
-    let v: number;
-    if (tFrac <= keys[0].tFrac || keys.length === 1) v = keys[0].value;
-    else if (tFrac >= keys[keys.length - 1].tFrac) v = keys[keys.length - 1].value;
-    else {
-      let k0 = keys[0], k1 = keys[1];
-      for (let i = 0; i < keys.length - 1; i++) if (tFrac >= keys[i].tFrac && tFrac <= keys[i + 1].tFrac) { k0 = keys[i]; k1 = keys[i + 1]; break; }
-      const span = k1.tFrac - k0.tFrac;
-      const u = span <= 0 ? 0 : (tFrac - k0.tFrac) / span;
-      const ease = k0.ease === "hold" ? "hold" : (k0.ease ?? EASING_PRESETS.smooth);
-      const e = ease === "hold" ? 0 : Array.isArray(ease) ? cubicBezier(ease[0], ease[1], ease[2], ease[3])(u) : u;
-      v = k0.value + (k1.value - k0.value) * e;
-    }
-    o[tr.prop] = v;
-  }
-  return o;
-}
+import { evalTemplateKf } from "../../utils/templateKeyframePreview";
 
 interface Props {
   json: TemplateJson;
@@ -54,6 +31,19 @@ interface Props {
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
+}
+
+// CSS clip-path polygon() approximating the same regular-N-gon math
+// drawShapeLayer uses on the real canvas (points inscribed in the box,
+// starting straight up) — good enough for the DOM preview.
+function polygonClipPath(sides: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / sides;
+    const x = 50 + 50 * Math.cos(angle), y = 50 + 50 * Math.sin(angle);
+    pts.push(`${x.toFixed(1)}% ${y.toFixed(1)}%`);
+  }
+  return `polygon(${pts.join(", ")})`;
 }
 
 // Rough visual stand-in for the real AnimationEngine reveals — enough to
@@ -125,6 +115,8 @@ export default function TemplatePreviewStage({
   const totalDur = templateJsonDuration(json);
   const slots = Array.isArray(json.videoSlots) ? json.videoSlots : [];
   const texts = Array.isArray(json.texts) ? json.texts : [];
+  const shapes = Array.isArray(json.shapes) ? json.shapes : [];
+  const brushes = Array.isArray(json.brushes) ? json.brushes : [];
   const accent = json.accentColor || "#8B5CFF";
 
   // Which slot is playing at `time`?
@@ -211,6 +203,50 @@ export default function TemplatePreviewStage({
             </div>
           )}
         </div>
+
+        {/* shape layers — read-only preview (positioned/edited via the form fields, not dragged here) */}
+        {shapes.map((s, i) => {
+          const start = s.startTime ?? 0, end = s.endTime ?? totalDur;
+          if (time < start || time > end) return null;
+          const kf = evalTemplateKf(s.keyframes, totalDur > 0 ? time / totalDur : 0);
+          const opacity = (s.opacity ?? 1) * (kf.opacity ?? 1);
+          const w = (s.wFrac ?? 0.3) * dispW, h = (s.hFrac ?? 0.2) * dispH;
+          const cx = ((s.xFrac ?? 0) + (kf.x ?? 0)) * dispW + w / 2;
+          const cy = ((s.yFrac ?? 0) + (kf.y ?? 0)) * dispH + h / 2;
+          const scale = kf.scale ?? 1;
+          const rotation = kf.rotation ?? 0;
+          const hasFill = s.fill && s.fill !== "transparent";
+          const hasStroke = s.stroke && s.stroke !== "transparent" && (s.strokeWidth ?? 0) > 0;
+          const shapeStyle: React.CSSProperties = {
+            position: "absolute", left: cx - w / 2, top: cy - h / 2, width: w, height: h,
+            opacity, transform: `scale(${scale}) rotate(${rotation}deg)`,
+            background: hasFill ? s.fill : "transparent",
+            border: hasStroke ? `${s.strokeWidth}px solid ${s.stroke}` : "none",
+            borderRadius: s.kind === "ellipse" ? "50%" : 0,
+            clipPath: s.kind === "polygon" ? polygonClipPath(Math.max(3, Math.min(12, Math.round(s.sides ?? 3)))) : undefined,
+          };
+          return <div key={`shape-${i}`} style={shapeStyle} />;
+        })}
+
+        {/* brush strokes — read-only preview */}
+        {brushes.length > 0 && (
+          <svg className="absolute inset-0" width={dispW} height={dispH} style={{ pointerEvents: "none" }}>
+            {brushes.map((b, i) => {
+              const start = b.startTime ?? 0, end = b.endTime ?? totalDur;
+              if (time < start || time > end) return null;
+              const kf = evalTemplateKf(b.keyframes, totalDur > 0 ? time / totalDur : 0);
+              const opacity = (b.opacity ?? 1) * (kf.opacity ?? 1);
+              const bw = (b.wFrac ?? 0.5) * dispW, bh = (b.hFrac ?? 0.2) * dispH;
+              const bx = ((b.xFrac ?? 0) + (kf.x ?? 0)) * dispW;
+              const by = ((b.yFrac ?? 0) + (kf.y ?? 0)) * dispH;
+              const points = (b.points ?? []).map((p) => `${bx + p.x * bw},${by + p.y * bh}`).join(" ");
+              return (
+                <polyline key={`brush-${i}`} points={points} fill="none" stroke={b.color}
+                  strokeWidth={b.strokeWidth} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} />
+              );
+            })}
+          </svg>
+        )}
 
         {/* text layers */}
         {texts.map((t, i) => {

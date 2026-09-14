@@ -11,7 +11,7 @@
  * "Animation" / "Transition" row showing the current value with a Change
  * button that opens the matching catalog on the left (via a window event).
  */
-import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline, Shapes as ShapesIcon, PenTool } from "@/utils/icons";
+import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline, Shapes as ShapesIcon, PenTool, Maximize2 } from "@/utils/icons";
 import TextEditor from "../editors/TextEditor";
 import KeyframeEditor from "../editors/KeyframeEditor";
 import { useAppDetailsContext, useEngineControls } from "../../context/useAppContext";
@@ -104,7 +104,7 @@ export default function PropertiesPanel() {
     selectedBlurId, selectedImageID, selectedTextId,
     selectedClipId, clipsDetails, setClipsDetails,
     audioDetails, setAudioDetails,
-    currentTime, totalTime, setCurrentTime,
+    currentTime, totalTime, setCurrentTime, containerDimenions,
   } = useAppDetailsContext();
   const { seekTo } = useEngineControls();
   const seek = (t: number) => { setCurrentTime(t); seekTo(t); };
@@ -209,6 +209,16 @@ export default function PropertiesPanel() {
                     </>
                   );
                 })()}
+
+                <button
+                  title="Resize and reposition this clip to exactly fill the composition — stretches/shrinks non-uniformly if the aspect ratios don't match"
+                  onClick={() => setClipsDetails(prev => prev.map(cl => cl.id === selectedClipId
+                    ? { ...cl, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height, scale: 1 }
+                    : cl))}
+                  className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-signal/35 text-signal text-[11.5px] font-bold hover:bg-signal/10 transition-colors"
+                >
+                  <Maximize2 size={12} /> Fit to composition
+                </button>
 
                 <div className="pt-1 border-t border-studio-border">
                   <ColorAdjustPanel

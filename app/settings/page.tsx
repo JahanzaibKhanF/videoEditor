@@ -9,6 +9,11 @@ import * as Icons from "@/utils/icons";
 import { DEFAULT_TEMPLATE_RECORDS } from "@/utils/templates";
 import { DEFAULT_ANIMATION_RECORDS, DEFAULT_TRANSITION_RECORDS, DEFAULT_FILTER_RECORDS } from "@/utils/motionPresets";
 import { TemplateBuilderModal } from "@/components/settings/TemplateBuilder";
+import MotionPresetPreviewStage, { ANIM_PREVIEW_DUR, TRANS_PREVIEW_DUR } from "@/components/settings/MotionPresetPreviewStage";
+import { TemplateTextKeyframes } from "@/components/settings/TemplateBuilder";
+import { TemplateJsonKeyframeTrack } from "@/utils/templateInterpreter";
+import { generateTemplateAnimationKeyframes } from "@/utils/templateAnimationRecipes";
+import { generateTransitionKeyframes } from "@/utils/transitionRecipes";
 import { adminApi as api } from "@/utils/adminApi";
 import { templateJsonDuration } from "@/utils/templateSchema";
 
@@ -600,6 +605,7 @@ interface AdminMotionPreset {
   preset_json: {
     engineKey?: string; description?: string; icon?: string;
     brightness?: number; contrast?: number; saturation?: number; temperature?: number;
+    keyframes?: TemplateJsonKeyframeTrack[];
   };
   is_active: boolean;
   sort_order: number;
@@ -673,11 +679,22 @@ function MotionPresetsSection({
     setImporting(true);
     try {
       for (const record of missingDefaults) {
+        // Bake real keyframes in at import time too (not just the first time
+        // someone opens the edit modal) — so a freshly-imported default's
+        // grid-card preview actually animates instead of sitting static
+        // until an admin happens to open+save it once.
+        const engineKey = "engineKey" in record.preset_json ? record.preset_json.engineKey : undefined;
+        const keyframes = record.kind === "animation"
+          ? generateTemplateAnimationKeyframes(engineKey, { startTime: 0, endTime: ANIM_PREVIEW_DUR, totalDur: ANIM_PREVIEW_DUR })
+          : record.kind === "transition"
+            ? generateTransitionKeyframes(engineKey, { startTime: 0, endTime: TRANS_PREVIEW_DUR, totalDur: TRANS_PREVIEW_DUR })
+            : undefined;
+        const presetJson = keyframes ? { ...record.preset_json, keyframes } : record.preset_json;
         const saved = await api("/api/admin/motion-presets", {
           method: "POST",
           body: JSON.stringify({
             kind: record.kind, name: record.name,
-            presetJson: record.preset_json, isActive: record.is_active ?? true,
+            presetJson, isActive: record.is_active ?? true,
             sortOrder: record.sort_order ?? 0,
           }),
         });
@@ -742,46 +759,50 @@ function MotionPresetsSection({
           {ordered.map((p) => {
             const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[p.preset_json.icon ?? "Sparkles"] ?? Icons.Sparkles;
             return (
-              <div key={p.id} className="bg-studio-surface border border-studio-border rounded-xl p-4 flex items-start gap-3">
-                {p.kind === "filter" ? (
-                  <div className="w-10 h-10 rounded-lg flex-shrink-0"
-                    style={{
-                      background: "linear-gradient(135deg, #FFB648, #8B5CFF)",
-                      filter: `brightness(${p.preset_json.brightness ?? 1}) contrast(${p.preset_json.contrast ?? 1}) saturate(${p.preset_json.saturation ?? 1})`,
-                    }} />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-signal/10 border border-signal/20 flex items-center justify-center flex-shrink-0 text-signal">
-                    <Icon size={17} />
+              <div key={p.id} className="bg-studio-surface border border-studio-border rounded-xl p-4 flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  {p.kind === "filter" ? (
+                    <div className="w-10 h-10 rounded-lg flex-shrink-0"
+                      style={{
+                        background: "linear-gradient(135deg, #FFB648, #8B5CFF)",
+                        filter: `brightness(${p.preset_json.brightness ?? 1}) contrast(${p.preset_json.contrast ?? 1}) saturate(${p.preset_json.saturation ?? 1})`,
+                      }} />
+                  ) : (
+                    <MotionPresetPreviewStage
+                      kind={p.kind} engineKey={p.preset_json.engineKey ?? "none"}
+                      keyframes={p.preset_json.keyframes} compact
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[13px] font-semibold text-ink-primary truncate">{p.name}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0 ${
+                        p.is_active ? "bg-success/15 text-success" : "bg-studio-hover text-ink-faint"
+                      }`}>
+                        {p.is_active ? "Active" : "Hidden"}
+                      </span>
+                    </div>
+                    <div className="text-[10.5px] text-ink-faint font-mono truncate flex items-center gap-1">
+                      {p.kind !== "filter" && <Icon size={11} className="flex-shrink-0" />}
+                      {p.kind === "filter"
+                        ? `B${Math.round((p.preset_json.brightness ?? 1) * 100)} C${Math.round((p.preset_json.contrast ?? 1) * 100)} S${Math.round((p.preset_json.saturation ?? 1) * 100)} T${p.preset_json.temperature ?? 0}`
+                        : p.preset_json.engineKey}
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[13px] font-semibold text-ink-primary truncate">{p.name}</span>
-                    <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0 ${
-                      p.is_active ? "bg-success/15 text-success" : "bg-studio-hover text-ink-faint"
-                    }`}>
-                      {p.is_active ? "Active" : "Hidden"}
-                    </span>
-                  </div>
-                  <div className="text-[10.5px] text-ink-faint font-mono truncate mb-2">
-                    {p.kind === "filter"
-                      ? `B${Math.round((p.preset_json.brightness ?? 1) * 100)} C${Math.round((p.preset_json.contrast ?? 1) * 100)} S${Math.round((p.preset_json.saturation ?? 1) * 100)} T${p.preset_json.temperature ?? 0}`
-                      : p.preset_json.engineKey}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => setEditing(p)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[11.5px] font-semibold py-1.5 rounded-lg border border-studio-border text-ink-secondary hover:border-signal hover:text-signal transition-colors">
-                      <Pencil size={10} /> Edit
-                    </button>
-                    <button onClick={() => handleToggleActive(p)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[11.5px] font-semibold py-1.5 rounded-lg border border-studio-border text-ink-secondary hover:bg-studio-hover transition-colors">
-                      {p.is_active ? <EyeOff size={10} /> : <Eye size={10} />}
-                    </button>
-                    <button onClick={() => handleDelete(p.id)}
-                      className="text-[11.5px] font-semibold py-1.5 px-2 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors">
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setEditing(p)}
+                    className="flex-1 flex items-center justify-center gap-1 text-[11.5px] font-semibold py-1.5 rounded-lg border border-studio-border text-ink-secondary hover:border-signal hover:text-signal transition-colors">
+                    <Pencil size={10} /> Edit
+                  </button>
+                  <button onClick={() => handleToggleActive(p)}
+                    className="flex-1 flex items-center justify-center gap-1 text-[11.5px] font-semibold py-1.5 rounded-lg border border-studio-border text-ink-secondary hover:bg-studio-hover transition-colors">
+                    {p.is_active ? <EyeOff size={10} /> : <Eye size={10} />}
+                  </button>
+                  <button onClick={() => handleDelete(p.id)}
+                    className="text-[11.5px] font-semibold py-1.5 px-2 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors">
+                    <Trash2 size={10} />
+                  </button>
                 </div>
               </div>
             );
@@ -824,19 +845,58 @@ function MotionPresetEditorModal({
   const [contrast, setContrast] = useState(preset?.preset_json.contrast ?? 1);
   const [saturation, setSaturation] = useState(preset?.preset_json.saturation ?? 1);
   const [temperature, setTemperature] = useState(preset?.preset_json.temperature ?? 0);
+  // Real keyframe data for BOTH kinds now (see motionPresets.ts's boundary
+  // note — animation keyframes are exact, transition keyframes are a
+  // best-effort single-object approximation). Seeded from the engine key
+  // immediately (existing preset's saved keyframes win on first load; a NEW
+  // preset or a picked engine key always (re)generates fresh ones, same
+  // "pick one, it replaces the keys" behavior the Template Builder already
+  // has for text-layer animations).
+  const genKeyframes = (k: string) => kind === "animation"
+    ? generateTemplateAnimationKeyframes(k, { startTime: 0, endTime: ANIM_PREVIEW_DUR, totalDur: ANIM_PREVIEW_DUR })
+    : kind === "transition"
+      ? generateTransitionKeyframes(k, { startTime: 0, endTime: TRANS_PREVIEW_DUR, totalDur: TRANS_PREVIEW_DUR })
+      : undefined;
+  const [keyframes, setKeyframes] = useState<TemplateJsonKeyframeTrack[] | undefined>(
+    () => preset?.preset_json.keyframes ?? genKeyframes(engineKey),
+  );
+  const [previewTime, setPreviewTime] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(true);
+  const [showJson, setShowJson] = useState(false);
+  const [jsonDraft, setJsonDraft] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const engineKeys = kind === "animation" ? ANIMATION_ENGINE_KEYS : TRANSITION_ENGINE_KEYS;
+
+  const presetJson = kind === "filter"
+    ? { brightness, contrast, saturation, temperature, description: description.trim() }
+    : { engineKey, description: description.trim(), icon, keyframes };
+
+  const openJson = () => {
+    setJsonDraft(JSON.stringify(presetJson, null, 2));
+    setJsonError(null);
+    setShowJson(true);
+  };
+  const applyJson = () => {
+    try {
+      const parsed = JSON.parse(jsonDraft);
+      if (parsed.engineKey) setEngineKey(parsed.engineKey);
+      if (parsed.description !== undefined) setDescription(parsed.description);
+      if (parsed.icon) setIcon(parsed.icon);
+      setKeyframes(Array.isArray(parsed.keyframes) ? parsed.keyframes : undefined);
+      setJsonError(null);
+      setShowJson(false);
+    } catch {
+      setJsonError("Not valid JSON — check for a trailing comma or missing quote.");
+    }
+  };
 
   const handleSave = async () => {
     setError(null);
     if (!name.trim()) { setError("Name is required."); return; }
     setSaving(true);
     try {
-      const presetJson = kind === "filter"
-        ? { brightness, contrast, saturation, temperature, description: description.trim() }
-        : { engineKey, description: description.trim(), icon };
       const body = { name: name.trim(), sortOrder, presetJson };
       const data = preset
         ? await api(`/api/admin/motion-presets/${preset.id}`, { method: "PUT", body: JSON.stringify(body) })
@@ -849,89 +909,146 @@ function MotionPresetEditorModal({
     }
   };
 
+  const hasPreview = kind === "animation" || kind === "transition";
+
   return (
     <div className="fixed inset-0 z-[1000] bg-black/65 backdrop-blur-md flex items-center justify-center px-4 animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-[440px] bg-studio-surface border border-studio-border rounded-2xl shadow-pop p-6 animate-rise-in">
-        <div className="flex items-center justify-between mb-5">
+      <div className={`w-full ${hasPreview ? "max-w-[760px]" : "max-w-[440px]"} max-h-[90vh] bg-studio-surface border border-studio-border rounded-2xl shadow-pop flex flex-col overflow-hidden animate-rise-in`}>
+        <div className="flex items-center justify-between px-6 pt-6 pb-2 flex-shrink-0">
           <h2 className="font-display text-lg font-semibold text-ink-primary capitalize">
             {preset ? `Edit ${kind}` : `New ${kind}`}
           </h2>
-          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center text-ink-muted hover:bg-studio-hover transition-colors">
-            <X size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            {hasPreview && (
+              <button onClick={showJson ? () => setShowJson(false) : openJson}
+                className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors ${
+                  showJson ? "border-signal text-signal" : "border-studio-border text-ink-secondary hover:text-ink-primary"
+                }`}>
+                <Code2 size={12} /> {showJson ? "Hide JSON" : "Edit as JSON"}
+              </button>
+            )}
+            <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center text-ink-muted hover:bg-studio-hover transition-colors">
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Fade In"
-              className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors" />
-          </div>
-
-          {kind !== "filter" ? (
-            <>
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Engine key</label>
-                <select value={engineKey} onChange={(e) => setEngineKey(e.target.value)}
-                  className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors">
-                  {engineKeys.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
-                <p className="text-[10.5px] text-ink-faint mt-1.5">Which built-in {kind} math this preset points to.</p>
-              </div>
-
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Icon</label>
-                <select value={icon} onChange={(e) => setIcon(e.target.value)}
-                  className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors">
-                  {MOTION_ICON_CHOICES.map((i) => <option key={i} value={i}>{i}</option>)}
-                </select>
-              </div>
-            </>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Brightness ({brightness.toFixed(2)})</label>
-                <input type="range" min={0} max={2} step={0.01} value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} className="w-full accent-signal" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Contrast ({contrast.toFixed(2)})</label>
-                <input type="range" min={0} max={2} step={0.01} value={contrast} onChange={(e) => setContrast(Number(e.target.value))} className="w-full accent-signal" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Saturation ({saturation.toFixed(2)})</label>
-                <input type="range" min={0} max={2} step={0.01} value={saturation} onChange={(e) => setSaturation(Number(e.target.value))} className="w-full accent-signal" />
-              </div>
-              <div>
-                <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Temperature ({temperature})</label>
-                <input type="range" min={-100} max={100} step={1} value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} className="w-full accent-signal" />
-              </div>
+        <div className={`flex-1 min-h-0 overflow-y-auto scrollbar-thin px-6 pb-6 flex ${hasPreview ? "flex-col lg:flex-row gap-6" : "flex-col"}`}>
+          {hasPreview && (
+            <div className="lg:w-[320px] flex-shrink-0 flex flex-col items-center gap-3 pt-2">
+              <MotionPresetPreviewStage
+                kind={kind} engineKey={engineKey} keyframes={keyframes} accentColor="#8B5CFF"
+                time={previewTime} onSeek={setPreviewTime} playing={previewPlaying} onPlayingChange={setPreviewPlaying}
+              />
+              {showJson && (
+                <div className="w-full max-w-[320px] flex flex-col gap-1.5">
+                  <textarea value={jsonDraft} onChange={(e) => setJsonDraft(e.target.value)} rows={10} spellCheck={false}
+                    className="w-full bg-studio-void border border-studio-border rounded-lg px-2.5 py-2 text-[10.5px] font-mono text-ink-primary outline-none focus:border-signal resize-y" />
+                  {jsonError && <div className="text-[10.5px] text-danger">{jsonError}</div>}
+                  <button onClick={applyJson}
+                    className="bg-signal hover:bg-signal-hover text-studio-void text-[11px] font-semibold py-1.5 rounded-lg transition-colors">
+                    Apply JSON
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Description</label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short helper text"
-              className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors" />
-          </div>
+          <div className="flex-1 min-w-0 flex flex-col gap-4 pt-2">
+            <div>
+              <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Fade In"
+                className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors" />
+            </div>
 
-          <div>
-            <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Sort order</label>
-            <input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))}
-              className="w-28 bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors" />
-          </div>
+            {kind !== "filter" ? (
+              <>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11.5px] font-semibold text-ink-secondary">Seeded from</label>
+                    <button onClick={() => setKeyframes(genKeyframes(engineKey))}
+                      className="text-[10.5px] font-semibold text-signal hover:text-signal-hover">
+                      Reset keyframes to this
+                    </button>
+                  </div>
+                  <div className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-faint font-mono">
+                    {engineKey}
+                  </div>
+                  <p className="text-[10.5px] text-ink-faint mt-1.5">
+                    Fixed reference only, not a live control — the keyframes below ARE this preset's actual motion now. Edit them directly, or use "Reset" to start over from this preset's original shape.
+                  </p>
+                </div>
 
-          {error && <div className="text-[12px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2">{error}</div>}
+                <div>
+                  <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Icon</label>
+                  <select value={icon} onChange={(e) => setIcon(e.target.value)}
+                    className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors">
+                    {MOTION_ICON_CHOICES.map((i) => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Brightness ({brightness.toFixed(2)})</label>
+                  <input type="range" min={0} max={2} step={0.01} value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} className="w-full accent-signal" />
+                </div>
+                <div>
+                  <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Contrast ({contrast.toFixed(2)})</label>
+                  <input type="range" min={0} max={2} step={0.01} value={contrast} onChange={(e) => setContrast(Number(e.target.value))} className="w-full accent-signal" />
+                </div>
+                <div>
+                  <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Saturation ({saturation.toFixed(2)})</label>
+                  <input type="range" min={0} max={2} step={0.01} value={saturation} onChange={(e) => setSaturation(Number(e.target.value))} className="w-full accent-signal" />
+                </div>
+                <div>
+                  <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Temperature ({temperature})</label>
+                  <input type="range" min={-100} max={100} step={1} value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} className="w-full accent-signal" />
+                </div>
+              </div>
+            )}
 
-          <div className="flex items-center gap-2 mt-1">
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 bg-signal hover:bg-signal-hover text-studio-void text-[13.5px] font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50">
-              {saving ? "Saving…" : "Save preset"}
-            </button>
-            <button onClick={onClose}
-              className="px-4 py-2.5 rounded-lg border border-studio-border text-ink-secondary text-[13.5px] font-semibold hover:bg-studio-hover transition-colors">
-              Cancel
-            </button>
+            <div>
+              <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Description</label>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short helper text"
+                className="w-full bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary placeholder:text-ink-faint outline-none focus:border-signal transition-colors" />
+            </div>
+
+            <div>
+              <label className="text-[11.5px] font-semibold text-ink-secondary block mb-1.5">Sort order</label>
+              <input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))}
+                className="w-28 bg-studio-void border border-studio-border rounded-lg px-3 py-2.5 text-[13.5px] text-ink-primary outline-none focus:border-signal transition-colors" />
+            </div>
+
+            {hasPreview && (
+              <div className="border-t border-studio-border pt-3">
+                <div className="text-[10.5px] font-bold text-ink-secondary mb-1.5">Motion keyframes</div>
+                {kind === "transition" && (
+                  <p className="text-[10px] text-ink-faint mb-1.5">
+                    Approximate — the live preview above still uses the real transition math; this is a single-object x/y/scale/opacity/blur stand-in for viewing/editing.
+                  </p>
+                )}
+                <TemplateTextKeyframes
+                  kf={keyframes} totalDur={kind === "animation" ? ANIM_PREVIEW_DUR : TRANS_PREVIEW_DUR} time={previewTime}
+                  onSeek={(t) => { setPreviewPlaying(false); setPreviewTime(t); }}
+                  onChange={setKeyframes}
+                />
+              </div>
+            )}
+
+            {error && <div className="text-[12px] text-danger bg-danger/10 border border-danger/25 rounded-lg px-3 py-2">{error}</div>}
+
+            <div className="flex items-center gap-2 mt-1">
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 bg-signal hover:bg-signal-hover text-studio-void text-[13.5px] font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50">
+                {saving ? "Saving…" : "Save preset"}
+              </button>
+              <button onClick={onClose}
+                className="px-4 py-2.5 rounded-lg border border-studio-border text-ink-secondary text-[13.5px] font-semibold hover:bg-studio-hover transition-colors">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

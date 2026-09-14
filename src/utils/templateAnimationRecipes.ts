@@ -1,144 +1,78 @@
 /**
- * templateAnimationRecipes — turns a template text layer's preset
- * `animation` (fadeIn, slideUp, bounceIn, ...) into real, editable keyframe
- * tracks (TemplateJsonKeyframeTrack[]) instead of leaving it as an opaque
- * label.
+ * templateAnimationRecipes — turns ANY engine animation key (the full set in
+ * AnimationEngine.ts's `computeAnimState`, not just a curated few) into
+ * real, editable keyframe tracks (TemplateJsonKeyframeTrack[]).
  *
- * This is template-builder-only (see KeyframeEditor.tsx / KeyframeLane.tsx —
- * the main editor deliberately keeps `animation` and manual keyframes as two
- * independent systems that both apply at once, with no UI bridging them).
- * In the builder, picking an animation is meant to give the admin a working
- * starting point they can then hand-tune in "Motion keyframes" — so instead
- * of a marker, we generate an actual approximation of that animation's
- * motion as keyframes right away. Picking a DIFFERENT animation regenerates
- * and replaces them; the caller (TemplateBuilder.tsx) is responsible for
- * that replace-on-change behavior, this module just does the generation.
+ * How: sample `computeAnimState` itself at a fixed rate across the
+ * animation's duration and record each property's value at each sample —
+ * i.e. literally bake the existing hardcoded math into keyframe data,
+ * rather than hand-reinventing an approximation of each of the ~50
+ * animations. This is what makes ANY engine key convertible automatically:
+ * whatever `computeAnimState` computes, these are just its recorded output.
+ * Samples are close enough together (15/sec) that linear interpolation
+ * between them reproduces the original curve (springs, oscillation, all of
+ * it) closely — the "real recipe" the user asked for, not an approximation.
  *
- * Values follow the same relative semantics as every other keyframe track
- * (see keyframes.ts): x/y are canvas-fraction OFFSETS added to the layer's
- * resting xFrac/yFrac, scale is a multiplier, rotation is degrees added,
- * opacity is a multiplier, blur is px added. `tFrac` is a fraction of the
- * TEMPLATE's total duration (matches TemplateJsonKeyframeTrack).
+ * Used by the Template Builder (fractional x/y, tFrac through the
+ * template's total duration) and the Motion Presets editor in
+ * /settings (same shape, previewed over a fixed short duration — see
+ * MotionPresetPreviewStage.tsx). NOT used by the main editor's Animation
+ * picker, which still applies a preset by engine-key reference — see the
+ * boundary note in motionPresets.ts.
  */
 import { KfProp } from "../types/types";
+import { computeAnimState } from "./AnimationEngine";
 import { TemplateJsonKeyframeTrack } from "./templateInterpreter";
 
 interface RecipeOpts {
-  /** seconds — this text layer's own start on the template timeline */
+  /** seconds — this layer's own start on the timeline being previewed */
   startTime: number;
-  /** seconds — this text layer's own end on the template timeline */
+  /** seconds — this layer's own end on the timeline being previewed */
   endTime: number;
-  /** seconds — the whole template's duration, for converting to tFrac */
+  /** seconds — the whole timeline's duration, for converting to tFrac */
   totalDur: number;
 }
 
-type RecipeKey = { at: number; value: number; ease?: [number, number, number, number] | "hold" };
+type RecipeKey = { at: number; value: number };
 type RecipeTrack = { prop: KfProp; keys: RecipeKey[] };
 
-const EASE_OUT: [number, number, number, number] = [0, 0, 0.58, 1];
-const EASE_IN_OUT: [number, number, number, number] = [0.42, 0, 0.58, 1];
+const SAMPLE_HZ = 15;
+// Reference canvas used only to make computeAnimState's off-screen-distance
+// math (slides come from off-canvas) produce a sensible ratio — x/y are
+// stored as FRACTIONS of these, same as every other template x/y value, so
+// the actual canvas size at apply-time doesn't need to match.
+const REF_W = 1280, REF_H = 720, REF_FONT = 100, REF_FPS = 30;
+const EPS = 1e-4;
 
-// `dur` = the layer's own active duration (seconds) — recipes scale their
-// intro/cycle timing to it so a 1s caption and a 6s title both look right.
-function recipe(animation: string, dur: number): RecipeTrack[] {
-  const intro = Math.max(0.15, Math.min(0.5, dur * 0.4));
-  switch (animation) {
-    case "fadeIn":
-      return [{ prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1, ease: EASE_OUT }] }];
-    case "slideUp":
-      return [
-        { prop: "y", keys: [{ at: 0, value: 0.12 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1, ease: EASE_OUT }] },
-      ];
-    case "slideIn":
-      return [
-        { prop: "x", keys: [{ at: 0, value: -0.35 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1, ease: EASE_OUT }] },
-      ];
-    case "slideInRight":
-      return [
-        { prop: "x", keys: [{ at: 0, value: 0.35 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1, ease: EASE_OUT }] },
-      ];
-    case "slideDown":
-      return [
-        { prop: "y", keys: [{ at: 0, value: -0.12 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1, ease: EASE_OUT }] },
-      ];
-    case "zoomIn":
-      return [
-        { prop: "scale", keys: [{ at: 0, value: 0.05 }, { at: intro, value: 1, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.6, value: 1, ease: EASE_OUT }] },
-      ];
-    case "popInUp":
-      return [
-        { prop: "y", keys: [{ at: 0, value: 0.05 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "scale", keys: [{ at: 0, value: 0.85 }, { at: intro, value: 1, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.6, value: 1 }] },
-      ];
-    case "popInDown":
-      return [
-        { prop: "y", keys: [{ at: 0, value: -0.05 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "scale", keys: [{ at: 0, value: 0.85 }, { at: intro, value: 1, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.6, value: 1 }] },
-      ];
-    case "bounceIn":
-      return [
-        { prop: "scale", keys: [
-          { at: 0, value: 0.3 },
-          { at: intro * 0.7, value: 1.08, ease: EASE_OUT },
-          { at: intro, value: 1, ease: EASE_IN_OUT },
-        ] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.5, value: 1 }] },
-      ];
-    case "grow":
-      return [
-        { prop: "scale", keys: [{ at: 0, value: 0.5 }, { at: intro, value: 1, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.6, value: 1 }] },
-      ];
-    case "blurIn":
-      return [
-        { prop: "blur", keys: [{ at: 0, value: 10 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro * 0.8, value: 1 }] },
-      ];
-    case "glowIn":
-      return [
-        { prop: "blur", keys: [{ at: 0, value: 8 }, { at: intro, value: 0, ease: EASE_OUT }] },
-        { prop: "opacity", keys: [{ at: 0, value: 0 }, { at: intro, value: 1 }] },
-      ];
-    case "typewriter":
-      return [{ prop: "opacity", keys: [{ at: 0, value: 0 }, { at: Math.min(dur, intro * 2.5), value: 1 }] }];
-    case "pulse": {
-      const cyc = 0.5;
-      const n = Math.max(1, Math.min(5, Math.floor(dur / cyc)));
-      const keys: RecipeKey[] = [];
-      for (let i = 0; i <= n * 2; i++) keys.push({ at: (i * cyc) / 2, value: i % 2 === 0 ? 1 : 1.05 });
-      return [{ prop: "scale", keys }];
-    }
-    case "wiggle": {
-      const cyc = 0.9;
-      const n = Math.max(1, Math.min(5, Math.floor(dur / cyc)));
-      const keys: RecipeKey[] = [];
-      for (let i = 0; i <= n * 2; i++) keys.push({ at: (i * cyc) / 2, value: i % 2 === 0 ? -6 : 6 });
-      return [{ prop: "rotation", keys }];
-    }
-    case "shake": {
-      const cyc = 0.25;
-      const n = Math.max(2, Math.min(10, Math.floor(dur / cyc)));
-      const keys: RecipeKey[] = [];
-      for (let i = 0; i <= n; i++) keys.push({ at: i * cyc, value: i % 2 === 0 ? -0.01 : 0.01 });
-      return [{ prop: "x", keys }];
-    }
-    case "sparkle": {
-      const cyc = 0.4;
-      const n = Math.max(2, Math.min(8, Math.floor(dur / cyc)));
-      const keys: RecipeKey[] = [];
-      for (let i = 0; i <= n * 2; i++) keys.push({ at: (i * cyc) / 2, value: i % 2 === 0 ? 1 : 1.04 });
-      return [{ prop: "scale", keys }];
-    }
-    default:
-      return [];
+const ALL_PROPS: KfProp[] = ["x", "y", "scale", "scaleX", "scaleY", "rotation", "opacity", "blur"];
+
+// `dur` = the layer's own active duration (seconds) — the bake spans exactly
+// that, so a 1s caption and a 6s title both sample proportionally.
+function bake(animation: string, dur: number): RecipeTrack[] {
+  const steps = Math.max(4, Math.round(dur * SAMPLE_HZ));
+  const series: Record<KfProp, RecipeKey[]> = { x: [], y: [], scale: [], scaleX: [], scaleY: [], rotation: [], opacity: [], blur: [] };
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * dur;
+    const s = computeAnimState(animation, t, 0, dur, REF_FPS, 0, 0, REF_W, REF_H, REF_FONT);
+    series.x.push({ at: t, value: s.tx / REF_W });
+    series.y.push({ at: t, value: s.ty / REF_H });
+    series.scale.push({ at: t, value: s.scale });
+    series.scaleX.push({ at: t, value: s.scaleX });
+    series.scaleY.push({ at: t, value: s.scaleY });
+    series.rotation.push({ at: t, value: s.rotation });
+    series.opacity.push({ at: t, value: s.opacity });
+    series.blur.push({ at: t, value: s.blur });
   }
+  // Drop tracks that never actually change — most animations only touch 1-3
+  // properties, no reason to ship flat tracks for the rest.
+  const tracks: RecipeTrack[] = [];
+  for (const prop of ALL_PROPS) {
+    const pts = series[prop];
+    const first = pts[0].value;
+    if (!pts.some((p) => Math.abs(p.value - first) > EPS)) continue;
+    tracks.push({ prop, keys: pts });
+  }
+  return tracks;
 }
 
 /** `undefined` for "none"/unknown animations — caller should clear the layer's `keyframes` field in that case. */
@@ -148,14 +82,13 @@ export function generateTemplateAnimationKeyframes(
 ): TemplateJsonKeyframeTrack[] | undefined {
   if (!animation || animation === "none") return undefined;
   const dur = Math.max(0.1, opts.endTime - opts.startTime);
-  const tracks = recipe(animation, dur);
+  const tracks = bake(animation, dur);
   if (!tracks.length) return undefined;
   return tracks.map((tr) => ({
     prop: tr.prop,
     keys: tr.keys.map((k) => ({
       tFrac: opts.totalDur > 0 ? Math.max(0, Math.min(1, (opts.startTime + k.at) / opts.totalDur)) : 0,
       value: k.value,
-      ease: k.ease,
     })),
   }));
 }

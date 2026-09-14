@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { TextDetails, BlurDetails, AspectRatio, KeyframeTrack, KfProp } from "../types/types";
+import { TextDetails, BlurDetails, ShapeDetails, BrushDetails, ShapeKind, BrushPoint, AspectRatio, KeyframeTrack, KfProp } from "../types/types";
 import { Template, TemplateVideoSlot } from "./templates";
 
 /**
@@ -57,6 +57,39 @@ export interface TemplateJsonBlur {
   endTime?: number;
 }
 
+export interface TemplateJsonShape {
+  kind: ShapeKind;
+  xFrac: number;
+  yFrac: number;
+  wFrac: number;
+  hFrac: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  sides?: number;
+  opacity?: number;
+  startTime?: number;
+  endTime?: number;
+  animation?: string;
+  keyframes?: TemplateJsonKeyframeTrack[];
+}
+
+export interface TemplateJsonBrush {
+  /** Already 0..1 within the stroke's own box — same convention as BrushDetails.points, no canvas-fraction conversion needed. */
+  points: BrushPoint[];
+  xFrac: number;
+  yFrac: number;
+  wFrac: number;
+  hFrac: number;
+  color: string;
+  strokeWidth: number;
+  opacity?: number;
+  startTime?: number;
+  endTime?: number;
+  animation?: string;
+  keyframes?: TemplateJsonKeyframeTrack[];
+}
+
 export interface TemplateJson {
   description?: string;
   category?: Template["category"];
@@ -65,6 +98,8 @@ export interface TemplateJson {
   videoSlots?: TemplateVideoSlot[];
   texts?: TemplateJsonText[];
   blurs?: TemplateJsonBlur[];
+  shapes?: TemplateJsonShape[];
+  brushes?: TemplateJsonBrush[];
 }
 
 export interface TemplateRecord {
@@ -98,6 +133,8 @@ export function buildTemplateFromRecord(record: TemplateRecord): Template {
   const videoSlots: TemplateVideoSlot[] = Array.isArray(json.videoSlots) ? json.videoSlots : [];
   const jsonTexts = Array.isArray(json.texts) ? json.texts : [];
   const jsonBlurs = Array.isArray(json.blurs) ? json.blurs : [];
+  const jsonShapes = Array.isArray(json.shapes) ? json.shapes : [];
+  const jsonBrushes = Array.isArray(json.brushes) ? json.brushes : [];
 
   // Fractional template keyframes → real KeyframeTrack (seconds + px).
   const buildKeyframes = (
@@ -164,6 +201,40 @@ export function buildTemplateFromRecord(record: TemplateRecord): Template {
         blurAmount: b.blurAmount ?? 12,
         startTime: b.startTime ?? 0,
         endTime: b.endTime ?? duration,
+      })),
+    buildShapes: (w: number, h: number, duration: number): ShapeDetails[] =>
+      jsonShapes.map((s) => ({
+        id: uuidv4(),
+        kind: s.kind ?? "rectangle",
+        x: s.xFrac * w,
+        y: s.yFrac * h,
+        width: s.wFrac * w,
+        height: s.hFrac * h,
+        fill: s.fill ?? "#8B5CFF",
+        stroke: s.stroke ?? "transparent",
+        strokeWidth: s.strokeWidth ?? 0,
+        sides: s.sides,
+        opacity: s.opacity ?? 1,
+        startTime: s.startTime ?? 0,
+        endTime: s.endTime ?? duration,
+        animation: s.animation ?? "none",
+        keyframes: buildKeyframes(s.keyframes, w, h, duration),
+      })),
+    buildBrushes: (w: number, h: number, duration: number): BrushDetails[] =>
+      jsonBrushes.map((b) => ({
+        id: uuidv4(),
+        points: Array.isArray(b.points) ? b.points : [],
+        x: b.xFrac * w,
+        y: b.yFrac * h,
+        width: b.wFrac * w,
+        height: b.hFrac * h,
+        color: b.color ?? "#FF4D6D",
+        strokeWidth: b.strokeWidth ?? 10,
+        opacity: b.opacity ?? 1,
+        startTime: b.startTime ?? 0,
+        endTime: b.endTime ?? duration,
+        animation: b.animation ?? "none",
+        keyframes: buildKeyframes(b.keyframes, w, h, duration),
       })),
   };
 }

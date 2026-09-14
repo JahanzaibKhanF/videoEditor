@@ -44,13 +44,18 @@ export default function Screen() {
     if (videos.length === 0) {
       // No video yet — still honour an explicitly chosen aspect ratio
       // (blank vertical composition, text-only template) instead of always
-      // forcing 16:9. "original" has no intrinsic size without media, so it
-      // stays 1280×720 until a clip is added.
-      setContainerDimenions(
-        selectedAspectRatio === "original"
-          ? { width: 1280, height: 720 }
-          : (([w, h]) => ({ width: w, height: h }))(aspectRatioDimensions(selectedAspectRatio)),
-      );
+      // forcing 16:9. "original" has no video to derive from, but a plain
+      // image-only project (no video, no template) still has SOMETHING to
+      // size the canvas from — fall back to the first imported image's own
+      // pixel dimensions before giving up and using a hardcoded 1280×720.
+      if (selectedAspectRatio === "original") {
+        const firstImage = imagesDetails[0];
+        setContainerDimenions(
+          firstImage ? { width: firstImage.width, height: firstImage.height } : { width: 1280, height: 720 },
+        );
+        return;
+      }
+      setContainerDimenions((([w, h]) => ({ width: w, height: h }))(aspectRatioDimensions(selectedAspectRatio)));
       return;
     }
     const vw = primaryVideoDimensions.width || 1280;

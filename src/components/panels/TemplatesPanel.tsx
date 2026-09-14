@@ -44,7 +44,7 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
     setVideos,
     setClipsDetails, setAudioDetails, setPrimaryVideoDimensions, setTotalTime,
     setActiveTemplate, setLayerOrder, setClipEffects,
-    activeTemplate, clipsDetails, textsDetails, imagesDetails,
+    activeTemplate, clipsDetails, textsDetails, imagesDetails, shapesDetails, brushesDetails,
   } = useAppDetailsContext();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -116,7 +116,8 @@ export default function TemplatesPanel({ initialTemplate }: { initialTemplate?: 
     setSlotFiles(tpl.videoSlots.map(() => null));
   };
 
-  const hasExistingWork = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0;
+  const hasExistingWork = clipsDetails.length > 0 || textsDetails.length > 0 || imagesDetails.length > 0
+    || shapesDetails.length > 0 || brushesDetails.length > 0;
 
   // Gate in front of openTemplate — if you're in plain editing mode (no
   // template active) and already have manual work on the canvas, applying

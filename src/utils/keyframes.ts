@@ -35,6 +35,8 @@ export const KF_PROPS: KfPropMeta[] = [
   { prop: "x",        label: "Position X", neutral: 0, unit: "px",  step: 1 },
   { prop: "y",        label: "Position Y", neutral: 0, unit: "px",  step: 1 },
   { prop: "scale",    label: "Scale",      neutral: 1, unit: "×",   step: 0.01, min: 0 },
+  { prop: "scaleX",   label: "Scale X",    neutral: 1, unit: "×",   step: 0.01 },
+  { prop: "scaleY",   label: "Scale Y",    neutral: 1, unit: "×",   step: 0.01 },
   { prop: "rotation", label: "Rotation",   neutral: 0, unit: "°",   step: 1 },
   { prop: "opacity",  label: "Opacity",    neutral: 1, unit: "",    step: 0.01, min: 0, max: 1 },
   { prop: "blur",     label: "Blur",       neutral: 0, unit: "px",  step: 0.5, min: 0 },

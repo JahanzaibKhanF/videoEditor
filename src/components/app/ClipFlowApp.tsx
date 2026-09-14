@@ -38,8 +38,12 @@ function EditorWithSetup({
     const dur = templateDuration(template);
     const texts = template.buildTexts(w, h, dur);
     const blurs = template.buildBlurs(w, h, dur);
+    const shapes = template.buildShapes(w, h, dur);
+    const brushes = template.buildBrushes(w, h, dur);
     if (texts.length > 0) setTextsDetails(texts);
     if (blurs.length > 0) setBlursDetails(blurs);
+    if (shapes.length > 0) setShapesDetails(shapes);
+    if (brushes.length > 0) setBrushesDetails(brushes);
   }, [template]);
 
   // Hydrate editor state from a resumed (previously saved) project — runs

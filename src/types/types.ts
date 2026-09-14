@@ -80,6 +80,8 @@ export interface ImageDetails {
   // a project's local media folder actually matches against; without it
   // there's nothing to match a re-picked file to at all.
   sourceFileName?: string;
+  // Manual green/blue-screen removal, same as clips — see utils/chromaKey.ts.
+  chromaKey?: ChromaKeySettings;
 }
 
 /**
@@ -420,6 +422,11 @@ export interface AppContextType {
   // save back to the same row instead of creating a new one.
   resumedProjectId: string | null;
   setResumedProjectId: React.Dispatch<React.SetStateAction<string | null>>;
+  // Lightweight session-only undo/redo — see useAppContext.tsx. Ctrl/Cmd+Z
+  // and Ctrl/Cmd+Shift+Z (or Ctrl+Y) are already wired globally; these are
+  // exposed too for a future toolbar button.
+  undo: () => void;
+  redo: () => void;
 }
 
 // Engine control functions injected into context from Screen

@@ -1,6 +1,6 @@
-import { TemplateJson, TemplateJsonText } from "./templateInterpreter";
+import { TemplateJson, TemplateJsonText, TemplateJsonShape, TemplateJsonBrush } from "./templateInterpreter";
 import { TemplateVideoSlot } from "./templates";
-import { AspectRatio } from "../types/types";
+import { AspectRatio, ShapeKind } from "../types/types";
 import { SPEED_PRESETS } from "./speedRamp";
 
 /**
@@ -97,6 +97,26 @@ export const DEFAULT_VIDEO_SLOT: TemplateVideoSlot = {
   transition: "none",
 };
 
+export const SHAPE_KIND_OPTIONS: { value: ShapeKind; label: string }[] = [
+  { value: "rectangle", label: "Rectangle" },
+  { value: "ellipse", label: "Ellipse" },
+  { value: "polygon", label: "Polygon / Triangle" },
+];
+
+export const DEFAULT_SHAPE_LAYER: TemplateJsonShape = {
+  kind: "rectangle",
+  xFrac: 0.3, yFrac: 0.35, wFrac: 0.4, hFrac: 0.3,
+  fill: "#8B5CFF", stroke: "transparent", strokeWidth: 0,
+  opacity: 1, startTime: 0, animation: "none",
+};
+
+export const DEFAULT_BRUSH_LAYER: TemplateJsonBrush = {
+  points: [{ x: 0, y: 0.5 }, { x: 0.5, y: 0 }, { x: 1, y: 0.5 }],
+  xFrac: 0.25, yFrac: 0.4, wFrac: 0.5, hFrac: 0.2,
+  color: "#FF4D6D", strokeWidth: 10,
+  opacity: 1, startTime: 0, animation: "none",
+};
+
 export function emptyTemplateJson(): TemplateJson {
   return {
     description: "",
@@ -106,6 +126,8 @@ export function emptyTemplateJson(): TemplateJson {
     videoSlots: [{ ...DEFAULT_VIDEO_SLOT, label: "Main clip", durationSecs: 8 }],
     texts: [{ ...DEFAULT_TEXT_LAYER, text: "YOUR TITLE" }],
     blurs: [],
+    shapes: [],
+    brushes: [],
   };
 }
 
@@ -177,6 +199,27 @@ export function validateTemplateJson(json: TemplateJson, name?: string): Templat
           warnings.push(`Text ${n} ${tr.prop} key ${ki + 1}: value ${round2(k.value)} is outside ±100% of the canvas.`);
       });
     }
+  });
+
+  const shapes = Array.isArray(json.shapes) ? json.shapes : [];
+  shapes.forEach((s, i) => {
+    const n = i + 1;
+    for (const [k, v] of [["xFrac", s.xFrac], ["yFrac", s.yFrac], ["wFrac", s.wFrac], ["hFrac", s.hFrac]] as const) {
+      if (typeof v !== "number" || Number.isNaN(v)) errors.push(`Shape ${n}: ${k} must be a number.`);
+    }
+    if (s.kind === "polygon" && s.sides !== undefined && (s.sides < 3 || s.sides > 12)) {
+      warnings.push(`Shape ${n}: sides should be between 3 and 12.`);
+    }
+    const start = s.startTime ?? 0, end = s.endTime ?? totalDur;
+    if (end < start) errors.push(`Shape ${n}: end time (${end}s) is before start time (${start}s).`);
+  });
+
+  const brushes = Array.isArray(json.brushes) ? json.brushes : [];
+  brushes.forEach((b, i) => {
+    const n = i + 1;
+    if (!Array.isArray(b.points) || b.points.length < 2) errors.push(`Brush ${n}: needs at least 2 points.`);
+    const start = b.startTime ?? 0, end = b.endTime ?? totalDur;
+    if (end < start) errors.push(`Brush ${n}: end time (${end}s) is before start time (${start}s).`);
   });
 
   if (json.aspectRatio && !isValidAspect(json.aspectRatio)) {
