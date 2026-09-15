@@ -16,7 +16,7 @@ import TextEditor from "../editors/TextEditor";
 import KeyframeEditor from "../editors/KeyframeEditor";
 import { useAppDetailsContext, useEngineControls } from "../../context/useAppContext";
 import { KeyframeTrack, KfProp } from "../../types/types";
-import { evalKeyframes, upsertKey, makeTrack, upsertTrack } from "../../utils/keyframes";
+import { evalKeyframes, upsertKey, makeTrack, upsertTrack, KfPropMeta, TEXT_ONLY_KF_PROPS } from "../../utils/keyframes";
 import Slider from "../ui/Slider";
 import NumberInput from "../ui/NumberInput";
 import EmptyState from "../ui/EmptyState";
@@ -80,17 +80,18 @@ function ChangeRow({
 
 /** Shared "Motion / Keyframes" card. */
 function KfCard({
-  tracks, onChange, time, duration, layerStart, onSeek, animation, animationLabel, onAnimationClear,
+  tracks, onChange, time, duration, layerStart, onSeek, animation, animationLabel, onAnimationClear, extraProps,
 }: {
   tracks: KeyframeTrack[] | undefined;
   onChange: (t: KeyframeTrack[] | undefined) => void;
   time: number; duration: number; layerStart: number; onSeek: (t: number) => void;
   animation?: string; animationLabel?: string; onAnimationClear?: () => void;
+  extraProps?: KfPropMeta[];
 }) {
   return (
     <InspectorCard accent="signal" icon={<Spline size={12} />} title="Motion / Keyframes">
       <KeyframeEditor tracks={tracks} onChange={onChange} time={time} duration={duration} layerStart={layerStart} onSeek={onSeek}
-        animation={animation} animationLabel={animationLabel} onAnimationClear={onAnimationClear} />
+        animation={animation} animationLabel={animationLabel} onAnimationClear={onAnimationClear} extraProps={extraProps} />
     </InspectorCard>
   );
 }
@@ -277,6 +278,7 @@ export default function PropertiesPanel() {
               animation={text.animation} animationLabel={animationName(text.animation)}
               onAnimationClear={() => setTextsDetails(prev => prev.map(tx => tx.id === selectedTextId ? { ...tx, animation: "none" } : tx))}
               time={currentTime} duration={totalTime} layerStart={text.startTime ?? 0} onSeek={seek}
+              extraProps={TEXT_ONLY_KF_PROPS}
             />
           </>
         )}

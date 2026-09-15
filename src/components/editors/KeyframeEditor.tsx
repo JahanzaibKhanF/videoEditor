@@ -15,7 +15,7 @@
 import { useState } from "react";
 import { KeyframeTrack, KfProp } from "../../types/types";
 import {
-  KF_PROPS, propMeta, evalTrack, makeTrack, upsertKey, removeKey, setKeyValue,
+  KF_PROPS, KfPropMeta, propMeta, evalTrack, makeTrack, upsertKey, removeKey, setKeyValue,
   upsertTrack, removeTrack, easePresetOf,
 } from "../../utils/keyframes";
 import { Clock, Diamond, Trash2, ChevronRight, Spline, Sparkles, X } from "@/utils/icons";
@@ -43,6 +43,9 @@ interface Props {
   animation?: string;
   animationLabel?: string;
   onAnimationClear?: () => void;
+  /** Extra rows appended after the shared KF_PROPS — e.g. TEXT_ONLY_KF_PROPS
+   * for text layers' Curve track. Other layer types simply omit this. */
+  extraProps?: KfPropMeta[];
 }
 
 // value <-> field display. In template mode X/Y are fractions of the canvas,
@@ -58,8 +61,9 @@ function fromField(prop: KfProp, v: number, mode: "editor" | "template") {
 
 export default function KeyframeEditor({
   tracks, onChange, time, duration, layerStart = 0, onSeek, mode = "editor",
-  animation, animationLabel, onAnimationClear,
+  animation, animationLabel, onAnimationClear, extraProps = [],
 }: Props) {
+  const rows = extraProps.length ? [...KF_PROPS, ...extraProps] : KF_PROPS;
   const [expanded, setExpanded] = useState<KfProp | null>(null);
   const [graphOpen, setGraphOpen] = useState(false);
 
@@ -118,7 +122,7 @@ export default function KeyframeEditor({
           )}
         </div>
       )}
-      {KF_PROPS.map((meta) => {
+      {rows.map((meta) => {
         const tr = trackFor(meta.prop);
         const on = active.has(meta.prop);
         const live = tr ? (evalTrack(tr, time) ?? meta.neutral) : meta.neutral;

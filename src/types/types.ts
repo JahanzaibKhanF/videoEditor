@@ -7,10 +7,12 @@ import { ChromaKeySettings } from "../utils/chromaKey";
 // is RELATIVE to the layer's resting value so turning a track on never
 // teleports anything: x/y are px offsets, scale/scaleX/scaleY multipliers
 // (1 = unchanged), rotation degrees added, opacity a 0..1 multiplier, blur
-// px added. Evaluated by src/utils/keyframes.ts, composited in
-// compositeFrame.ts so both the live preview and the WebCodecs export get
-// them (the FFmpeg fallback does not — same lim.as clip effects).
-export type KfProp = "x" | "y" | "scale" | "scaleX" | "scaleY" | "rotation" | "opacity" | "blur";
+// px added, curve points added to the layer's base curve (text only, same
+// "base + offset" convention as rotation — see TextDetails.curve).
+// Evaluated by src/utils/keyframes.ts, composited in compositeFrame.ts so
+// both the live preview and the WebCodecs export get them (the FFmpeg
+// fallback does not — same lim.as clip effects).
+export type KfProp = "x" | "y" | "scale" | "scaleX" | "scaleY" | "rotation" | "opacity" | "blur" | "curve";
 
 export interface Keyframe {
   id: string;

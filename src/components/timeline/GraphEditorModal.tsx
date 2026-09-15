@@ -30,7 +30,7 @@ interface Props {
 
 const TRACK_COLORS: Record<KfProp, string> = {
   x: "#4C8CFF", y: "#33D8A0", scale: "#FFB648", scaleX: "#FFB648", scaleY: "#FF9D4C",
-  rotation: "#FF4F70", opacity: "#8B5CFF", blur: "#A78BFA",
+  rotation: "#FF4F70", opacity: "#8B5CFF", blur: "#A78BFA", curve: "#33D8A0",
 };
 
 const W = 720, H = 380, PAD_L = 46, PAD_R = 16, PAD_T = 18, PAD_B = 28;

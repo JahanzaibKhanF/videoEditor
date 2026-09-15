@@ -133,9 +133,10 @@ export function compositeFrame(input: CompositeFrameInput) {
 // Draws one text layer. Extracted out of the old dedicated "text" block —
 // see the merged draw pass above.
 function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: number, fps: number, w: number, h: number) {
+  const kf = evalKeyframes(text.keyframes, t);
   const anim = applyKfOverride(
     computeAnimState(text.animation, t, text.startTime, text.endTime, fps, text.textX, text.textY, w, h, text.fontSize),
-    evalKeyframes(text.keyframes, t),
+    kf,
   );
   if (!anim.visible) return;
   const tw2 = text.width ?? 200, th2 = text.height ?? text.fontSize * 1.4;
@@ -173,9 +174,9 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
     ctx.lineJoin = "round";
   }
 
-  const curve = text.curve ?? 0;
+  const curve = Math.max(-100, Math.min(100, (text.curve ?? 0) + (kf.curve ?? 0)));
   if (curve !== 0) {
-    drawCurvedText(ctx, text.text.replace(/\n/g, " "), curve, hasStroke);
+    drawCurvedText(ctx, text.text.replace(/\n/g, " "), curve, hasStroke, tw2);
   } else {
     drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2), hasStroke);
   }
@@ -534,22 +535,49 @@ function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number,
 // upward, circle center below the text). Each character is placed like a
 // clock hand: rotate to its angle on the circle, then step outward by the
 // radius — the same construction used to draw text around a circular logo.
-function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number, stroke: boolean) {
+//
+// A curved line can't wrap onto multiple lines like normal text does, so a
+// caption long enough to have wrapped before would otherwise run straight
+// off its box (and often off the canvas) the moment curve is turned on,
+// looking like the text just vanished. `maxWidth` (the text layer's own
+// box width) lets this auto-shrink the font just for the curved draw so
+// the arc's footprint — always close to the flat line width, since chord
+// length <= arc length — stays inside the box, the same guarantee wrapping
+// used to give for free. The layer's stored fontSize is never touched.
+function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number, stroke: boolean, maxWidth: number) {
   const chars = [...text];
   if (!chars.length) return;
-  const prevAlign = ctx.textAlign, prevBaseline = ctx.textBaseline;
+  const prevAlign = ctx.textAlign, prevBaseline = ctx.textBaseline, prevFont = ctx.font;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
   const sweep = (Math.min(100, Math.max(-100, pct)) / 100) * Math.PI * 0.9;
   const upward = sweep >= 0;
   const absSweep = Math.abs(sweep);
-  const widths = chars.map(c => ctx.measureText(c).width || 1);
-  const totalWidth = widths.reduce((a, b) => a + b, 0);
+
+  const measure = () => {
+    const w = chars.map(c => ctx.measureText(c).width || 1);
+    return { w, total: w.reduce((a, b) => a + b, 0) };
+  };
+  let { w: widths, total: totalWidth } = measure();
+  if (maxWidth > 0 && totalWidth > maxWidth) {
+    const m = ctx.font.match(/([\d.]+)px/);
+    if (m) {
+      const shrunk = Math.max(4, parseFloat(m[1]) * (maxWidth / totalWidth));
+      ctx.font = ctx.font.replace(/[\d.]+px/, `${shrunk}px`);
+      ({ w: widths, total: totalWidth } = measure());
+    }
+  }
   const radius = totalWidth / absSweep;
 
   ctx.save();
-  ctx.translate(0, upward ? radius : -radius);
+  // Flat text is left-aligned inside its box (drawn from the left edge,
+  // -maxWidth/2). Centering the curved line on the box instead (x=0) made
+  // even a tiny curve jump the text sideways the moment it turned on —
+  // anchor the arc's own center where flat text's center would land so
+  // toggling curve on/off doesn't move the text horizontally.
+  const xAnchor = maxWidth > 0 ? -maxWidth / 2 + totalWidth / 2 : 0;
+  ctx.translate(xAnchor, upward ? radius : -radius);
   let cursor = -absSweep / 2;
   for (let i = 0; i < chars.length; i++) {
     const charAngle = (widths[i] / totalWidth) * absSweep;
@@ -566,6 +594,7 @@ function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number
 
   ctx.textAlign = prevAlign;
   ctx.textBaseline = prevBaseline;
+  ctx.font = prevFont;
 }
 
 export function applyTransition(

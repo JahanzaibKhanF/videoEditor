@@ -18,6 +18,10 @@ export interface KfOverride {
   x?: number; y?: number;
   scale?: number; scaleX?: number; scaleY?: number;
   rotation?: number; opacity?: number; blur?: number;
+  /** Text-only — added to TextDetails.curve, not folded by applyKfOverride
+   *  (curve isn't part of the shared AnimStateLike shape every other layer
+   *  type uses). compositeFrame.ts's drawTextLayer reads it directly. */
+  curve?: number;
 }
 
 export interface KfPropMeta {
@@ -42,8 +46,18 @@ export const KF_PROPS: KfPropMeta[] = [
   { prop: "blur",     label: "Blur",       neutral: 0, unit: "px",  step: 0.5, min: 0 },
 ];
 
+// Extra rows only text layers should ever show (see KeyframeEditor's
+// `extraProps` prop) — kept OUT of KF_PROPS since that list is shared by
+// every layer type's keyframe panel, and no other layer type has a `curve`
+// field.
+export const TEXT_ONLY_KF_PROPS: KfPropMeta[] = [
+  { prop: "curve", label: "Curve", neutral: 0, unit: "", step: 1, min: -100, max: 100 },
+];
+
+const ALL_KF_PROP_META: KfPropMeta[] = [...KF_PROPS, ...TEXT_ONLY_KF_PROPS];
+
 export function propMeta(prop: KfProp): KfPropMeta {
-  return KF_PROPS.find((p) => p.prop === prop)
+  return ALL_KF_PROP_META.find((p) => p.prop === prop)
     ?? { prop, label: prop, neutral: prop === "scale" || prop === "scaleX" || prop === "scaleY" || prop === "opacity" ? 1 : 0, unit: "", step: 0.01 };
 }
 

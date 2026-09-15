@@ -1,7 +1,25 @@
 "use client";
-import { IoTextOutline, GoFileMedia, GoSun, TbTransitionRight, FiLayers, CgTemplate, Scissors, Wand2, Pipette, Shapes, PenTool, FolderOpen } from "@/utils/icons";
+import {
+  IoTextOutline,
+  GoFileMedia,
+  GoSun,
+  TbTransitionRight,
+  FiLayers,
+  CgTemplate,
+  Scissors,
+  Wand2,
+  Pipette,
+  Shapes,
+  PenTool,
+  FolderOpen,
+} from "@/utils/icons";
 
-interface Tab { id: string; label: string; icon: React.ReactNode; badge?: string; }
+interface Tab {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  badge?: string;
+}
 
 // Grouped by intent — Add (bring something in) · Apply (treat the selection)
 // · Manage. "Recent" used to live only in the profile menu dropdown (the
@@ -12,21 +30,30 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
   {
     cap: "Add",
     tabs: [
-      { id: "media",     label: "Media",     icon: <GoFileMedia size={20} /> },
-      { id: "text",      label: "Text",      icon: <IoTextOutline size={20} /> },
-      { id: "shapes",    label: "Shapes",    icon: <Shapes size={20} /> },
-      { id: "brush",     label: "Brush",     icon: <PenTool size={20} /> },
+      { id: "media", label: "Media", icon: <GoFileMedia size={20} /> },
+      { id: "text", label: "Text", icon: <IoTextOutline size={20} /> },
+      { id: "shapes", label: "Shapes", icon: <Shapes size={20} /> },
+      { id: "brush", label: "Brush", icon: <PenTool size={20} /> },
       { id: "templates", label: "Templates", icon: <CgTemplate size={20} /> },
     ],
   },
   {
     cap: "Apply",
     tabs: [
-      { id: "effects",     label: "Effects",     icon: <GoSun size={20} /> },
-      { id: "transitions", label: "Transitions", icon: <TbTransitionRight size={20} /> },
-      { id: "animations",  label: "Animate",     icon: <Wand2 size={20} /> },
-      { id: "bgremove",    label: "BG Remove",   icon: <Scissors size={20} />, badge: "AI" },
-      { id: "chromakey",   label: "Chroma Key",  icon: <Pipette size={20} /> },
+      { id: "effects", label: "Effects", icon: <GoSun size={20} /> },
+      {
+        id: "transitions",
+        label: "Transitions",
+        icon: <TbTransitionRight size={20} />,
+      },
+      { id: "animations", label: "Animate", icon: <Wand2 size={20} /> },
+      {
+        id: "bgremove",
+        label: "BG Remove",
+        icon: <Scissors size={20} />,
+        badge: "AI",
+      },
+      { id: "chromakey", label: "Chroma Key", icon: <Pipette size={20} /> },
     ],
   },
   {
@@ -38,12 +65,15 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
   },
 ];
 
-interface Props { activeTab: string; onTabChange: (t: string) => void; }
+interface Props {
+  activeTab: string;
+  onTabChange: (t: string) => void;
+}
 
 export default function IconSidebar({ activeTab, onTabChange }: Props) {
   return (
     <div
-      style={{ width: 72 }}
+      style={{ width: 80 }}
       className="flex-shrink-0 flex flex-col items-center py-2 overflow-y-auto scrollbar-thin bg-studio-surface border-r border-studio-border"
     >
       {GROUPS.map((group, gi) => (
@@ -53,7 +83,7 @@ export default function IconSidebar({ activeTab, onTabChange }: Props) {
             {group.cap}
           </span>
           <div className="flex flex-col items-center gap-1">
-            {group.tabs.map(t => {
+            {group.tabs.map((t) => {
               const active = activeTab === t.id;
               return (
                 <button
@@ -66,15 +96,18 @@ export default function IconSidebar({ activeTab, onTabChange }: Props) {
                     w-[58px] h-[52px] rounded-xl border cursor-pointer
                     transition-[background,color,border-color,transform] duration-150 flex-shrink-0 relative
                     active:scale-95
-                    ${active
-                      ? "bg-signal/12 text-signal border-signal/25"
-                      : "bg-transparent text-ink-muted border-transparent hover:bg-studio-hover hover:text-ink-primary"
+                    ${
+                      active
+                        ? "bg-signal/12 text-signal border-signal/25"
+                        : "bg-transparent text-ink-muted border-transparent hover:bg-studio-hover hover:text-ink-primary"
                     }
                   `}
                 >
                   <span
                     className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full bg-signal transition-all duration-200 ${
-                      active ? "h-6 opacity-100" : "h-2 opacity-0 group-hover:opacity-40"
+                      active
+                        ? "h-6 opacity-100"
+                        : "h-2 opacity-0 group-hover:opacity-40"
                     }`}
                   />
                   <span className="relative">

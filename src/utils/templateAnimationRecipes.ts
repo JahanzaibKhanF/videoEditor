@@ -50,7 +50,9 @@ const ALL_PROPS: KfProp[] = ["x", "y", "scale", "scaleX", "scaleY", "rotation", 
 // that, so a 1s caption and a 6s title both sample proportionally.
 function bake(animation: string, dur: number): RecipeTrack[] {
   const steps = Math.max(4, Math.round(dur * SAMPLE_HZ));
-  const series: Record<KfProp, RecipeKey[]> = { x: [], y: [], scale: [], scaleX: [], scaleY: [], rotation: [], opacity: [], blur: [] };
+  // `curve` is never baked from an engine-key animation (no engine animation
+  // touches it) — present only so this satisfies Record<KfProp, ...>.
+  const series: Record<KfProp, RecipeKey[]> = { x: [], y: [], scale: [], scaleX: [], scaleY: [], rotation: [], opacity: [], blur: [], curve: [] };
   for (let i = 0; i <= steps; i++) {
     const t = (i / steps) * dur;
     const s = computeAnimState(animation, t, 0, dur, REF_FPS, 0, 0, REF_W, REF_H, REF_FONT);

@@ -87,6 +87,25 @@ export default function TextEditor() {
     }
   }, [selectedTextId]);
 
+  // fontSize/lineHeight can also change from the CANVAS (dragging a resize
+  // handle bakes the new size straight into the text), independently of
+  // this panel. Without resyncing here, that change left this panel's local
+  // copies stale, and the next edit made in this panel (e.g. dragging Curve
+  // or Gradient Angle) would push the stale values back and visually snap
+  // the text back down to its pre-resize size.
+  useEffect(() => {
+    if (!selectedTextId || isUpdating.current) return;
+    const t = textsDetails.find(t => t.id === selectedTextId);
+    if (!t) return;
+    const liveFontSize = Math.trunc(t.fontSize);
+    if (liveFontSize !== fontSize || t.lineHeight !== lineHeight) {
+      isUpdating.current = true;
+      setFontSize(liveFontSize);
+      setLineHeight(t.lineHeight);
+      setTimeout(() => { isUpdating.current = false; }, 0);
+    }
+  }, [textsDetails, selectedTextId]);
+
   useEffect(() => {
     if (!selectedTextId || isUpdating.current) return;
     setTextsDetails(prev => prev.map(t => {
