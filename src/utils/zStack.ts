@@ -50,3 +50,44 @@ export function frontmostZ(allExistingZ: number[]): number {
   if (allExistingZ.length === 0) return 0;
   return Math.min(...allExistingZ) - 1;
 }
+
+/**
+ * Same track-resolution math as VideoClipsRangeSlider.tsx's own
+ * `resolveTargetTrack` (kept as a separate, generic copy rather than a
+ * shared import — video's version is delicate, already-proven code, not
+ * worth the regression risk of refactoring it just to dedupe this), for any
+ * OTHER layer type that also wants "multiple non-overlapping items share a
+ * track/row" behavior (see TextRangeSlider.tsx). `others` is every other
+ * item of the SAME layer type (never the one being moved); `otherLayerZs`
+ * is every other layer TYPE's zIndex, so a track move can also land in a
+ * slot between/beyond those (shared unified stack).
+ */
+export function resolveTargetTrackGeneric(
+  dir: "up" | "down",
+  curZ: number,
+  start: number,
+  end: number,
+  others: { zIndex?: number; start: number; end: number }[],
+  otherLayerZs: number[] = [],
+): number {
+  const tracks = Array.from(new Set([...others.map(o => o.zIndex ?? 0), curZ])).sort((a, b) => a - b);
+  const idx = tracks.indexOf(curZ);
+  const overlaps = (z: number) => others.some(o => (o.zIndex ?? 0) === z && start < o.end && end > o.start);
+  if (dir === "down") {
+    if (idx < tracks.length - 1) {
+      const cand = tracks[idx + 1];
+      if (!overlaps(cand)) return cand;
+      const beyond = idx + 2 < tracks.length ? tracks[idx + 2] : cand + 1;
+      return (cand + beyond) / 2;
+    }
+    return computeAdjacentZ("down", curZ, [...others.map(o => o.zIndex ?? 0), ...otherLayerZs]);
+  } else {
+    if (idx > 0) {
+      const cand = tracks[idx - 1];
+      if (!overlaps(cand)) return cand;
+      const beyond = idx - 2 >= 0 ? tracks[idx - 2] : cand - 1;
+      return (cand + beyond) / 2;
+    }
+    return computeAdjacentZ("up", curZ, [...others.map(o => o.zIndex ?? 0), ...otherLayerZs]);
+  }
+}

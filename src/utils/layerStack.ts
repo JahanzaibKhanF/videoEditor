@@ -6,9 +6,9 @@ export interface StackEntry {
   kind: LayerKind;
   /** Effective zIndex used to sort — same "lower = frontmost" convention as compositeFrame.ts. */
   z: number;
-  /** Set when kind === "video": the track id (clip.zIndex) this entry represents. */
+  /** Set when kind === "video" or "text": the track id (zIndex) this entry represents — several non-overlapping items can share one track/row. */
   trackZ?: number;
-  /** Set when kind !== "video": the individual image/text/blur's own id. */
+  /** Set when kind is a single-item-per-row type: the individual image/blur/shape/brush's own id. */
   id?: string;
 }
 
@@ -20,9 +20,13 @@ export interface StackRun {
 /**
  * Builds ONE merged, z-sorted list spanning every layer type — the same
  * merge compositeFrame.ts does for actual drawing (see MergedLayer there).
- * Video clips are collapsed to one entry per TRACK (matching
- * VideoClipsRangeSlider's own track grouping — several non-overlapping
- * clips can share a track/zIndex).
+ * Video clips AND text layers are each collapsed to one entry per TRACK
+ * (matching VideoClipsRangeSlider's / TextRangeSlider's own track grouping —
+ * several non-overlapping clips, or captions, can share a track/zIndex,
+ * e.g. auto-generated captions all sitting on the same row since they're
+ * sequential and never overlap). Image/blur/shape/brush stay one row per
+ * item — sharing a row isn't a thing anyone asked those layer types to do,
+ * and it'd need the same track/collision machinery text just got.
  *
  * Sorted ascending by z, i.e. LOWEST zIndex (frontmost, drawn on top) comes
  * FIRST — so rendering this list top-to-bottom puts the frontmost layer at
@@ -42,10 +46,11 @@ export function buildMergedEntries(
   brushes: BrushDetails[] = [],
 ): StackEntry[] {
   const trackZs = Array.from(new Set(clips.map(c => c.zIndex ?? 0)));
+  const textZs = Array.from(new Set(texts.map(t => t.zIndex ?? 0)));
   const entries: StackEntry[] = [
     ...trackZs.map(z => ({ kind: "video" as const, z, trackZ: z })),
     ...images.map(i => ({ kind: "image" as const, z: i.zIndex ?? 0, id: i.id })),
-    ...texts.map(t => ({ kind: "text" as const, z: t.zIndex ?? 0, id: t.id })),
+    ...textZs.map(z => ({ kind: "text" as const, z, trackZ: z })),
     ...blurs.map(b => ({ kind: "blur" as const, z: b.zIndex ?? 0, id: b.id })),
     ...shapes.map(s => ({ kind: "shape" as const, z: s.zIndex ?? 0, id: s.id })),
     ...brushes.map(b => ({ kind: "brush" as const, z: b.zIndex ?? 0, id: b.id })),

@@ -351,8 +351,10 @@ function LabelColumn() {
       });
     } else if (run.kind === "text") {
       run.entries.forEach(entry => {
-        const t = textsDetails.find(tx => tx.id === entry.id);
-        rows.push({ key: `run-${runIdx}-text-${entry.id}`, type: "text", label: CFG.text.label, color: CFG.text.color, sub: t?.text });
+        const z = entry.trackZ!;
+        const trackTexts = textsDetails.filter(t => (t.zIndex ?? 0) === z).sort((a, b) => (a.startTime ?? 0) - (b.startTime ?? 0));
+        const sub = trackTexts.length === 1 ? trackTexts[0].text : `${trackTexts.length} captions`;
+        rows.push({ key: `run-${runIdx}-text-${z}`, type: "text", label: CFG.text.label, color: CFG.text.color, sub });
       });
     } else if (run.kind === "shape") {
       run.entries.forEach(entry => {

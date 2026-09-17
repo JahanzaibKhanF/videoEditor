@@ -32,7 +32,7 @@ export const ROW_H = 36;
 export const ROW_GAP = 3;
 // Text/image/blur chips are 28px each with a 3px gap (not ROW_H, which is
 // what video/audio rows actually use).
-const ITEM_H = 28;
+export const ITEM_H = 28;
 const ITEM_GAP = 3;
 
 export default function Layers() {
@@ -82,12 +82,25 @@ export default function Layers() {
           );
         }
 
+        if (run.kind === "text") {
+          // Text shares video's "track" model — several non-overlapping
+          // text layers (most commonly a batch of auto-generated captions,
+          // which never overlap in time) sit on the SAME row instead of
+          // each forcing its own line.
+          const textTrackZs = run.entries.map(e => e.trackZ!);
+          const h = Math.max(ROW_H, textTrackZs.length * (ITEM_H + ITEM_GAP) - ITEM_GAP);
+          return (
+            <div key={`run-${runIdx}-text`} style={{ height: h, position: "relative" }}>
+              <TextRangeSlider onlyTrackZs={textTrackZs} />
+            </div>
+          );
+        }
+
         const ids = run.entries.map(e => e.id!);
         const h = Math.max(ROW_H, ids.length * (ITEM_H + ITEM_GAP) - ITEM_GAP);
         return (
           <div key={`run-${runIdx}-${run.kind}`} style={{ height: h, position: "relative" }}>
             {run.kind === "blur" && <BlurRangeSlider onlyIds={ids} />}
-            {run.kind === "text" && <TextRangeSlider onlyIds={ids} />}
             {run.kind === "image" && <ImagesRangeSlider onlyIds={ids} />}
             {run.kind === "shape" && <ShapesRangeSlider onlyIds={ids} />}
             {run.kind === "brush" && <BrushRangeSlider onlyIds={ids} />}

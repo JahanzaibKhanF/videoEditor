@@ -3,7 +3,7 @@ import path from "node:path";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config) => {
+  webpack: (config, { webpack }) => {
     config.resolve.fallback = { ...config.resolve.fallback, fs: false, buffer: "buffer" };
 
     // @imgly/background-removal pulls in onnxruntime-web, which ships large
@@ -38,9 +38,35 @@ const nextConfig = {
     // CommonJS .js file — no ESM, no WebGPU, no internal Worker spawning)
     // removes the crashing file from the bundle entirely rather than hoping
     // runtime config prevents it from being touched.
+    //
+    // Scoped to @imgly/background-removal specifically (via
+    // NormalModuleReplacementPlugin checking the importing file's own
+    // path), NOT a blanket alias on the bare "onnxruntime-web" specifier —
+    // @huggingface/transformers (captionWorker.ts's Whisper pipeline) ships
+    // its OWN, newer onnxruntime-web nested in its own node_modules, built
+    // specifically to match that version. A blanket alias silently forced
+    // Whisper onto imgly's older CPU-only build instead, which fails
+    // entirely at inference time ("no available backend found ... Failed to
+    // fetch dynamically imported module") since its WASM/worker glue
+    // doesn't line up with the newer version transformers.js expects.
     const cpuOnlyBuild = path.resolve(process.cwd(), "node_modules/onnxruntime-web/dist/ort.wasm.min.js");
-    config.resolve.alias["onnxruntime-web/webgpu"] = cpuOnlyBuild;
-    config.resolve.alias["onnxruntime-web$"] = cpuOnlyBuild;
+    // @huggingface/transformers ships its OWN separately-versioned
+    // onnxruntime-web nested in its own node_modules — same "plain
+    // single-file build" fix, applied to ITS copy specifically (imgly's
+    // cpuOnlyBuild above is a different, incompatible version).
+    const transformersCpuOnlyBuild = path.resolve(
+      process.cwd(),
+      "node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort.wasm.min.js",
+    );
+    config.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(/^onnxruntime-web(\/webgpu)?$/, (resource) => {
+        if (resource.context && resource.context.includes("@imgly")) {
+          resource.request = cpuOnlyBuild;
+        } else if (resource.context && resource.context.includes("@huggingface")) {
+          resource.request = transformersCpuOnlyBuild;
+        }
+      }),
+    );
 
     // The "ebml" package (a transitive dep of ts-ebml, used to patch WebM
     // duration metadata after background removal — see backgroundRemoval.ts)
@@ -60,6 +86,20 @@ const nextConfig = {
     // CommonJS build (lib/ebml.js, which correctly sets `exports.tools`)
     // fixes it.
     config.resolve.alias["ebml$"] = path.resolve(process.cwd(), "node_modules/ebml/lib/ebml.js");
+
+    // @huggingface/transformers (captionWorker.ts's Whisper pipeline) ships
+    // separate node/browser builds selected via package.json `exports`
+    // conditions — but webpack's worker sub-compilation (for `new
+    // Worker(new URL(...))`, see captionWorker.ts) resolves it against the
+    // Node.js build instead of the browser one, which then fails outright
+    // (`Module not found: ort-wasm-simd-threaded.asyncify.wasm`, a file that
+    // only exists for the Node build). Aliasing straight to the browser
+    // bundle sidesteps whatever condition webpack's worker resolution is
+    // actually using.
+    config.resolve.alias["@huggingface/transformers$"] = path.resolve(
+      process.cwd(),
+      "node_modules/@huggingface/transformers/dist/transformers.web.js",
+    );
 
     return config;
   },

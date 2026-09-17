@@ -12,6 +12,7 @@ import {
   Shapes,
   PenTool,
   FolderOpen,
+  Captions,
 } from "@/utils/icons";
 
 interface Tab {
@@ -54,6 +55,7 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
         badge: "AI",
       },
       { id: "chromakey", label: "Chroma Key", icon: <Pipette size={20} /> },
+      { id: "captions", label: "Captions", icon: <Captions size={20} />, badge: "AI" },
     ],
   },
   {

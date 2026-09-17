@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle, Pipette } from "@/utils/icons";
+import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle, Pipette, Captions } from "@/utils/icons";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -15,6 +15,7 @@ import TemplatesPanel from "./TemplatesPanel";
 import RecentProjectsPanel from "./RecentProjectsPanel";
 import ClipEffectsPanel from "./ClipEffectsPanel";
 import BackgroundRemovalPanel from "./BackgroundRemovalPanel";
+import CaptionsPanel from "./CaptionsPanel";
 import ChromaKeyPanel from "../editors/ChromaKeyPanel";
 import ShapesPanel from "./ShapesPanel";
 import BrushPanel from "./BrushPanel";
@@ -172,7 +173,10 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
     const fontSize = 48;
     const width = Math.min(420, Math.max(220, containerDimenions.width * 0.4));
     const height = measureWrappedTextHeight(defaultText, fontSize, "Arial", 1, width, false, false);
-    const defaultDuration = Math.min(5, totalTime || 5);
+    // Spans the FULL composition length by default, same as image/blur —
+    // matches how a title/caption on a real timeline behaves until you
+    // deliberately trim it shorter.
+    const defaultDuration = totalTime > 0 ? totalTime : 5;
     // NEW-LAYER-ON-TOP FIX — see the matching comment in ingestFiles above.
     const textZIndex = frontmostZ([
       ...clipsDetails.map(c => c.zIndex ?? 0),
@@ -429,6 +433,32 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
               icon={<Pipette size={18} strokeWidth={1.7} />}
               title="Nothing selected"
               hint="Tap a video clip or image on the timeline, then come back here."
+            />
+          )}
+        </PanelBody>
+      </PanelShell>
+    );
+  }
+
+  /* ─── CAPTIONS TAB ─── */
+  if (activeTab === "captions") {
+    const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
+    return (
+      <PanelShell>
+        <PanelHeader
+          icon={<Captions size={13} />}
+          title="Auto Captions"
+          subtitle={selectedClip ? "Ready for the selected clip" : "Select a video clip on the timeline first"}
+        />
+        <PanelBody padded>
+          {selectedClip ? (
+            <CaptionsPanel clip={selectedClip} />
+          ) : (
+            <EmptyState
+              compact
+              icon={<Captions size={18} strokeWidth={1.7} />}
+              title="No clip selected"
+              hint="Tap a video clip on the timeline, then come back here."
             />
           )}
         </PanelBody>

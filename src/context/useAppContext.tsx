@@ -156,6 +156,29 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // A text/image/blur layer newly added at "the full composition length"
+  // (MediaPanel's addText/addImage/addBlur default) keeps following the
+  // composition as it grows, the same way an After Effects layer dragged
+  // out to the comp's own duration marker keeps up when you lengthen the
+  // comp — but only until the user deliberately trims that specific layer
+  // to something else, at which point it naturally stops matching this
+  // condition and is left alone. Detected structurally (no extra "is
+  // following" field needed): a layer whose endTime still exactly equals
+  // the PREVIOUS totalTime, at the moment totalTime grows, was clearly
+  // still spanning "the whole comp" and gets carried along; anything
+  // already trimmed short doesn't match and is untouched.
+  const prevTotalTimeRef = useRef(totalTime);
+  useEffect(() => {
+    const prev = prevTotalTimeRef.current;
+    if (totalTime > prev + 0.001) {
+      const stillFollowing = (end: number) => Math.abs(end - prev) < 0.05;
+      setTextsDetails(ts => ts.map(t => stillFollowing(t.endTime) ? { ...t, endTime: totalTime } : t));
+      setImagesDetails(is => is.map(i => stillFollowing(i.endTime) ? { ...i, endTime: totalTime } : i));
+      setBlursDetails(bs => bs.map(b => stillFollowing(b.endTime) ? { ...b, endTime: totalTime } : b));
+    }
+    prevTotalTimeRef.current = totalTime;
+  }, [totalTime]);
+
   // A video-less project's duration auto-fits to its content's own latest
   // end — both growing (already true, add-handlers already bump totalTime
   // up) AND shrinking as content is trimmed shorter, so trimming a text/
