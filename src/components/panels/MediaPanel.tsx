@@ -1,6 +1,7 @@
 "use client";
 
 import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle, Pipette, Captions } from "@/utils/icons";
+import EnhancePanel from "./EnhancePanel";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -457,6 +458,32 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
             <EmptyState
               compact
               icon={<Captions size={18} strokeWidth={1.7} />}
+              title="No clip selected"
+              hint="Tap a video clip on the timeline, then come back here."
+            />
+          )}
+        </PanelBody>
+      </PanelShell>
+    );
+  }
+
+  /* ─── ENHANCE TAB ─── */
+  if (activeTab === "enhance") {
+    const selectedClip = clipsDetails.find(c => c.id === selectedClipId);
+    return (
+      <PanelShell>
+        <PanelHeader
+          icon={<Sparkles size={13} />}
+          title="AI Enhance"
+          subtitle={selectedClip ? "Ready for the selected clip" : "Select a video clip on the timeline first"}
+        />
+        <PanelBody padded>
+          {selectedClip ? (
+            <EnhancePanel clip={selectedClip} />
+          ) : (
+            <EmptyState
+              compact
+              icon={<Sparkles size={18} strokeWidth={1.7} />}
               title="No clip selected"
               hint="Tap a video clip on the timeline, then come back here."
             />
