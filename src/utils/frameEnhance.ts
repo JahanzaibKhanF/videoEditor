@@ -15,9 +15,12 @@ import { ColorAdjustments } from "../types/types";
 
 export type EnhanceLevel = 0 | 1 | 2; // Off / Low / High
 
+// The dial's first click (Off → level 1) lands on FHD, not HD — most people
+// turning Quality on at all want the best result by default; HD (a lighter,
+// faster option) is still one more click away at level 2.
 export const RESOLUTION_TARGET_HEIGHT: Record<1 | 2, number> = {
-  1: 720,  // HD
-  2: 1080, // FHD
+  1: 1080, // FHD
+  2: 720,  // HD
 };
 
 function clamp(v: number, lo: number, hi: number) {
@@ -85,24 +88,77 @@ export function detectAutoColor(
 }
 
 /**
- * Softens sensor grain/noise by blending a lightly-blurred copy of the
- * frame back over itself at partial opacity — cheap (no cross-frame state
- * to manage), and conservative enough at these blend strengths to avoid
- * smearing real detail. Must be called AFTER the frame is already drawn to
- * `ctx`.
+ * Reduces sensor grain/noise WITHOUT softening real detail — a plain
+ * blur-and-blend also smooths edges, faces, and texture, which reads as
+ * "blurry", not "cleaned up". This blends toward a blurred copy only where
+ * a pixel is already close to its blurred neighborhood (flat, likely-noisy
+ * areas); where a pixel differs a lot from its blurred neighborhood (an
+ * edge — the boundary of a face, an object, fine texture), the blend
+ * strength fades toward zero, so that detail is left alone. A cheap
+ * approximation of a bilateral/edge-preserving filter, not a true one, but
+ * enough to keep faces and object edges sharp while grain in flat regions
+ * (skin, sky, walls) gets cleaned up. Must be called AFTER the frame is
+ * already drawn to `ctx`.
  */
-export function applySoftenDenoise(
+export function applyNoiseOnlyDenoise(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   w: number, h: number,
   level: EnhanceLevel,
 ) {
   if (level === 0) return;
-  const alpha = level === 1 ? 0.18 : 0.32;
-  const blurPx = level === 1 ? 0.6 : 1.2;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  (ctx as CanvasRenderingContext2D).filter = `blur(${blurPx}px)`;
-  ctx.drawImage(ctx.canvas as CanvasImageSource, 0, 0, w, h);
-  (ctx as CanvasRenderingContext2D).filter = "none";
-  ctx.restore();
+  const strength = level === 1 ? 0.35 : 0.6;
+  const blurPx = level === 1 ? 1.2 : 2.2;
+  const edgeThreshold = 18; // per-channel 0..255 difference that counts as "an edge, not noise"
+
+  const orig = ctx.getImageData(0, 0, w, h);
+
+  const blurCanvas = document.createElement("canvas");
+  blurCanvas.width = w; blurCanvas.height = h;
+  const bctx = blurCanvas.getContext("2d")!;
+  bctx.filter = `blur(${blurPx}px)`;
+  bctx.drawImage(ctx.canvas as CanvasImageSource, 0, 0);
+  const blurred = bctx.getImageData(0, 0, w, h);
+
+  const od = orig.data, bd = blurred.data;
+  const out = new Uint8ClampedArray(od.length);
+  for (let i = 0; i < od.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const o = od[i + c], b = bd[i + c];
+      const localWeight = strength * Math.max(0, 1 - Math.abs(o - b) / edgeThreshold);
+      out[i + c] = o + (b - o) * localWeight;
+    }
+    out[i + 3] = od[i + 3];
+  }
+  ctx.putImageData(new ImageData(out, w, h), 0, 0);
+}
+
+/**
+ * A real (pixel-level) unsharp mask — original plus a fraction of
+ * (original minus a blurred copy) — so Basic-mode Quality reads as
+ * "repaired/crisper", not just "resized bigger and softer", even without a
+ * real AI model behind it. Cheap, one pass, no cross-frame state.
+ */
+export function applySharpen(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  w: number, h: number,
+  amount = 0.35,
+) {
+  const orig = ctx.getImageData(0, 0, w, h);
+
+  const blurCanvas = document.createElement("canvas");
+  blurCanvas.width = w; blurCanvas.height = h;
+  const bctx = blurCanvas.getContext("2d")!;
+  bctx.filter = "blur(1.4px)";
+  bctx.drawImage(ctx.canvas as CanvasImageSource, 0, 0);
+  const blurred = bctx.getImageData(0, 0, w, h);
+
+  const od = orig.data, bd = blurred.data;
+  const out = new Uint8ClampedArray(od.length);
+  for (let i = 0; i < od.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      out[i + c] = od[i + c] + (od[i + c] - bd[i + c]) * amount;
+    }
+    out[i + 3] = od[i + 3];
+  }
+  ctx.putImageData(new ImageData(out, w, h), 0, 0);
 }

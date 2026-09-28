@@ -78,6 +78,13 @@ self.onmessage = async (e: MessageEvent) => {
       [buffer],
     );
   } catch (err) {
-    post({ type: "error", message: (err as Error)?.message ?? "Enhance failed." });
+    const raw = (err as Error)?.message ?? "Enhance failed.";
+    // A raw "std::bad_alloc" from inside OrtRun() means the WASM engine ran
+    // out of memory — surface something a person can actually act on
+    // instead of the C++ allocator's own error text.
+    const message = /bad_alloc|out of memory/i.test(raw)
+      ? "Ran out of memory processing this frame — try Basic mode, or a lower resolution/shorter clip."
+      : raw;
+    post({ type: "error", message });
   }
 };

@@ -4,16 +4,25 @@
  * algorithms) or Advanced (real AI models for resolution + denoise; a
  * stronger classical pass for color — see frameEnhance.ts for why) mode.
  *
- * Structurally mirrors backgroundRemoval.ts (same seek-per-frame loop,
- * mediabunny CanvasSource encode, index-based frame timing) — the
- * difference is what happens to each frame's pixels, and this output needs
- * no alpha channel, so it encodes to a plain MP4 instead of an alpha WebM.
+ * Structurally mirrors backgroundRemoval.ts (mediabunny CanvasSource
+ * encode, index-based frame timing) — the difference is what happens to
+ * each frame's pixels, and this output needs no alpha channel, so it
+ * encodes to a plain MP4 instead of an alpha WebM.
  *
- * Per-frame pipeline (each stage only runs if its control is above Off):
- *   1. Resolution — scale up to the target height (skipped if the source
- *      is already there or taller)
- *   2. Denoise — clean up the (possibly just-upscaled) frame
- *   3. Color — one final auto-color-corrected pass
+ * OUTPUT FRAME RATE — always a smooth OUTPUT_FPS (24), for both modes. An
+ * earlier version processed (and encoded) at a much lower rate in Advanced
+ * mode (as low as 6fps) purely to keep the slow AI models' total run time
+ * down — but that meant the ENCODED result genuinely only had 6 unique
+ * images per second, which reads as stuck/juddery both in the review
+ * preview and in the final exported file, not just "lower quality". Basic
+ * mode is cheap per frame, so it simply runs its (classical, no model)
+ * pipeline at the full output rate directly. Advanced mode can't afford to
+ * run its slow AI models at the full rate (that's the same total run time
+ * problem all over again) — instead it computes the AI result at a sparse
+ * set of "keyframes" (still ~6/s of unique AI work, unchanged run time
+ * budget from before) and CROSS-FADES between consecutive keyframes for
+ * every frame in between, so the output timeline still has real 24fps
+ * motion instead of a hard, choppy hold on the same stale frame.
  */
 import {
   Output, Mp4OutputFormat, BufferTarget, CanvasSource,
@@ -21,13 +30,13 @@ import {
 } from "mediabunny";
 import { ClipDetails } from "../types/types";
 import { buildCanvasFilterString } from "./colorAdjustments";
-import { detectAutoColor, applySoftenDenoise, RESOLUTION_TARGET_HEIGHT, EnhanceLevel } from "./frameEnhance";
+import { detectAutoColor, applyNoiseOnlyDenoise, applySharpen, RESOLUTION_TARGET_HEIGHT, EnhanceLevel } from "./frameEnhance";
 
 export type EnhanceMode = "basic" | "advanced";
 
 export interface EnhanceSettings {
   mode: EnhanceMode;
-  resolution: EnhanceLevel; // 1 = HD (720p), 2 = FHD (1080p)
+  resolution: EnhanceLevel; // 1 = FHD (1080p), 2 = HD (720p)
   denoise: EnhanceLevel;
   color: EnhanceLevel;
 }
@@ -45,7 +54,6 @@ export interface EnhanceResult {
 export interface EnhanceOptions {
   clip: ClipDetails;
   settings: EnhanceSettings;
-  processFps?: number;
   onProgress?: (p: EnhanceProgress) => void;
   onFramePreview?: (canvas: HTMLCanvasElement) => void;
   signal: AbortSignal;
@@ -53,7 +61,40 @@ export interface EnhanceOptions {
 
 export const MAX_ENHANCE_SECONDS = 30;
 
+// The output's real frame rate — smooth, normal-video territory. Never
+// lowered for Advanced mode; see the file comment for why (that used to be
+// where the choppiness came from).
+const OUTPUT_FPS = 24;
+// Advanced mode only: one fresh AI computation every this-many output
+// frames (4 → 6 AI computations/sec at 24fps, matching the old 6fps
+// advanced rate's total AI workload/run time) — every frame in between is
+// a cross-fade blend of its two surrounding AI keyframes, not a hold.
+const AI_KEYFRAME_STRIDE = 4;
+
 const VIDEO_CODEC_CANDIDATES: VideoCodec[] = ["avc", "vp9", "vp8"];
+
+// The AI models here are transformer-based, so their WASM memory use scales
+// with input pixel count — feeding a real clip's actual frame size straight
+// in (anything above small-test-clip resolution) reliably crashes the model
+// with `std::bad_alloc` inside OrtRun(). Capping the input before it ever
+// reaches the model keeps memory use bounded regardless of the source
+// clip's real resolution; the model's output still gets scaled up to the
+// real target size afterward, so this only affects how much detail the AI
+// itself has to work from, not the final output size. Denoise's model is a
+// heavier 4x model, so it gets a smaller cap.
+const AI_RESOLUTION_MAX_DIM = 480;
+const AI_DENOISE_MAX_DIM = 384;
+
+function capForAI(canvas: HTMLCanvasElement, maxDim: number): HTMLCanvasElement {
+  const { width: w, height: h } = canvas;
+  if (Math.max(w, h) <= maxDim) return canvas;
+  const scale = maxDim / Math.max(w, h);
+  const capped = document.createElement("canvas");
+  capped.width = Math.max(1, Math.round(w * scale));
+  capped.height = Math.max(1, Math.round(h * scale));
+  capped.getContext("2d")!.drawImage(canvas, 0, 0, capped.width, capped.height);
+  return capped;
+}
 
 let enhanceWorker: Worker | null = null;
 function getWorker(): Worker {
@@ -100,7 +141,7 @@ function rawBytesToImageData(bytes: Uint8ClampedArray, width: number, height: nu
 }
 
 export async function enhanceClipVideo(opts: EnhanceOptions): Promise<EnhanceResult> {
-  const { clip, settings, processFps, onProgress, onFramePreview, signal } = opts;
+  const { clip, settings, onProgress, onFramePreview, signal } = opts;
   if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
   if (typeof VideoEncoder === "undefined") {
     throw new Error("This browser doesn't support WebCodecs, which Enhance needs to produce the result video.");
@@ -134,8 +175,8 @@ export async function enhanceClipVideo(opts: EnhanceOptions): Promise<EnhanceRes
   let outW = Math.round(srcW * scale), outH = Math.round(srcH * scale);
   outW -= outW % 2; outH -= outH % 2; // even dimensions for the encoder
 
-  const fps = processFps ?? (settings.mode === "advanced" ? 6 : 15);
-  const totalFrames = Math.max(1, Math.round(clipDuration * fps));
+  const totalFrames = Math.max(1, Math.round(clipDuration * OUTPUT_FPS));
+  const frameDuration = 1 / OUTPUT_FPS;
 
   const srcCanvas = document.createElement("canvas");
   srcCanvas.width = srcW; srcCanvas.height = srcH;
@@ -144,11 +185,6 @@ export async function enhanceClipVideo(opts: EnhanceOptions): Promise<EnhanceRes
   const outCanvas = document.createElement("canvas");
   outCanvas.width = outW; outCanvas.height = outH;
   const outCtx = outCanvas.getContext("2d")!;
-
-  // Advanced Resolution's AI upscaler is a fixed 2x model — if that lands
-  // short of the requested target, a plain canvas resize covers the rest;
-  // if it overshoots, downscale back down to the target.
-  const aiUpscaleFactor = 2;
 
   onProgress?.({ fraction: 0, label: "Analyzing color…" });
   const colorAdj = settings.color > 0
@@ -163,68 +199,129 @@ export async function enhanceClipVideo(opts: EnhanceOptions): Promise<EnhanceRes
   output.addVideoTrack(videoSource);
   await output.start();
 
-  const frameDuration = 1 / fps;
-
   try {
-    for (let i = 0; i < totalFrames; i++) {
-      if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
-      const localTime = startTime + (i / totalFrames) * clipDuration;
-      await seekVideo(sourceVideo, localTime);
-      if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+    if (settings.mode === "basic") {
+      // Cheap per frame (no model) — just run the real pipeline at the full
+      // output rate directly, no keyframing/blending needed.
+      for (let i = 0; i < totalFrames; i++) {
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+        const localTime = startTime + (i / totalFrames) * clipDuration;
+        await seekVideo(sourceVideo, localTime);
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
 
-      srcCtx.drawImage(sourceVideo, 0, 0, srcW, srcH);
+        srcCtx.drawImage(sourceVideo, 0, 0, srcW, srcH);
 
-      // ── Stage 1: resolution ──────────────────────────────────────────
-      if (!doResize) {
-        outCtx.drawImage(srcCanvas, 0, 0, outW, outH);
-      } else if (settings.mode === "basic") {
-        outCtx.imageSmoothingEnabled = true;
-        outCtx.imageSmoothingQuality = "high";
-        outCtx.drawImage(srcCanvas, 0, 0, outW, outH);
-      } else {
-        const bitmap = await createImageBitmap(srcCanvas);
-        const aiImage = await processFrameAI("resolution", bitmap, i === 0 ? onProgress : undefined);
-        const aiCanvas = document.createElement("canvas");
-        aiCanvas.width = aiImage.width; aiCanvas.height = aiImage.height;
-        aiCanvas.getContext("2d")!.putImageData(aiImage, 0, 0);
-        outCtx.drawImage(aiCanvas, 0, 0, outW, outH);
-      }
-      if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
-
-      // ── Stage 2: denoise ──────────────────────────────────────────────
-      if (settings.denoise > 0) {
-        if (settings.mode === "basic") {
-          applySoftenDenoise(outCtx, outW, outH, settings.denoise);
+        if (!doResize) {
+          outCtx.drawImage(srcCanvas, 0, 0, outW, outH);
         } else {
-          const bitmap = await createImageBitmap(outCanvas);
-          const aiImage = await processFrameAI("denoise", bitmap, i === 0 ? onProgress : undefined);
+          outCtx.imageSmoothingEnabled = true;
+          outCtx.imageSmoothingQuality = "high";
+          outCtx.drawImage(srcCanvas, 0, 0, outW, outH);
+          // A plain resize alone just makes a bigger, softer image — a real
+          // unsharp-mask pass gives Basic Quality some actual "repaired
+          // detail" character too, not just more pixels.
+          applySharpen(outCtx, outW, outH);
+        }
+
+        if (settings.denoise > 0) applyNoiseOnlyDenoise(outCtx, outW, outH, settings.denoise);
+
+        if (colorAdj) {
+          outCtx.save();
+          outCtx.filter = buildCanvasFilterString(colorAdj);
+          outCtx.drawImage(outCanvas, 0, 0);
+          outCtx.filter = "none";
+          outCtx.restore();
+        }
+
+        onFramePreview?.(outCanvas);
+        await videoSource.add(i * frameDuration, frameDuration);
+        onProgress?.({ fraction: (i + 1) / totalFrames, label: `Enhancing — frame ${i + 1} of ${totalFrames}` });
+      }
+    } else {
+      // Advanced — sparse AI keyframes, cross-faded for every frame between
+      // them, so the AI's total run time stays the same as before while the
+      // output timeline still has real 24fps motion.
+      const keyIndices: number[] = [];
+      for (let i = 0; i < totalFrames; i += AI_KEYFRAME_STRIDE) keyIndices.push(i);
+      if (keyIndices[keyIndices.length - 1] !== totalFrames - 1) keyIndices.push(totalFrames - 1);
+
+      const keyCanvases = new Map<number, HTMLCanvasElement>();
+      for (let k = 0; k < keyIndices.length; k++) {
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+        const idx = keyIndices[k];
+        const localTime = startTime + (idx / totalFrames) * clipDuration;
+        await seekVideo(sourceVideo, localTime);
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+
+        srcCtx.drawImage(sourceVideo, 0, 0, srcW, srcH);
+
+        if (!doResize) {
+          outCtx.drawImage(srcCanvas, 0, 0, outW, outH);
+        } else {
+          const bitmap = await createImageBitmap(capForAI(srcCanvas, AI_RESOLUTION_MAX_DIM));
+          const aiImage = await processFrameAI("resolution", bitmap, k === 0 ? onProgress : undefined);
+          const aiCanvas = document.createElement("canvas");
+          aiCanvas.width = aiImage.width; aiCanvas.height = aiImage.height;
+          aiCanvas.getContext("2d")!.putImageData(aiImage, 0, 0);
+          outCtx.drawImage(aiCanvas, 0, 0, outW, outH);
+        }
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+
+        if (settings.denoise > 0) {
+          const bitmap = await createImageBitmap(capForAI(outCanvas, AI_DENOISE_MAX_DIM));
+          const aiImage = await processFrameAI("denoise", bitmap, k === 0 ? onProgress : undefined);
           const aiCanvas = document.createElement("canvas");
           aiCanvas.width = aiImage.width; aiCanvas.height = aiImage.height;
           aiCanvas.getContext("2d")!.putImageData(aiImage, 0, 0);
           // The realworld-SR denoiser is a 4x model — resample its output
           // back down to this frame's actual working size so denoise never
-          // changes resolution on its own (that's Stage 1's job).
+          // changes resolution on its own (that's the resolution stage's job).
           outCtx.drawImage(aiCanvas, 0, 0, outW, outH);
         }
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+
+        const snap = document.createElement("canvas");
+        snap.width = outW; snap.height = outH;
+        snap.getContext("2d")!.drawImage(outCanvas, 0, 0);
+        keyCanvases.set(idx, snap);
+
+        onProgress?.({
+          // Keyframe computation is the slow part (real AI work) — budget it
+          // as the first 85% of the bar; the blend/encode pass below is fast.
+          fraction: (0.85 * (k + 1)) / keyIndices.length,
+          label: `Enhancing — keyframe ${k + 1} of ${keyIndices.length}`,
+        });
       }
-      if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
 
-      // ── Stage 3: color ──────────────────────────────────────────────
-      if (colorAdj) {
-        outCtx.save();
-        outCtx.filter = buildCanvasFilterString(colorAdj);
-        outCtx.drawImage(outCanvas, 0, 0);
-        outCtx.filter = "none";
-        outCtx.restore();
+      let ki = 0;
+      for (let i = 0; i < totalFrames; i++) {
+        if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+        while (ki < keyIndices.length - 1 && keyIndices[ki + 1] <= i) ki++;
+        const kA = keyIndices[ki], kB = keyIndices[Math.min(ki + 1, keyIndices.length - 1)];
+        const t = kB === kA ? 0 : (i - kA) / (kB - kA);
+        const canvasA = keyCanvases.get(kA)!, canvasB = keyCanvases.get(kB)!;
+
+        outCtx.clearRect(0, 0, outW, outH);
+        outCtx.globalAlpha = 1;
+        outCtx.drawImage(canvasA, 0, 0);
+        if (t > 0.001) {
+          outCtx.globalAlpha = t;
+          outCtx.drawImage(canvasB, 0, 0);
+          outCtx.globalAlpha = 1;
+        }
+
+        if (colorAdj) {
+          outCtx.save();
+          outCtx.filter = buildCanvasFilterString(colorAdj);
+          outCtx.drawImage(outCanvas, 0, 0);
+          outCtx.filter = "none";
+          outCtx.restore();
+        }
+
+        onFramePreview?.(outCanvas);
+        await videoSource.add(i * frameDuration, frameDuration);
+        onProgress?.({ fraction: 0.85 + 0.15 * ((i + 1) / totalFrames), label: `Finishing — frame ${i + 1} of ${totalFrames}` });
       }
-
-      onFramePreview?.(outCanvas);
-      await videoSource.add(i * frameDuration, frameDuration);
-
-      onProgress?.({
-        fraction: (i + 1) / totalFrames,
-        label: `Enhancing — frame ${i + 1} of ${totalFrames}`,
-      });
     }
   } catch (err) {
     await output.cancel().catch(() => {});
@@ -244,7 +341,6 @@ export async function enhanceClipVideo(opts: EnhanceOptions): Promise<EnhanceRes
   const buffer = (output.target as BufferTarget).buffer!;
   const blob = new Blob([buffer], { type: "video/mp4" });
   const blobUrl = URL.createObjectURL(blob);
-  void aiUpscaleFactor; // kept for the comment above; not otherwise referenced
   return { blobUrl, blob };
 }
 

@@ -12,7 +12,7 @@ const RADIUS = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
 export default function RingDial({
-  label, value, labels, onChange, disabled, accent = "#8B5CFF",
+  label, value, labels, onChange, disabled, accent = "#8B5CFF", fillFractions = [0, 0.5, 1],
 }: {
   label: string;
   value: 0 | 1 | 2;
@@ -20,8 +20,13 @@ export default function RingDial({
   onChange: (v: 0 | 1 | 2) => void;
   disabled?: boolean;
   accent?: string;
+  /** Ring fill at each level (0..1) — defaults to a plain Off/Half/Full
+   * progression. Pass a custom set when level 1 isn't "less" than level 2
+   * (e.g. Quality's FHD-first ordering, where level 1 is the BETTER option
+   * and should read as the fuller ring, not the emptier one). */
+  fillFractions?: [number, number, number];
 }) {
-  const fraction = value / 2;
+  const fraction = fillFractions[value];
   const offset = CIRC * (1 - fraction);
 
   return (

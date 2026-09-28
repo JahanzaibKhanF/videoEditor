@@ -1,13 +1,19 @@
 "use client";
 
 /**
- * EnhancePanel — AI Enhance for a selected clip: Resolution / Denoise /
- * Color, each a click-to-cycle ring (Off/Low/High, or Off/HD/FHD for
- * Resolution), under an overall Basic/Advanced mode switch — same
+ * EnhancePanel — AI Enhance for a selected clip: Quality / Denoise / Color,
+ * each a click-to-cycle ring (Off/Low/High, or Off/FHD/HD for Quality — the
+ * first click lands on FHD, the better result, not the lighter HD option),
+ * under an overall Basic/Advanced mode switch — same
  * choosing/running/done/error/cancelled shape as BackgroundRemovalPanel.
  *
+ * "Quality" (not "Resolution") on purpose — it isn't a plain resize even in
+ * Basic mode (a real unsharp-mask pass runs after the upscale, see
+ * frameEnhance.ts's applySharpen), and in Advanced mode it's a genuine
+ * AI super-resolution/detail-repair model, not interpolation.
+ *
  * Basic = fast classical algorithms, always available. Advanced = real AI
- * models for Resolution and Denoise (see enhanceWorker.ts); Advanced Color
+ * models for Quality and Denoise (see enhanceWorker.ts); Advanced Color
  * is a stronger pass of the SAME classical auto-color algorithm, not a
  * separate model — flagged here rather than silently implied as "more AI".
  * Capped at 30s clips — Enhance is real per-frame model work, not instant.
@@ -18,7 +24,8 @@ import { ClipDetails } from "../../types/types";
 import { enhanceClipVideo, EnhanceMode, MAX_ENHANCE_SECONDS } from "../../utils/enhanceClipVideo";
 import { EnhanceLevel } from "../../utils/frameEnhance";
 import RingDial from "../ui/RingDial";
-import { Sparkles, Loader2, CheckCircle2, RotateCcw, AlertTriangle, Zap, Gem, Ban } from "@/utils/icons";
+import EnhanceReviewModal from "../modals/EnhanceReviewModal";
+import { Sparkles, Loader2, CheckCircle2, RotateCcw, AlertTriangle, Zap, Gem, Ban, Eye } from "@/utils/icons";
 
 export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
   const { setClipsDetails } = useAppDetailsContext();
@@ -36,6 +43,7 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const clipDuration = (clip.endTime ?? clip.duration ?? 0) - (clip.startTime ?? 0);
   const tooLong = clipDuration > MAX_ENHANCE_SECONDS + 0.05;
@@ -48,6 +56,7 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
     setResultUrl(null);
     setResultBlob(null);
     setErrorMsg("");
+    setReviewOpen(false);
   }, [clip.id]);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
@@ -85,7 +94,7 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
   };
 
   const cancel = () => { abortRef.current?.abort(); setStatus("cancelled"); };
-  const discard = () => { setStatus("choosing"); setResultUrl(null); setResultBlob(null); };
+  const discard = () => { setStatus("choosing"); setResultUrl(null); setResultBlob(null); setReviewOpen(false); };
 
   const applyResult = () => {
     if (!resultUrl || !resultBlob) return;
@@ -102,6 +111,7 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
     setResultUrl(null);
     setResultBlob(null);
     setResolution(0); setDenoise(0); setColor(0);
+    setReviewOpen(false);
   };
 
   const chip = (Icon: any, text: string) => (
@@ -207,13 +217,13 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
           </div>
 
           <div className="flex items-center justify-around py-2 rounded-xl bg-studio-surface border border-studio-border">
-            <RingDial label="Resolution" value={resolution} labels={["Off", "HD", "FHD"]} onChange={setResolution} accent="#4C8CFF" />
+            <RingDial label="Quality" value={resolution} labels={["Off", "FHD", "HD"]} onChange={setResolution} accent="#4C8CFF" fillFractions={[0, 1, 0.5]} />
             <RingDial label="Denoise" value={denoise} labels={["Off", "Low", "High"]} onChange={setDenoise} accent="#33D8A0" />
             <RingDial label="Color" value={color} labels={["Off", "On", "On+"]} onChange={setColor} accent="#FFB648" />
           </div>
           {mode === "advanced" && (
             <p className="text-[10px] text-ink-faint leading-snug px-0.5">
-              Color in Advanced mode is a stronger version of the same auto-correction — Resolution and Denoise are the two that run a real AI model.
+              Color in Advanced mode is a stronger version of the same auto-correction — Quality and Denoise are the two that run a real AI model.
             </p>
           )}
         </>
@@ -238,10 +248,10 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
             <button onClick={discard} className="flex-1 py-2.5 rounded-xl border border-studio-border text-ink-secondary text-[13px] font-bold hover:bg-studio-hover transition-colors">
               Discard
             </button>
-            <button onClick={applyResult}
-              className="flex-[2] py-2.5 rounded-xl text-[13px] font-bold text-white transition-all"
+            <button onClick={() => setReviewOpen(true)}
+              className="flex-[2] flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-bold text-white transition-all"
               style={{ background: "linear-gradient(135deg,#8B5CFF,#A47CFF)" }}>
-              Apply to clip
+              <Eye size={13} /> Review
             </button>
           </>
         )}
@@ -252,6 +262,15 @@ export default function EnhancePanel({ clip }: { clip: ClipDetails }) {
           </button>
         )}
       </div>
+
+      {reviewOpen && resultUrl && (
+        <EnhanceReviewModal
+          originalSrc={clip.src}
+          enhancedSrc={resultUrl}
+          onApply={applyResult}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
     </div>
   );
 }
