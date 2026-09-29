@@ -8,7 +8,7 @@
  * reviewing and committing are the same step instead of a blind apply.
  */
 import { useEffect, useRef, useState } from "react";
-import { X, Check, RotateCcw } from "@/utils/icons";
+import { X, Check, RotateCcw, FaPlay, FaPause } from "@/utils/icons";
 
 export default function EnhanceReviewModal({
   originalSrc, enhancedSrc, onApply, onClose,
@@ -19,22 +19,50 @@ export default function EnhanceReviewModal({
   onClose: () => void;
 }) {
   const [dividerPct, setDividerPct] = useState(50);
+  const [isPlaying, setIsPlaying] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const beforeRef = useRef<HTMLVideoElement>(null);
   const afterRef = useRef<HTMLVideoElement>(null);
   const draggingRef = useRef(false);
 
-  // Keep the two videos roughly in sync — they're independent <video>
-  // elements (need separate elements to show two different sources at
-  // once), so left to themselves they'd slowly drift apart.
+  // The original and enhanced files can differ very slightly in encoded
+  // duration/frame timing, so native per-video `loop` playback drifts the
+  // two apart over time (worst right at each one's own loop boundary,
+  // where they can be up to a full loop-length apart for an instant — the
+  // "one is late" effect). Fix: disable native loop on both, drive them
+  // from a single rAF loop that (a) corrects small drift every frame
+  // instead of every 800ms, and (b) restarts BOTH together the moment
+  // EITHER one reaches the shared (shorter) duration, so a loop restart
+  // is always in lockstep rather than each video looping on its own clock.
   useEffect(() => {
-    const id = setInterval(() => {
+    let raf = 0;
+    const tick = () => {
       const b = beforeRef.current, a = afterRef.current;
-      if (!b || !a) return;
-      if (Math.abs(b.currentTime - a.currentTime) > 0.15) a.currentTime = b.currentTime;
-    }, 800);
-    return () => clearInterval(id);
-  }, []);
+      if (b && a && isPlaying) {
+        const loopDur = Math.min(b.duration || Infinity, a.duration || Infinity);
+        if (isFinite(loopDur) && (b.currentTime >= loopDur - 0.03 || a.currentTime >= loopDur - 0.03)) {
+          b.currentTime = 0; a.currentTime = 0;
+          b.play().catch(() => {}); a.play().catch(() => {});
+        } else if (Math.abs(b.currentTime - a.currentTime) > 0.05) {
+          a.currentTime = b.currentTime;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+    const b = beforeRef.current, a = afterRef.current;
+    if (!b || !a) return;
+    if (isPlaying) {
+      b.pause(); a.pause();
+    } else {
+      b.play().catch(() => {}); a.play().catch(() => {});
+    }
+    setIsPlaying(!isPlaying);
+  };
 
   const setFromClientX = (clientX: number) => {
     const el = containerRef.current;
@@ -80,13 +108,23 @@ export default function EnhanceReviewModal({
           onPointerUp={onPointerUp}
           style={{ cursor: "ew-resize" }}
         >
-          <video ref={beforeRef} src={originalSrc} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-contain" />
+          <video ref={beforeRef} src={originalSrc} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-contain" />
           <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 0 0 ${dividerPct}%)` }}>
-            <video ref={afterRef} src={enhancedSrc} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-contain" />
+            <video ref={afterRef} src={enhancedSrc} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-contain" />
           </div>
 
           <span className="absolute top-2.5 left-2.5 text-[10px] font-bold px-2 py-1 rounded-full bg-black/60 text-white/90 backdrop-blur-sm pointer-events-none">Before</span>
           <span className="absolute top-2.5 right-2.5 text-[10px] font-bold px-2 py-1 rounded-full bg-signal/70 text-white backdrop-blur-sm pointer-events-none">After</span>
+
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/75 transition-colors"
+            title={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <FaPause size={13} /> : <FaPlay size={13} />}
+          </button>
 
           <div className="absolute top-0 bottom-0 w-0.5 bg-white/90 pointer-events-none" style={{ left: `${dividerPct}%` }} />
           <div
