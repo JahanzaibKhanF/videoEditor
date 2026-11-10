@@ -29,6 +29,7 @@
  * Live position/size during a drag stays in local state (`liveRect`) and
  * is only committed to shared context on pointer-up.
  */
+import { brushPath } from "../../utils/brushPath";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useAppDetailsContext } from "../../context/useAppContext";
@@ -724,6 +725,7 @@ export default function InteractionOverlay({ width, height }: Props) {
           const newBrush: BrushDetails = {
             id: uuidv4(), points: normPts, x: bx, y: by, width: bw, height: bh,
             color: brushDraft.color, strokeWidth: brushDraft.strokeWidth,
+            smooth: brushDraft.smooth, closed: brushDraft.closed && normPts.length > 2, fill: brushDraft.fill,
             opacity: 1, startTime: 0, endTime, animation: "none", zIndex: frontmostZ(zAll),
           };
           setBrushesDetails(prev => [...prev, newBrush]);
@@ -1047,9 +1049,9 @@ export default function InteractionOverlay({ width, height }: Props) {
       {liveBrushPoints && liveBrushPoints.length > 1 && (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
           style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}>
-          <polyline
-            points={liveBrushPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
-            fill="none" stroke={brushDraft.color} strokeWidth={brushDraft.strokeWidth}
+          <path
+            d={brushPath(liveBrushPoints, brushDraft.smooth, brushDraft.closed)}
+            fill={brushDraft.closed ? brushDraft.fill : "none"} stroke={brushDraft.color} strokeWidth={brushDraft.strokeWidth}
             strokeLinecap="round" strokeLinejoin="round" opacity={0.85}
           />
         </svg>

@@ -32,6 +32,7 @@ const GROUPS: { cap: string; tabs: Tab[] }[] = [
   {
     cap: "Add",
     tabs: [
+      { id: "ai", label: "AI Director", icon: <Sparkles size={20} /> },
       { id: "media", label: "Media", icon: <GoFileMedia size={20} /> },
       { id: "text", label: "Text", icon: <IoTextOutline size={20} /> },
       { id: "shapes", label: "Shapes", icon: <Shapes size={20} /> },

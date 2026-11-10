@@ -19,10 +19,15 @@ import EmptyState from "../ui/EmptyState";
 import SectionLabel from "../ui/SectionLabel";
 import { Shapes as ShapesIcon, Square, Circle, Triangle, X } from "@/utils/icons";
 
-const PRESETS: { kind: ShapeKind; label: string; icon: React.ReactNode; sides?: number }[] = [
+const PRESETS: { kind: ShapeKind; label: string; icon: React.ReactNode; sides?: number; equal?: boolean; rotation?: number }[] = [
   { kind: "rectangle", label: "Rectangle", icon: <Square size={16} /> },
   { kind: "ellipse", label: "Ellipse", icon: <Circle size={16} /> },
   { kind: "polygon", label: "Triangle", icon: <Triangle size={16} />, sides: 3 },
+  { kind: "ellipse", label: "Circle", icon: <Circle size={16} />, equal: true },
+  { kind: "rectangle", label: "Square", icon: <Square size={16} />, equal: true },
+  { kind: "rectangle", label: "Diamond", icon: <Square size={16} className="rotate-45" />, equal: true, rotation: 45 },
+  { kind: "polygon", label: "Pentagon", icon: <ShapesIcon size={16} />, sides: 5 },
+  { kind: "polygon", label: "Hexagon", icon: <ShapesIcon size={16} />, sides: 6 },
 ];
 
 export default function ShapesPanel() {
@@ -47,12 +52,13 @@ export default function ShapesPanel() {
     setSelectedClipId(null); setSelectedBrushId(null);
   };
 
-  const addShape = (kind: ShapeKind, sides?: number) => {
-    const w = Math.round(cw * 0.3), h = Math.round(kind === "polygon" ? cw * 0.3 : ch * 0.2);
+  const addShape = (kind: ShapeKind, sides?: number, equal = false, rotation = 0) => {
+    const regular = equal || kind === "polygon";
+    const w = Math.round(regular ? Math.min(cw, ch) * 0.3 : cw * 0.3), h = Math.round(regular ? w : ch * 0.2);
     const endTime = totalTime > 0 ? totalTime : 5;
     const shape: ShapeDetails = {
       id: uuidv4(), kind, x: Math.round((cw - w) / 2), y: Math.round((ch - h) / 2), width: w, height: h,
-      fill: "#8B5CFF", stroke: "transparent", strokeWidth: 0, sides,
+      rotation, fill: "#8B5CFF", stroke: "transparent", strokeWidth: 0, sides,
       opacity: 1, startTime: 0, endTime, animation: "none", zIndex: frontmostZ(zAll()),
     };
     setShapesDetails(prev => [...prev, shape]);
@@ -90,7 +96,7 @@ export default function ShapesPanel() {
           <div className="grid grid-cols-2 gap-1.5">
             {PRESETS.map((p) => (
               <button key={p.label} disabled={!!activeTemplate}
-                onClick={() => addShape(p.kind, p.sides)}
+                onClick={() => addShape(p.kind, p.sides, p.equal, p.rotation)}
                 className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-studio-border bg-studio-raised text-ink-secondary text-[12px] font-semibold hover:bg-signal/10 hover:border-signal/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 {p.icon} {p.label}
               </button>

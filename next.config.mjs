@@ -1,4 +1,5 @@
 import path from "node:path";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -117,4 +118,9 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Keep a production build from replacing chunks served by a live dev server.
+// Production/Netlify still use the standard .next output directory.
+export default (phase) => ({
+  ...nextConfig,
+  distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
+});

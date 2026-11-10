@@ -61,7 +61,7 @@ type Tab = "create" | "recent";
 type CreateStep = "grid" | "ratio";
 
 export default function StartupScreen({ onStart, onResumeProject, resuming, resumeError }: Props) {
-  const { user, promptLogin, logout, authModalOpen } = useAuth();
+  const { user, loading: checkingSession, promptLogin, logout, authModalOpen } = useAuth();
   const [tab, setTab] = useState<Tab>("create");
   const [step, setStep] = useState<CreateStep>("grid");
   const [selAspect, setSelAspect] = useState<AspectRatio | null>(null);
@@ -121,6 +121,7 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
   // Only nags once per browser session.
   const [pendingStart, setPendingStart] = useState<{ ratio: AspectRatio; tpl?: Template } | null>(null);
   const sawAuthModal = useRef(false);
+  const [waitingStart, setWaitingStart] = useState<{ ratio: AspectRatio; tpl?: Template } | null>(null);
 
   useEffect(() => {
     if (authModalOpen) { sawAuthModal.current = true; return; }
@@ -134,6 +135,10 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
   }, [authModalOpen, pendingStart, onStart]);
 
   const beginStart = (ratio: AspectRatio, tpl?: Template) => {
+    if (checkingSession) {
+      setWaitingStart({ ratio, tpl });
+      return;
+    }
     let alreadyAsked = false;
     try { alreadyAsked = sessionStorage.getItem("clipflow-guest-start-ack") === "1"; } catch {}
 
@@ -151,6 +156,14 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
     setClosing(true);
     setTimeout(() => onStart(ratio, tpl), 250);
   };
+
+  useEffect(() => {
+    if (checkingSession || !waitingStart) return;
+    setWaitingStart(null);
+    beginStart(waitingStart.ratio, waitingStart.tpl);
+    // Resume the choice only once the session check has finished.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkingSession, waitingStart]);
 
   const goBlank = (ratio: AspectRatio) => beginStart(ratio);
   const goTemplate = (tpl: Template) => beginStart(tpl.aspectRatio, tpl);
@@ -176,7 +189,9 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
           in/out anywhere on this screen at all, only after already
           entering the editor. */}
       <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-10">
-        {user ? (
+        {checkingSession ? (
+          <span role="status" className="text-[12px] text-ink-secondary">Checking your session…</span>
+        ) : user ? (
           <button
             onClick={logout}
             title={user.email}
@@ -210,6 +225,8 @@ export default function StartupScreen({ onStart, onResumeProject, resuming, resu
           </div>
         )}
       </div>
+
+      {waitingStart && <p role="status" className="fixed bottom-6 z-10 text-sm text-ink-secondary">Checking your session before opening your project…</p>}
 
       <div className="relative flex flex-col items-center w-[96vw] max-w-[900px]" style={{ zIndex: 1 }}>
         {/* ── Hero title — sits on the moving aurora background, above the card ── */}

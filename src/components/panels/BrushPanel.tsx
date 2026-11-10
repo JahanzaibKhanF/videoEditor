@@ -10,6 +10,7 @@
  */
 import { useAppDetailsContext } from "../../context/useAppContext";
 import { PanelShell, PanelHeader, PanelBody } from "../ui/Panel";
+import BrushStyleControls from "../ui/BrushStyleControls";
 import EmptyState from "../ui/EmptyState";
 import SectionLabel from "../ui/SectionLabel";
 import Slider from "../ui/Slider";
@@ -61,6 +62,8 @@ export default function BrushPanel() {
           <Slider value={brushDraft.strokeWidth} min={1} max={60} onChange={(v) => setBrushDraft(d => ({ ...d, strokeWidth: v }))} />
           <FieldValue className="min-w-[30px]">{Math.round(brushDraft.strokeWidth)}px</FieldValue>
         </FieldRow>
+
+        <BrushStyleControls value={brushDraft} color={brushDraft.color} onChange={patch => setBrushDraft(d => ({ ...d, ...patch }))} />
 
         <button
           disabled={!!activeTemplate}

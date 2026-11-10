@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppContextProvider, EngineControlsProvider } from "@/context/useAppContext";
 import { useAppDetailsContext } from "@/context/useAppContext";
 import { AuthProvider, useAuth } from "@/context/useAuthContext";
 import AuthScreen from "@/components/auth/AuthScreen";
-import Editor from "@/components/editor/EditorShell";
 import StartupScreen from "@/components/startup/StartupScreen";
 import LoadingScreen from "@/components/startup/LoadingScreen";
 import { AspectRatio } from "@/types/types";
 import { Template, templateDuration } from "@/utils/templates";
 import { aspectRatioDimensions } from "@/utils/aspectRatios";
 import { restoreProjectMedia } from "@/utils/restoreProjectMedia";
+
+const Editor = dynamic(() => import("@/components/editor/EditorShell"), {
+  loading: () => <LoadingScreen stages={["Loading the editor"]} />,
+});
 
 interface ResumeData {
   id: string;
@@ -157,12 +161,10 @@ function ClipFlowAppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, searchParams]);
 
-  // `loading` here just means "checking whether a session cookie already
-  // exists" — it does NOT block guests from using the app. It only avoids
-  // a one-frame flash of "Sign in" before we know someone's already
-  // logged in.
-  if (loading) {
-    return <LoadingScreen stages={["Starting ClipFlow", "Checking your session"]} />;
+  // A fresh project can show its picker while the session check runs.
+  // Saved-project URLs still wait for authentication before fetching data.
+  if (loading && searchParams.get("project")) {
+    return <LoadingScreen stages={["Opening your project", "Checking your session"]} />;
   }
 
   // A saved project is being fetched + rehydrated (either the user clicked

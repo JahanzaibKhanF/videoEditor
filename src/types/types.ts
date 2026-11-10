@@ -1,3 +1,4 @@
+import type { EditorDocument } from "../utils/ai/editorPlan";
 import React from "react";
 import { ChromaKeySettings } from "../utils/chromaKey";
 
@@ -270,6 +271,9 @@ export interface BrushDetails {
   height: number;
   color: string;
   strokeWidth: number;
+  smooth?: boolean;
+  closed?: boolean;
+  fill?: string;
   opacity?: number;
   rotation?: number;
   startTime: number;
@@ -385,8 +389,8 @@ export interface AppContextType {
   setSelectedBrushId: React.Dispatch<React.SetStateAction<string | null>>;
   isDrawingBrush: boolean;
   setIsDrawingBrush: React.Dispatch<React.SetStateAction<boolean>>;
-  brushDraft: { color: string; strokeWidth: number };
-  setBrushDraft: React.Dispatch<React.SetStateAction<{ color: string; strokeWidth: number }>>;
+  brushDraft: { color: string; strokeWidth: number; smooth: boolean; closed: boolean; fill: string };
+  setBrushDraft: React.Dispatch<React.SetStateAction<{ color: string; strokeWidth: number; smooth: boolean; closed: boolean; fill: string }>>;
   audioDetails: AudioDetails[];
   setAudioDetails: React.Dispatch<React.SetStateAction<AudioDetails[]>>;
   layerOrder: LayerOrder[];
@@ -445,6 +449,7 @@ export interface AppContextType {
   // Lightweight session-only undo/redo — see useAppContext.tsx. Ctrl/Cmd+Z
   // and Ctrl/Cmd+Shift+Z (or Ctrl+Y) are already wired globally; these are
   // exposed too for a future toolbar button.
+  applyAiDocument: (document: EditorDocument) => void;
   undo: () => void;
   redo: () => void;
 }

@@ -11,6 +11,7 @@
  * "Animation" / "Transition" row showing the current value with a Change
  * button that opens the matching catalog on the left (via a window event).
  */
+import BrushStyleControls from "../ui/BrushStyleControls";
 import { MousePointerClick, VolumeX, Volume2, Film, Droplets, ImageIcon, Shuffle, Wand2, Spline, Shapes as ShapesIcon, PenTool, Maximize2 } from "@/utils/icons";
 import TextEditor from "../editors/TextEditor";
 import KeyframeEditor from "../editors/KeyframeEditor";
@@ -405,6 +406,7 @@ export default function PropertiesPanel() {
         {brush && (
           <>
             <InspectorCard accent="signal" icon={<PenTool size={12} />} title="Brush Stroke">
+              <BrushStyleControls value={brush} color={brush.color} onChange={patch => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, ...patch } : b))} />
               <FieldRow label="Color">
                 <input type="color" value={brush.color}
                   onChange={e => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, color: e.target.value } : b))}

@@ -18,6 +18,7 @@ export interface MobileTool {
 // the right panel on desktop). Each `view` is either a MediaPanel
 // activeTab or one of the special keys "assets" / "edit".
 export const MOBILE_TOOLS: MobileTool[] = [
+  { key: "ai", label: "AI Director", Icon: Sparkles, view: "ai" },
   { key: "media",       label: "Media",     Icon: Film,              view: "media" },
   { key: "edit",        label: "Edit",      Icon: SlidersHorizontal, view: "edit" },
   { key: "text",        label: "Text",      Icon: Type,              view: "text" },

@@ -1,6 +1,7 @@
 "use client";
 
 import { X, Plus, Droplets, Type, SplitSquareHorizontal, Film, Upload, Wand2, Scissors, Sparkles, FiLayers, Shuffle, Pipette, Captions } from "@/utils/icons";
+import dynamic from "next/dynamic";
 import EnhancePanel from "./EnhancePanel";
 import { v4 as uuidv4 } from "uuid";
 import { measureWrappedTextHeight } from "../../utils/measureText";
@@ -27,6 +28,8 @@ import { PanelShell, PanelHeader, PanelBody } from "../ui/Panel";
 import SectionLabel from "../ui/SectionLabel";
 import EmptyState from "../ui/EmptyState";
 
+const AiDirectorPanel = dynamic(() => import("./AiDirectorPanel"), { loading: () => <p className="p-4 text-xs text-ink-secondary">Opening AI Director…</p> });
+
 export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: string; pendingTemplate?: Template }) {
   const {
     videos, setVideos, clipsDetails, setClipsDetails, setTotalTime, setPrimaryVideoDimensions, setAudioDetails, audioDetails,
@@ -39,6 +42,7 @@ export default function MediaPanel({ activeTab, pendingTemplate }: { activeTab: 
   const { registerFiles } = useProjectMedia();
 
   // Route templates tab directly to TemplatesPanel
+  if (activeTab === "ai") return <AiDirectorPanel />;
   if (activeTab === "templates") return <TemplatesPanel initialTemplate={pendingTemplate} />;
   if (activeTab === "recent") return <RecentProjectsPanel />;
   if (activeTab === "shapes") return <ShapesPanel />;

@@ -1,5 +1,187 @@
+## Repeated text commands (2026-11-10)
+
+- Literal typing now recognizes repetition before adding text. The screenshot
+  request `write hi how are you word 50 tiems` creates exactly 50 editable copies
+  of `hi how are you`, arranged in rows sized to the composition.
+- Supports write/type/repeat with numeric counts, quoted phrases, and common
+  times typos. Quoted literal `50 times` is preserved. Counts are bounded at
+  1–80 operations, with a readable-size check; styled requests still use AI.
+- 35 regression tests and TypeScript checks pass, including exact count,
+  distinct positions, portrait/landscape bounds and invalid quantities.
+
+## Brush fallback for drawings without presets (2026-11-10)
+
+- Hearts now compile to one smooth, filled native brush contour, with a separate
+  editable label. No new shape kind or menu preset is needed.
+- Generic creation requests such as clouds, leaves and teardrops automatically
+  use compact pen instructions. Selected-layer edits retain scene-aware routing;
+  compound labeled drawings can use native brush and text operations.
+- General model instructions explicitly require brushes for missing shape kinds.
+  This enables freeform outlines but does not guarantee the tiny model's accuracy.
+- 34 regression tests and TypeScript checks pass, including heart geometry,
+  label stacking, multi-aspect layouts and automatic drawing routing.
+
+## Editable AI pen paths and drawing tools (2026-11-10)
+
+- AI Director now exposes native brush add/update fields and accepts compact
+  normalized pen paths. Simple pen prompts use one short path to limit response
+  length; explicit single-color requests override omitted/wrong model colors.
+  Added a Pen sketch example. Complex illustration quality remains limited by
+  the small model; no general image-generation capability is implied.
+- Brush supports smooth curves, closed contours and optional fill, both when
+  drawing and in the selected-stroke inspector. Optional persisted fields keep
+  legacy strokes unchanged. Shared brushPath geometry drives the live SVG
+  preview and Canvas compositor used by preview/WebCodecs export.
+- Added Circle, Square, Diamond, Pentagon and Hexagon presets. Regular shapes
+  size against the smaller canvas dimension, including portrait compositions.
+- Real Chrome model generated an editable pen path; requested blue rendered
+  6,213 pixels. Smooth/close/fill controls worked, yellow fill visually checked,
+  and new presets including Hexagon added successfully. Screenshots under
+  /tmp/clipflow-browser-pen*.png. No browser exceptions or Ollama requests.
+- 33 regression tests, TypeScript and production build pass. Build retains the
+  existing ONNX dependency warnings. Project autosave retains full brush data.
+
+## Heart with centered text (2026-11-10)
+
+- Fixed combined drawing/text routing: heart requests no longer enter the
+  title-only path. Added a compact shape-and-label instruction, expanded to
+  native editable shapes and a measured, centered Arial text layer.
+- Hearts use two circles and a rotated square; circles, rectangles and squares
+  also support labels. Label/color/shape fields are validated before application.
+- The real small-model test extracted Khan but invented a green ellipse.
+  Explicit requested shape and adjacent color words now take precedence over
+  those guesses, including preserving the request's label capitalization.
+- Exact screenshot prompt passed real Chrome inference: a red heart with white
+  Khan text, 90,677 red pixels and 3,126 white pixels, and working Undo. Screenshot
+  inspected at /tmp/clipflow-browser-heart.png. No browser exceptions.
+- 27 regression tests and TypeScript checks pass, including multiple canvas
+  aspect ratios, correct text stacking, and contradictory model guesses.
+
+## Browser AI Director replacement and response parsing (2026-11-10)
+
+- Replaced the Ollama connection/model/environment UI and removed its proxy,
+  client utility and smoke script. AI Director uses a fixed browser-only
+  Qwen2.5-0.5B q8 model through the existing Transformers.js worker runtime.
+  The q8 export is about 512 MB, smaller than this repository's q4 export
+  (~786 MB); first-use size is disclosed in the panel. No new env values.
+- Small-model instructions use compact cat/title recipes. A cat expands into
+  16 editable shapes plus a brush tail, with common translation/bobbing and
+  alternating leg rotation. Corrected native AI z-order so facial details
+  appear in front of the head and new titles appear above existing media.
+- Real Chrome inference passed running cat and red bold welcome prompts.
+  Pixel checks found 565 white cat-eye pixels and 5,601 red text pixels.
+  Undo/cancel passed; no Ollama or server-AI requests occurred. Browser test
+  caching reported a cache-write warning, so reuse remains conditional on
+  available browser storage. First-download cost is not promised to disappear.
+- User then reported `write hello` failing on text after valid JSON. Added a
+  shared string/escape-aware JSON object extractor for streaming and final
+  parsing, expanded title routing to write/type, and made unambiguous literal
+  typing immediate without model inference. Validation still rejects unknown
+  fields, malformed/truncated JSON, and ambiguous multiple-object responses.
+- 23 regression tests and TypeScript checks pass, including literal commands,
+  trailing prose/fences, cancellation/retry, native layers and media handling.
+- Exact `write hello` browser reproduction now applies in 90 ms, with no model
+  download or AI network request; Undo also passed. Final production build
+  succeeded, with the existing ONNX dependency warnings only.
+
+## Development session loading / JavaScript 404 fix (2026-11-10)
+
+- Reproduced 404s for main-app.js, app-pages-internals.js, editor/page.js,
+  and editor/loading.js. A production build shared `.next` with the running
+  development server, replacing the chunks needed to initialize the browser.
+- Isolated development output in `.next-dev` via the Next configuration phase.
+  Production and Netlify retain `.next`. Ignored the new generated directory
+  and included its generated TypeScript types.
+- Verified a production build succeeds while development remains running.
+  After the build, a real Chrome browser completed the session check, created
+  a composition, and opened AI Director. All loaded Next scripts returned 200,
+  the real session API returned 200, and no browser exceptions occurred.
+
 # ClipFlow Rebuild — Progress Tracker
 (Keep this file updated at the end of every session. If a session gets cut off, resume from here.)
+
+## Session — AI text generation schema fix (verified 2026-11-10)
+
+Fixed text requests failing with `values.kind: unsupported value`. The
+response schema now selects allowed properties by layer instead of exposing
+one combined property list. Added an explicit red/bold text example and
+instructions distinguishing text from shape properties. The parser safely
+normalizes redundant `kind: "text"`, text position/style aliases and a small
+named-color mapping, while rejecting conflicting or unknown properties.
+New text defaults use a wider box to avoid unnecessary word wrapping.
+
+Validation: 13 AI regression tests, TypeScript and diff checks passed.
+Production build passed in the isolated copy before the interrupted session.
+The exact user prompt produced one native text layer: welcome, #FF0000,
+isBold=true, with local Llama inference taking about 67 seconds.
+Browser verification completed after resuming: replayed that actual model
+response, checked visible red canvas pixels, Undo, and a redundant-kind
+response. No browser exceptions or nonempty alerts. The empty alert counted
+by the earlier test was an empty framework live region, not a UI error.
+Restarted the local server on port 3000 with a fresh generated cache after
+resolving a concurrent-start/cache error. No deployment was performed.
+
+## Session — local Ollama AI Director
+
+Added AI Director to desktop and mobile. Every prompt sends fixed editor
+capabilities plus current scene properties/selection/canvas dimensions to
+local Ollama, requests JSON-schema output, validates it, then applies the
+whole batch as native editable project layers. Automatic apply/play is on
+by default; manual apply, cancellation, model selection, JSON inspection,
+and a one-step Undo are available. Stale results are rejected if the scene
+changes while generation runs. Unrelated keyframe tracks are preserved.
+
+Supported: create shapes/brush paths/text/blur; update supported properties,
+keyframes, grading, preset animations/transitions; move/delete layers;
+mute video and paired audio; volume; normal-speed video trim/split without
+clip effects. No generated photos/video/audio or arbitrary code execution.
+Media URLs, Files and cloud metadata are excluded from the model context.
+
+Connection: fixed-loopback development-only `/api/ai/ollama` bridge. The
+production route returns 404; hosted pages instead connect from the visitor's
+browser to that visitor's Ollama. Exact-origin OLLAMA_ORIGINS configuration
+and browser local-network support are required. This is NOT a public shared
+AI backend. See `docs/AI_DIRECTOR.md`; no new secret/env value is required.
+
+Also fixed the No Media overlay showing over shape/brush-only scenes.
+Expanded undo snapshots to include duration/effects/layer order; explicit
+AI/undo restores bypass automatic duration adjustment so they remain a
+single history step and do not change unrelated layer timing.
+
+Validation: 11 focused tests (`npm run test:ai`), TypeScript and production
+build pass. Existing ONNX static-dependency warnings remain. Headless Chrome
+checks passed on an isolated app copy: desktop model discovery, automatic
+apply/play, immediate and delayed Undo, invalid JSON rejection, manual
+apply, cancellation; mobile sheet, example prompt, connection, no overflow.
+No browser exceptions in those checks. Generation responses in interaction
+tests were deterministic fixtures; model discovery used the real service.
+A real Llama 3.2 request with the revised prompt produced a valid animated
+ellipse in 32 seconds. Initial Qwen cat inference exceeded five minutes on
+CPU; the first Llama response had invalid operations and was correctly
+rejected. Shortened instructions and added an exact example; Llama 3.2 is
+now the initial preferred model when available (saved selection wins).
+The final 8–10-part running-cat test with Llama and the shorter prompt also
+hit the five-minute timeout; complex character generation is NOT verified.
+The local editor on port 3000 still returned HTTP 200 after all changes.
+An optional repeatable live test is `npm run test:ollama -- <model> <prompt>`.
+
+## Session — faster landing-page entry into the editor
+
+The `/editor` route had no loading boundary, eagerly imported EditorShell
+and its tools, and hid the project picker until `/api/auth/me` finished
+(up to the existing six-second timeout).
+
+- Added `app/editor/loading.tsx` for route-transition feedback.
+- Load EditorShell with `next/dynamic` only when opening a composition.
+- Show the project picker while authentication runs in the background.
+  Account controls show the checking state; a project selected during that
+  check is queued until it completes, preserving the guest sign-in prompt.
+- Saved-project links still wait for authentication before fetching.
+
+Validation: `npx tsc --noEmit`, `git diff --check`, and `npm run build` passed.
+Production build reports `/editor` at 12.7 kB route size / 108 kB first-load
+JS. ONNX runtime static-dependency warnings remain. No browser timing or
+interactive sign-in / saved-project regression check was performed here.
 
 ## Session — mobile: timeline drag works on touch + denser welcome screen
 

@@ -13,6 +13,7 @@
 import { ClipDetails, TextDetails, ImageDetails, BlurDetails, ShapeDetails, BrushDetails, LayerOrder, ClipEffectDetails } from "../types/types";
 import { computeAnimState, computeTransition } from "./AnimationEngine";
 import { evalKeyframes, applyKfOverride } from "./keyframes";
+import { brushPath } from "./brushPath";
 import { wrapTextLines } from "./measureText";
 import { buildCanvasFilterString } from "./colorAdjustments";
 import { applyChromaKey, applyEdgeThin } from "./chromaKey";
@@ -246,16 +247,16 @@ function drawBrushLayer(ctx: CanvasRenderingContext2D, brush: BrushDetails, t: n
   ctx.rotate(((anim.rotation + (brush.rotation ?? 0)) * Math.PI) / 180);
   ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
 
-  ctx.beginPath();
-  brush.points.forEach((p, i) => {
-    const px = p.x * bw - bw / 2, py = p.y * bh - bh / 2;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  });
+  const path = new Path2D(brushPath(brush.points.map(p => ({ x: p.x * bw - bw / 2, y: p.y * bh - bh / 2 })), brush.smooth, brush.closed));
+  if (brush.closed && brush.fill && brush.fill !== "transparent") {
+    ctx.fillStyle = brush.fill;
+    ctx.fill(path);
+  }
   ctx.strokeStyle = brush.color;
   ctx.lineWidth = brush.strokeWidth;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.stroke();
+  ctx.stroke(path);
   ctx.filter = "none";
   ctx.restore();
 }

@@ -7,7 +7,7 @@ import AssetsPanel from "../../panels/AssetsPanel";
 import type { Template } from "../../../utils/templates";
 
 const TITLES: Record<string, string> = {
-  media: "Media", edit: "Edit", text: "Text", effects: "Effects",
+  ai: "AI Director", media: "Media", edit: "Edit", text: "Text", effects: "Effects",
   bgremove: "Remove Background", transitions: "Transitions", animations: "Animations",
   templates: "Templates", layers: "Layers", assets: "Assets & Audio", recent: "Recent Projects",
 };
@@ -15,10 +15,10 @@ const TITLES: Record<string, string> = {
 // Views that render through MediaPanel's own activeTab switch — identical
 // routing to the desktop IconSidebar.
 const MEDIA_VIEWS = new Set([
-  "media", "text", "effects", "bgremove", "transitions", "animations", "templates", "layers", "recent",
+  "ai", "media", "text", "effects", "bgremove", "transitions", "animations", "templates", "layers", "recent",
 ]);
 
-const TALL_VIEWS = new Set(["edit", "templates", "layers", "animations"]);
+const TALL_VIEWS = new Set(["ai", "edit", "templates", "layers", "animations"]);
 
 /**
  * MobileToolSheet — hosts the SAME panel component the desktop uses for a

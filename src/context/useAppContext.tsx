@@ -1,5 +1,6 @@
 "use client";
 
+import type { EditorDocument } from "../utils/ai/editorPlan";
 import React, { createContext, useState, useContext, useRef, useCallback, useEffect } from "react";
 import {
   AppContextType, ActiveTemplate, AudioDetails, BlurDetails, BrushDetails, ClipDetails, ClipEffectDetails,
@@ -28,7 +29,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const [brushesDetails, setBrushesDetails] = useState<BrushDetails[]>([]);
   const [selectedBrushId, setSelectedBrushId] = useState<string | null>(null);
   const [isDrawingBrush, setIsDrawingBrush] = useState(false);
-  const [brushDraft, setBrushDraft] = useState({ color: "#FF4D6D", strokeWidth: 10 });
+  const [brushDraft, setBrushDraft] = useState({ color: "#FF4D6D", strokeWidth: 10, smooth: true, closed: false, fill: "transparent" });
   const [audioDetails, setAudioDetails] = useState<AudioDetails[]>([]);
   const [layerOrder, setLayerOrder] = useState<LayerOrder[]>([]);
   const [transitionsFrames, setTransitionsFrames] = useState<TransitionFrame[]>([]);
@@ -78,19 +79,19 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   // hold the live array/object references directly (not serialized), which
   // is safe because every mutation in this codebase already replaces arrays
   // immutably (`prev.map/filter/[...prev, x]`), never mutates in place.
-  interface DocSnapshot {
-    clips: ClipDetails[]; texts: TextDetails[]; images: ImageDetails[]; blurs: BlurDetails[];
-    shapes: ShapeDetails[]; brushes: BrushDetails[]; audio: AudioDetails[];
-  }
+  type DocSnapshot = EditorDocument;
   const snapshot = useCallback((): DocSnapshot => ({
     clips: clipsDetails, texts: textsDetails, images: imagesDetails, blurs: blursDetails,
     shapes: shapesDetails, brushes: brushesDetails, audio: audioDetails,
-  }), [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails]);
+    effects: clipEffects, layerOrder, totalTime,
+  }), [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects, layerOrder, totalTime]);
 
+  const applyingDocumentRef = useRef(false);
   const applySnapshot = useCallback((s: DocSnapshot) => {
+    applyingDocumentRef.current = true;
     setClipsDetails(s.clips); setTextsDetails(s.texts); setImagesDetails(s.images);
     setBlursDetails(s.blurs); setShapesDetails(s.shapes); setBrushesDetails(s.brushes);
-    setAudioDetails(s.audio);
+    setAudioDetails(s.audio); setClipEffects(s.effects); setLayerOrder(s.layerOrder); setTotalTime(s.totalTime);
   }, []);
 
   const historyRef = useRef<{ past: DocSnapshot[]; future: DocSnapshot[] }>({ past: [], future: [] });
@@ -115,7 +116,23 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails]);
+  }, [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects, layerOrder, totalTime]);
+
+  // AI changes are one immediate undo step, independent of slider debounce.
+  const applyAiDocument = useCallback((next: EditorDocument) => {
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    const before = snapshot();
+    const committed = lastCommittedRef.current;
+    if (committed && Object.keys(before).some(k => before[k as keyof EditorDocument] !== committed[k as keyof EditorDocument])) {
+      historyRef.current.past.push(committed);
+    }
+    historyRef.current.past.push(before);
+    historyRef.current.past = historyRef.current.past.slice(-HISTORY_LIMIT);
+    historyRef.current.future = [];
+    restoringRef.current = true;
+    lastCommittedRef.current = next;
+    applySnapshot(next);
+  }, [snapshot, applySnapshot]);
 
   const undo = useCallback(() => {
     if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
@@ -170,6 +187,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   const prevTotalTimeRef = useRef(totalTime);
   useEffect(() => {
     const prev = prevTotalTimeRef.current;
+    if (applyingDocumentRef.current) { prevTotalTimeRef.current = totalTime; return; }
     if (totalTime > prev + 0.001) {
       const stillFollowing = (end: number) => Math.abs(end - prev) < 0.05;
       setTextsDetails(ts => ts.map(t => stillFollowing(t.endTime) ? { ...t, endTime: totalTime } : t));
@@ -188,7 +206,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
   // more deliberate, frequent editing action there, and silently shortening
   // the whole timeline every time would be surprising.
   useEffect(() => {
-    if (clipsDetails.length > 0) return;
+    if (applyingDocumentRef.current || clipsDetails.length > 0) return;
     const maxEnd = Math.max(
       0,
       ...textsDetails.map(t => t.endTime ?? 0),
@@ -202,6 +220,10 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clipsDetails.length, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails]);
+
+  // Explicit document restores already include timing. Do not let the normal
+  // auto-fit/follow effects rewrite that transaction or add a second undo step.
+  useEffect(() => { applyingDocumentRef.current = false; }, [clipsDetails, textsDetails, imagesDetails, blursDetails, shapesDetails, brushesDetails, audioDetails, clipEffects, layerOrder, totalTime]);
 
   return (
     <AppContext.Provider value={{
@@ -249,7 +271,7 @@ export const AppContextProvider = ({ children }: { children: React.ReactNode }) 
       activeTemplate, setActiveTemplate,
       missingMediaNames, setMissingMediaNames,
       resumedProjectId, setResumedProjectId,
-      undo, redo,
+      undo, redo, applyAiDocument,
     }}>
       {children}
     </AppContext.Provider>
