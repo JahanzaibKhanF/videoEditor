@@ -1,0 +1,55 @@
+Full current working-tree status (includes preserved work from earlier increments):
+
+MM PROGRESS.md
+AM app/api/ai/director/route.ts
+MM docs/AI_DIRECTOR.md
+AM docs/AI_EDITOR_SCHEMA.json
+M  package-lock.json
+M  package.json
+MM src/components/panels/AiDirectorPanel.tsx
+ M src/components/panels/PropertiesPanel.tsx
+ M src/types/types.ts
+D  src/utils/ai/browserDirector.ts
+D  src/utils/ai/browserPlan.ts
+MM src/utils/ai/editorPlan.ts
+AM src/utils/ai/editorProtocol.ts
+AM src/utils/ai/localDirector.ts
+ M src/utils/brushPath.ts
+MM src/utils/compositeFrame.ts
+D  src/workers/directorWorker.ts
+MM tests/ai-editor.test.mjs
+?? docs/AI_DRAWING_PROTOCOL.md
+?? docs/ai-audit/
+?? src/utils/ai/drawingCompiler.ts
+?? tests/ai-export.browser.mjs
+?? tests/ai-live.mjs
+?? tests/ai-parts.browser.mjs
+?? tests/ai-render.browser.mjs
+
+Exact evidence files:
+docs/ai-audit/artifacts/2026-11-18/cat-final-HAHA.png
+docs/ai-audit/artifacts/2026-11-18/cat-final-semantic-failure.json
+docs/ai-audit/artifacts/2026-11-18/cat-one-call-failure.json
+docs/ai-audit/artifacts/2026-11-18/export-measurements.json
+docs/ai-audit/artifacts/2026-11-18/initial-prototype-failure.json
+docs/ai-audit/artifacts/2026-11-18/native-text-measurements.json
+docs/ai-audit/artifacts/2026-11-18/pivot-0.png
+docs/ai-audit/artifacts/2026-11-18/pivot-1.5.png
+docs/ai-audit/artifacts/2026-11-18/pivot-3.png
+docs/ai-audit/artifacts/2026-11-18/pivot-and-cat-measurements.json
+docs/ai-audit/artifacts/2026-11-18/pivot-export-0.png
+docs/ai-audit/artifacts/2026-11-18/pivot-export-1.5.png
+docs/ai-audit/artifacts/2026-11-18/pivot-export-3.png
+docs/ai-audit/artifacts/2026-11-18/pivot-export.mp4
+docs/ai-audit/artifacts/2026-11-18/pivot-fixture.json
+docs/ai-audit/artifacts/2026-11-18/pivot-measurements.json
+docs/ai-audit/artifacts/2026-11-18/pivot-ui-export.log
+docs/ai-audit/artifacts/2026-11-18/production-build.log
+docs/ai-audit/artifacts/2026-11-18/second-prototype-failure.json
+docs/ai-audit/artifacts/2026-11-18/text-export-frame.png
+docs/ai-audit/artifacts/2026-11-18/text-export.mp4
+docs/ai-audit/artifacts/2026-11-18/text-final-Hello.png
+docs/ai-audit/artifacts/2026-11-18/text-final-response.json
+docs/ai-audit/artifacts/2026-11-18/text-ui-export.log
+docs/ai-audit/artifacts/2026-11-18/typescript.log
+docs/ai-audit/artifacts/2026-11-18/unit-tests.log

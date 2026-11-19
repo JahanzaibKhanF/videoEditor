@@ -1,0 +1,1795 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [
+        1
+      ],
+      "title": "Protocol version",
+      "description": "Use version 1 for native editor operations."
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 500,
+      "title": "Outcome or clarification",
+      "description": "Describe actual edits, or ask a specific question with operations empty when essential details are missing."
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "shape"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "rotation": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600,
+                    "title": "Rotation",
+                    "description": "Base rotation in degrees."
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "title": "Opacity",
+                    "description": "Visibility: 0 is invisible, 1 is fully opaque."
+                  },
+                  "startTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "Start Time",
+                    "description": "Layer visibility begins at this absolute timeline second."
+                  },
+                  "endTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "End Time",
+                    "description": "Layer visibility ends at this absolute timeline second; must exceed startTime."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "animation": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "slideIn",
+                      "slideInRight",
+                      "slideUp",
+                      "slideDown",
+                      "fadeIn",
+                      "fadeOut",
+                      "zoomIn",
+                      "rotateIn",
+                      "pulse",
+                      "bounceIn",
+                      "wiggle",
+                      "typewriter",
+                      "drawIn"
+                    ],
+                    "title": "Animation",
+                    "description": "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "scale",
+                            "scaleX",
+                            "scaleY",
+                            "rotation",
+                            "opacity",
+                            "blur"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  },
+                  "x": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "X",
+                    "description": "Base left position in canvas pixels; animation x is an offset from this position."
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Y",
+                    "description": "Base top position in canvas pixels; positive y goes down."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "rectangle",
+                      "ellipse",
+                      "polygon"
+                    ],
+                    "title": "Kind",
+                    "description": "Primitive geometry only: rectangle, ellipse, or regular polygon. Compose several parts or use brush contours for other silhouettes."
+                  },
+                  "fill": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Fill",
+                    "description": "Interior color as hexadecimal or transparent; a brush fill requires a closed contour."
+                  },
+                  "stroke": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Stroke",
+                    "description": "Shape outline color as hexadecimal or transparent."
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "title": "Stroke Width",
+                    "description": "Outline or brush line thickness in pixels; text/shape allow 0 for no outline."
+                  },
+                  "sides": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "maximum": 12,
+                    "title": "Sides",
+                    "description": "Number of vertices for a regular polygon, integer 3..12; irrelevant to rectangles and ellipses."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "brush"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "rotation": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600,
+                    "title": "Rotation",
+                    "description": "Base rotation in degrees."
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "title": "Opacity",
+                    "description": "Visibility: 0 is invisible, 1 is fully opaque."
+                  },
+                  "startTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "Start Time",
+                    "description": "Layer visibility begins at this absolute timeline second."
+                  },
+                  "endTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "End Time",
+                    "description": "Layer visibility ends at this absolute timeline second; must exceed startTime."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "animation": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "slideIn",
+                      "slideInRight",
+                      "slideUp",
+                      "slideDown",
+                      "fadeIn",
+                      "fadeOut",
+                      "zoomIn",
+                      "rotateIn",
+                      "pulse",
+                      "bounceIn",
+                      "wiggle",
+                      "typewriter",
+                      "drawIn"
+                    ],
+                    "title": "Animation",
+                    "description": "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "scale",
+                            "scaleX",
+                            "scaleY",
+                            "rotation",
+                            "opacity",
+                            "blur"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  },
+                  "x": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "X",
+                    "description": "Base left position in canvas pixels; animation x is an offset from this position."
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Y",
+                    "description": "Base top position in canvas pixels; positive y goes down."
+                  },
+                  "drawDuration": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 3600,
+                    "title": "Draw Duration",
+                    "description": "Seconds to trace a brush path when animation is drawIn, starting at startTime. Afterwards the complete drawing stays visible until endTime. Omit for a one-second reveal."
+                  },
+                  "smooth": {
+                    "type": "boolean",
+                    "title": "Smooth",
+                    "description": "Interpolate the brush points into a smooth curve instead of straight line segments."
+                  },
+                  "closed": {
+                    "type": "boolean",
+                    "title": "Closed",
+                    "description": "Connect the final brush point to the first to form a closed contour. Use at least three points for a filled silhouette."
+                  },
+                  "fill": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Fill",
+                    "description": "Interior color as hexadecimal or transparent; a brush fill requires a closed contour."
+                  },
+                  "points": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1,
+                          "title": "X",
+                          "description": "Normalized horizontal position inside the brush box, from 0 to 1."
+                        },
+                        "y": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1,
+                          "title": "Y",
+                          "description": "Normalized vertical position inside the brush box, from 0 to 1."
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 256,
+                    "minItems": 2,
+                    "title": "Points",
+                    "description": "Ordered custom contour points normalized to this brush's box, each coordinate 0..1. Separate disconnected strokes into separate brush layers."
+                  },
+                  "color": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Color",
+                    "description": "Brush line color as hexadecimal or transparent; does not set text color or interior fill."
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "title": "Stroke Width",
+                    "description": "Outline or brush line thickness in pixels; text/shape allow 0 for no outline."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "rotation": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600,
+                    "title": "Rotation",
+                    "description": "Base rotation in degrees."
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "title": "Opacity",
+                    "description": "Visibility: 0 is invisible, 1 is fully opaque."
+                  },
+                  "startTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "Start Time",
+                    "description": "Layer visibility begins at this absolute timeline second."
+                  },
+                  "endTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "End Time",
+                    "description": "Layer visibility ends at this absolute timeline second; must exceed startTime."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "animation": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "slideIn",
+                      "slideInRight",
+                      "slideUp",
+                      "slideDown",
+                      "fadeIn",
+                      "fadeOut",
+                      "zoomIn",
+                      "rotateIn",
+                      "pulse",
+                      "bounceIn",
+                      "wiggle",
+                      "typewriter",
+                      "drawIn"
+                    ],
+                    "title": "Animation",
+                    "description": "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "scale",
+                            "scaleX",
+                            "scaleY",
+                            "rotation",
+                            "opacity",
+                            "blur",
+                            "curve"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "title": "Text",
+                    "description": "Only the words or Unicode characters to display, preserving requested spelling, case and punctuation. Exclude styling, repetition and animation instructions unless explicitly requested as literal text."
+                  },
+                  "textX": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Text X",
+                    "description": "Text box left position in canvas pixels."
+                  },
+                  "textY": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Text Y",
+                    "description": "Text box top position in canvas pixels."
+                  },
+                  "fontSize": {
+                    "type": "number",
+                    "minimum": 8,
+                    "maximum": 600,
+                    "title": "Font Size",
+                    "description": "Text size in pixels; choose a size that fits the box and requested repetitions."
+                  },
+                  "lineHeight": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 4,
+                    "title": "Line Height",
+                    "description": "Line spacing multiplier relative to font size."
+                  },
+                  "fontFamily": {
+                    "type": "string",
+                    "enum": [
+                      "Inter",
+                      "Arial",
+                      "Space Grotesk",
+                      "Anton",
+                      "Bebas Neue",
+                      "Oswald",
+                      "Permanent Marker",
+                      "Caveat",
+                      "Archivo Black",
+                      "Righteous",
+                      "Bangers"
+                    ],
+                    "title": "Font Family",
+                    "description": "Typeface from the supported font names."
+                  },
+                  "textColor": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Text Color",
+                    "description": "Color of the displayed letters for solid text, as hexadecimal. This is the field for requests to color text."
+                  },
+                  "backgroundColor": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Background Color",
+                    "description": "Color behind the text box, not the letter color. Use transparent for no background."
+                  },
+                  "isBold": {
+                    "type": "boolean",
+                    "title": "Is Bold",
+                    "description": "True makes the letters bold; false uses normal weight."
+                  },
+                  "isItalic": {
+                    "type": "boolean",
+                    "title": "Is Italic",
+                    "description": "True slants the letters."
+                  },
+                  "isUnderline": {
+                    "type": "boolean",
+                    "title": "Is Underline",
+                    "description": "True underlines the letters."
+                  },
+                  "shadowColor": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Shadow Color",
+                    "description": "Text shadow color; transparent disables visible shadow."
+                  },
+                  "shadowBlur": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "title": "Shadow Blur",
+                    "description": "Text shadow softness in pixels."
+                  },
+                  "shadowOffsetX": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100,
+                    "title": "Shadow Offset X",
+                    "description": "Horizontal text shadow displacement in pixels; positive is right."
+                  },
+                  "shadowOffsetY": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100,
+                    "title": "Shadow Offset Y",
+                    "description": "Vertical text shadow displacement in pixels; positive is down."
+                  },
+                  "fillMode": {
+                    "type": "string",
+                    "enum": [
+                      "solid",
+                      "gradient"
+                    ],
+                    "title": "Fill Mode",
+                    "description": "Use solid for one textColor, gradient for a blend of gradientColorStart and gradientColorEnd."
+                  },
+                  "gradientColorStart": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Gradient Color Start",
+                    "description": "First text gradient color in hexadecimal."
+                  },
+                  "gradientColorEnd": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Gradient Color End",
+                    "description": "Second text gradient color in hexadecimal."
+                  },
+                  "gradientAngle": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360,
+                    "title": "Gradient Angle",
+                    "description": "Text gradient direction in degrees."
+                  },
+                  "strokeColor": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|transparent)$",
+                    "title": "Stroke Color",
+                    "description": "Text outline color, not the letter fill."
+                  },
+                  "strokeWidth": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "title": "Stroke Width",
+                    "description": "Outline or brush line thickness in pixels; text/shape allow 0 for no outline."
+                  },
+                  "curve": {
+                    "type": "number",
+                    "minimum": -100,
+                    "maximum": 100,
+                    "title": "Curve",
+                    "description": "Text curvature from -100 to 100; 0 is straight."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "image"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "rotation": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600,
+                    "title": "Rotation",
+                    "description": "Base rotation in degrees."
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "title": "Opacity",
+                    "description": "Visibility: 0 is invisible, 1 is fully opaque."
+                  },
+                  "startTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "Start Time",
+                    "description": "Layer visibility begins at this absolute timeline second."
+                  },
+                  "endTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "End Time",
+                    "description": "Layer visibility ends at this absolute timeline second; must exceed startTime."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "animation": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "slideIn",
+                      "slideInRight",
+                      "slideUp",
+                      "slideDown",
+                      "fadeIn",
+                      "fadeOut",
+                      "zoomIn",
+                      "rotateIn",
+                      "pulse",
+                      "bounceIn",
+                      "wiggle",
+                      "typewriter",
+                      "drawIn"
+                    ],
+                    "title": "Animation",
+                    "description": "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "scale",
+                            "scaleX",
+                            "scaleY",
+                            "rotation",
+                            "opacity",
+                            "blur"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  },
+                  "imageX": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Image X",
+                    "description": "Image left position in canvas pixels."
+                  },
+                  "imageY": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Image Y",
+                    "description": "Image top position in canvas pixels."
+                  },
+                  "scaleX": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 20,
+                    "title": "Scale X",
+                    "description": "Horizontal size multiplier: 1 is original width."
+                  },
+                  "scaleY": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 20,
+                    "title": "Scale Y",
+                    "description": "Vertical size multiplier: 1 is original height."
+                  },
+                  "colorAdjustments": {
+                    "type": "object",
+                    "properties": {
+                      "brightness": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Brightness",
+                        "description": "Brightness multiplier; 1 is unchanged."
+                      },
+                      "contrast": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Contrast",
+                        "description": "Contrast multiplier; 1 is unchanged."
+                      },
+                      "saturation": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Saturation",
+                        "description": "Color saturation multiplier; 1 is unchanged, 0 is grayscale."
+                      },
+                      "temperature": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100,
+                        "title": "Temperature",
+                        "description": "Color temperature adjustment: negative cooler, positive warmer, 0 unchanged."
+                      }
+                    },
+                    "required": [
+                      "brightness",
+                      "contrast",
+                      "saturation",
+                      "temperature"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Color Adjustments",
+                    "description": "Media color correction; provide all four values when setting this object."
+                  },
+                  "chromaKey": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "title": "Enabled",
+                        "description": "Whether this color-key filter is active."
+                      },
+                      "color": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "title": "Color",
+                        "description": "Backdrop color to remove, six-digit hex RGB. Use the actual requested screen color; do not guess an arbitrary background."
+                      },
+                      "tolerance": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "title": "Tolerance",
+                        "description": "Normalized RGB-distance threshold, 0..1. Larger values remove more colors; start conservatively."
+                      },
+                      "edgeFeather": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 1,
+                        "title": "Edge Feather",
+                        "description": "Soft-edge width, .01..1; .12 is the manual default."
+                      },
+                      "edgeThin": {
+                        "type": "number",
+                        "minimum": -1,
+                        "maximum": 1,
+                        "title": "Edge Thin",
+                        "description": "Shrink (negative) or grow (positive) the remaining foreground edge, -1..1; 0 leaves it unchanged."
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "color",
+                      "tolerance",
+                      "edgeFeather",
+                      "edgeThin"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Chroma Key",
+                    "description": "Live color-screen removal on this existing video/image, shared by preview and WebCodecs export. Supply all five settings. This is NOT subject segmentation of arbitrary backgrounds."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "blur"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "X",
+                    "description": "Base left position in canvas pixels; animation x is an offset from this position."
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Y",
+                    "description": "Base top position in canvas pixels; positive y goes down."
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "startTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "Start Time",
+                    "description": "Layer visibility begins at this absolute timeline second."
+                  },
+                  "endTime": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600,
+                    "title": "End Time",
+                    "description": "Layer visibility ends at this absolute timeline second; must exceed startTime."
+                  },
+                  "blurAmount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "title": "Blur Amount",
+                    "description": "Strength of the rectangular blur region, 0..100."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "blur"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "video"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "X",
+                    "description": "Base left position in canvas pixels; animation x is an offset from this position."
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": -16384,
+                    "maximum": 16384,
+                    "title": "Y",
+                    "description": "Base top position in canvas pixels; positive y goes down."
+                  },
+                  "width": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Width",
+                    "description": "Bounding-box width in canvas pixels."
+                  },
+                  "height": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 8192,
+                    "title": "Height",
+                    "description": "Bounding-box height in canvas pixels."
+                  },
+                  "scale": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 20,
+                    "title": "Scale",
+                    "description": "Uniform size multiplier: 1 is original size."
+                  },
+                  "rotation": {
+                    "type": "number",
+                    "minimum": -3600,
+                    "maximum": 3600,
+                    "title": "Rotation",
+                    "description": "Base rotation in degrees."
+                  },
+                  "zIndex": {
+                    "type": "number",
+                    "minimum": -10000,
+                    "maximum": 10000,
+                    "title": "Z Index",
+                    "description": "Stacking order: smaller numbers appear in front. Add background parts before foreground parts."
+                  },
+                  "muted": {
+                    "type": "boolean",
+                    "title": "Muted",
+                    "description": "True silences audio. Muting a video also mutes its linked audio."
+                  },
+                  "animation": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "slideIn",
+                      "slideInRight",
+                      "slideUp",
+                      "slideDown",
+                      "fadeIn",
+                      "fadeOut",
+                      "zoomIn",
+                      "rotateIn",
+                      "pulse",
+                      "bounceIn",
+                      "wiggle",
+                      "typewriter",
+                      "drawIn"
+                    ],
+                    "title": "Animation",
+                    "description": "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation."
+                  },
+                  "transition": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "crossDissolve",
+                      "dipToBlack",
+                      "dipToWhite",
+                      "filmDissolve",
+                      "wipeLeftToRight",
+                      "wipeTopToBottom",
+                      "slideIn",
+                      "push",
+                      "zoom",
+                      "morphCut",
+                      "fadeIn",
+                      "slideUp",
+                      "slideRight",
+                      "flipIn",
+                      "blurIn",
+                      "scaleIn"
+                    ],
+                    "title": "Transition",
+                    "description": "Supported video transition preset; applies to existing video media."
+                  },
+                  "keyframes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "prop": {
+                          "type": "string",
+                          "enum": [
+                            "x",
+                            "y",
+                            "scale",
+                            "scaleX",
+                            "scaleY",
+                            "rotation",
+                            "opacity",
+                            "blur"
+                          ],
+                          "title": "Prop",
+                          "description": "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only."
+                        },
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "t": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 3600,
+                                "title": "T",
+                                "description": "Absolute timeline time in seconds, not a frame number or delay."
+                              },
+                              "value": {
+                                "type": "number",
+                                "minimum": -16384,
+                                "maximum": 16384,
+                                "title": "Value",
+                                "description": "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees."
+                              },
+                              "ease": {
+                                "type": "string",
+                                "enum": [
+                                  "linear",
+                                  "smooth",
+                                  "easeIn",
+                                  "easeOut",
+                                  "easeInOut",
+                                  "hold"
+                                ],
+                                "title": "Ease",
+                                "description": "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample."
+                              }
+                            },
+                            "required": [
+                              "t",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 64,
+                          "minItems": 1,
+                          "title": "Keys",
+                          "description": "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window."
+                        }
+                      },
+                      "required": [
+                        "prop",
+                        "keys"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 9,
+                    "minItems": 0,
+                    "title": "Keyframes",
+                    "description": "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks."
+                  },
+                  "colorAdjustments": {
+                    "type": "object",
+                    "properties": {
+                      "brightness": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Brightness",
+                        "description": "Brightness multiplier; 1 is unchanged."
+                      },
+                      "contrast": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Contrast",
+                        "description": "Contrast multiplier; 1 is unchanged."
+                      },
+                      "saturation": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 3,
+                        "title": "Saturation",
+                        "description": "Color saturation multiplier; 1 is unchanged, 0 is grayscale."
+                      },
+                      "temperature": {
+                        "type": "number",
+                        "minimum": -100,
+                        "maximum": 100,
+                        "title": "Temperature",
+                        "description": "Color temperature adjustment: negative cooler, positive warmer, 0 unchanged."
+                      }
+                    },
+                    "required": [
+                      "brightness",
+                      "contrast",
+                      "saturation",
+                      "temperature"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Color Adjustments",
+                    "description": "Media color correction; provide all four values when setting this object."
+                  },
+                  "chromaKey": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "title": "Enabled",
+                        "description": "Whether this color-key filter is active."
+                      },
+                      "color": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$",
+                        "title": "Color",
+                        "description": "Backdrop color to remove, six-digit hex RGB. Use the actual requested screen color; do not guess an arbitrary background."
+                      },
+                      "tolerance": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "title": "Tolerance",
+                        "description": "Normalized RGB-distance threshold, 0..1. Larger values remove more colors; start conservatively."
+                      },
+                      "edgeFeather": {
+                        "type": "number",
+                        "minimum": 0.01,
+                        "maximum": 1,
+                        "title": "Edge Feather",
+                        "description": "Soft-edge width, .01..1; .12 is the manual default."
+                      },
+                      "edgeThin": {
+                        "type": "number",
+                        "minimum": -1,
+                        "maximum": 1,
+                        "title": "Edge Thin",
+                        "description": "Shrink (negative) or grow (positive) the remaining foreground edge, -1..1; 0 leaves it unchanged."
+                      }
+                    },
+                    "required": [
+                      "enabled",
+                      "color",
+                      "tolerance",
+                      "edgeFeather",
+                      "edgeThin"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Chroma Key",
+                    "description": "Live color-screen removal on this existing video/image, shared by preview and WebCodecs export. Supply all five settings. This is NOT subject segmentation of arbitrary backgrounds."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "update",
+                  "delete",
+                  "move",
+                  "split",
+                  "trim"
+                ]
+              },
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "audio"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "values": {
+                "type": "object",
+                "properties": {
+                  "volume": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "title": "Volume",
+                    "description": "Audio gain from 0 (silent) to 1 (full volume)."
+                  },
+                  "muted": {
+                    "type": "boolean",
+                    "title": "Muted",
+                    "description": "True silences audio. Muting a video also mutes its linked audio."
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "at": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceStart": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              },
+              "sourceEnd": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3600
+              }
+            },
+            "required": [
+              "action",
+              "layer"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "maxItems": 80,
+      "minItems": 0
+    }
+  },
+  "required": [
+    "version",
+    "summary",
+    "operations"
+  ],
+  "additionalProperties": false
+}

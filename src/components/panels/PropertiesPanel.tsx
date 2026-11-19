@@ -422,6 +422,10 @@ export default function PropertiesPanel() {
                   onChange={v => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, opacity: v } : b))} />
                 <FieldValue>{Math.round((brush.opacity ?? 1) * 100)}%</FieldValue>
               </FieldRow>
+              {brush.animation === "drawIn" && <FieldRow label="Draw time (s)">
+                <NumberInput value={brush.drawDuration ?? Math.min(1, brush.endTime - brush.startTime)} min={0.05} max={3600} step={0.1}
+                  onChange={v => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId ? { ...b, drawDuration: v } : b))} />
+              </FieldRow>}
               <FitToCompButton onClick={() => setBrushesDetails(prev => prev.map(b => b.id === selectedBrushId
                 ? { ...b, x: 0, y: 0, width: containerDimenions.width, height: containerDimenions.height }
                 : b))} />

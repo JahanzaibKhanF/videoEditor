@@ -13,7 +13,7 @@
 import { ClipDetails, TextDetails, ImageDetails, BlurDetails, ShapeDetails, BrushDetails, LayerOrder, ClipEffectDetails } from "../types/types";
 import { computeAnimState, computeTransition } from "./AnimationEngine";
 import { evalKeyframes, applyKfOverride } from "./keyframes";
-import { brushPath } from "./brushPath";
+import { revealedBrushPath } from "./brushPath";
 import { wrapTextLines } from "./measureText";
 import { buildCanvasFilterString } from "./colorAdjustments";
 import { applyChromaKey, applyEdgeThin } from "./chromaKey";
@@ -177,9 +177,9 @@ function drawTextLayer(ctx: CanvasRenderingContext2D, text: TextDetails, t: numb
 
   const curve = Math.max(-100, Math.min(100, (text.curve ?? 0) + (kf.curve ?? 0)));
   if (curve !== 0) {
-    drawCurvedText(ctx, text.text.replace(/\n/g, " "), curve, hasStroke, tw2);
+    drawCurvedText(ctx, text.text.replace(/\n/g, " "), curve, hasStroke, tw2, text.isUnderline);
   } else {
-    drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2), hasStroke);
+    drawWrappedText(ctx, text.text, -tw2 / 2, -th2 / 2, tw2, text.fontSize * (text.lineHeight ?? 1.2), hasStroke, text.isUnderline);
   }
   ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.filter = "none";
   ctx.restore();
@@ -235,7 +235,7 @@ function drawShapeLayer(ctx: CanvasRenderingContext2D, shape: ShapeDetails, t: n
 // re-record point geometry.
 function drawBrushLayer(ctx: CanvasRenderingContext2D, brush: BrushDetails, t: number, fps: number, w: number, h: number) {
   const anim = applyKfOverride(
-    computeAnimState(brush.animation ?? "none", t, brush.startTime, brush.endTime, fps, brush.x, brush.y, w, h, 100),
+    computeAnimState(brush.animation === "drawIn" ? "none" : brush.animation ?? "none", t, brush.startTime, brush.endTime, fps, brush.x, brush.y, w, h, 100),
     evalKeyframes(brush.keyframes, t),
   );
   if (!anim.visible || brush.points.length < 2) return;
@@ -247,8 +247,11 @@ function drawBrushLayer(ctx: CanvasRenderingContext2D, brush: BrushDetails, t: n
   ctx.rotate(((anim.rotation + (brush.rotation ?? 0)) * Math.PI) / 180);
   ctx.scale(anim.scale * anim.scaleX, anim.scale * anim.scaleY);
 
-  const path = new Path2D(brushPath(brush.points.map(p => ({ x: p.x * bw - bw / 2, y: p.y * bh - bh / 2 })), brush.smooth, brush.closed));
-  if (brush.closed && brush.fill && brush.fill !== "transparent") {
+  const progress = brush.animation === "drawIn"
+    ? Math.max(0, Math.min(1, (t - brush.startTime) / Math.max(0.05, brush.drawDuration ?? Math.min(1, brush.endTime - brush.startTime)))) : 1;
+  const points = brush.points.map(p => ({ x: p.x * bw - bw / 2, y: p.y * bh - bh / 2 }));
+  const path = new Path2D(revealedBrushPath(points, !!brush.smooth, !!brush.closed, progress));
+  if (progress >= 1 && brush.closed && brush.fill && brush.fill !== "transparent") {
     ctx.fillStyle = brush.fill;
     ctx.fill(path);
   }
@@ -518,13 +521,22 @@ function drawClipEffectOverlay(
   ctx.restore();
 }
 
-function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number, stroke?: boolean) {
+function drawUnderline(ctx: CanvasRenderingContext2D, x: number, y: number, width: number) {
+  const fontSize = Number(ctx.font.match(/([\d.]+)px/)?.[1] ?? 16);
+  const descent = ctx.measureText("Mg").actualBoundingBoxDescent;
+  const below = Number.isFinite(descent) ? descent : fontSize * (ctx.textBaseline === "middle" ? 0.5 : 1);
+  // Reuse the glyph fill (including gradients), alpha, shadow and transform.
+  ctx.fillRect(x, y + below + fontSize * 0.04, width, Math.max(1, fontSize / 16));
+}
+
+function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number, stroke?: boolean, underline?: boolean) {
   const lines = wrapTextLines(ctx, text, maxW);
   let ly = y;
   for (const line of lines) {
     if (line) {
       if (stroke) ctx.strokeText(line, x, ly);
       ctx.fillText(line, x, ly);
+      if (underline) drawUnderline(ctx, x, ly, ctx.measureText(line).width);
     }
     ly += lineH;
   }
@@ -545,7 +557,7 @@ function drawWrappedText(ctx: CanvasRenderingContext2D, text: string, x: number,
 // the arc's footprint — always close to the flat line width, since chord
 // length <= arc length — stays inside the box, the same guarantee wrapping
 // used to give for free. The layer's stored fontSize is never touched.
-function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number, stroke: boolean, maxWidth: number) {
+function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number, stroke: boolean, maxWidth: number, underline?: boolean) {
   const chars = [...text];
   if (!chars.length) return;
   const prevAlign = ctx.textAlign, prevBaseline = ctx.textBaseline, prevFont = ctx.font;
@@ -588,6 +600,7 @@ function drawCurvedText(ctx: CanvasRenderingContext2D, text: string, pct: number
     ctx.translate(0, upward ? -radius : radius);
     if (stroke) ctx.strokeText(chars[i], 0, 0);
     ctx.fillText(chars[i], 0, 0);
+    if (underline) drawUnderline(ctx, -widths[i] / 2, 0, widths[i]);
     ctx.restore();
     cursor += charAngle;
   }

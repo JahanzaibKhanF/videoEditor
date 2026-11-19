@@ -1,0 +1,68 @@
+{
+  "input": {
+    "prompt": "Move the selected video from left to right over 3 seconds.",
+    "model": "qwen2.5:7b",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "totalTime": 5,
+    "selectedIds": [
+      "video-motion-check"
+    ],
+    "scene": {
+      "shape": [],
+      "brush": [],
+      "text": [],
+      "image": [],
+      "blur": [],
+      "video": [
+        {
+          "id": "video-motion-check",
+          "x": 440,
+          "y": 210,
+          "width": 400,
+          "height": 300,
+          "scale": 1,
+          "zIndex": 0,
+          "transition": "none",
+          "startTime": 0,
+          "endTime": 5,
+          "startPosition": 0,
+          "endPosition": 5,
+          "duration": 5,
+          "label": "Video 1",
+          "timelineStart": 0,
+          "timelineEnd": 5,
+          "sourceRef": "source-1",
+          "sourceStart": 0,
+          "sourceEnd": 5,
+          "mediaAvailable": true,
+          "backgroundRemoved": false,
+          "linkedAudioIds": [
+            "audio-motion-check"
+          ],
+          "effects": []
+        }
+      ],
+      "audio": [
+        {
+          "id": "audio-motion-check",
+          "volume": 1,
+          "muted": false,
+          "startTime": 0,
+          "endTime": 5,
+          "clipId": "video-motion-check",
+          "label": "Audio 1",
+          "timelineStart": 0,
+          "timelineEnd": 5
+        }
+      ]
+    }
+  },
+  "error": "The assistant reached the 3-minute limit. Your scene was not changed. Try fewer edits or a faster local model.",
+  "metrics": [],
+  "responses": [],
+  "requests": 1,
+  "elapsedMs": 90015.518555
+}

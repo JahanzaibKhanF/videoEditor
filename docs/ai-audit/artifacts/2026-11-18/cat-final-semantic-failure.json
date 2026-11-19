@@ -1,0 +1,96 @@
+{
+  "input": {
+    "prompt": "Create a laughing cartoon cat with a tongue moving and rotating.",
+    "model": "qwen2.5:7b",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "totalTime": 5,
+    "selectedIds": [],
+    "scene": {}
+  },
+  "plan": {
+    "version": 1,
+    "summary": "Laughing cartoon cat with moving and rotating tongue",
+    "operations": [
+      {
+        "action": "add",
+        "layer": "text",
+        "values": {
+          "text": "HAHA",
+          "textColor": "#FFFFFF",
+          "isBold": true,
+          "isItalic": false,
+          "isUnderline": false,
+          "startTime": 0,
+          "endTime": 5
+        }
+      }
+    ]
+  },
+  "doc": {
+    "clips": [],
+    "texts": [
+      {
+        "id": "e9b89d3e-1a50-4493-9c93-79872d0b0f71",
+        "width": 768,
+        "height": 144,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -1,
+        "textX": 256,
+        "textY": 288,
+        "fontSize": 64,
+        "lineHeight": 1.2,
+        "fontFamily": "Inter",
+        "textColor": "#FFFFFF",
+        "backgroundColor": "transparent",
+        "shadowColor": "transparent",
+        "shadowBlur": 0,
+        "shadowOffsetX": 0,
+        "shadowOffsetY": 0,
+        "isBold": true,
+        "isItalic": false,
+        "isUnderline": false,
+        "opacity": 1,
+        "animation": "none",
+        "text": "HAHA"
+      }
+    ],
+    "images": [],
+    "blurs": [],
+    "shapes": [],
+    "brushes": [],
+    "audio": [],
+    "effects": [],
+    "layerOrder": [],
+    "totalTime": 5
+  },
+  "metrics": [
+    {
+      "type": "metrics",
+      "model": "qwen2.5:7b",
+      "correction": false,
+      "call": 1,
+      "promptChars": 3928,
+      "schemaChars": 9594,
+      "wallMs": 23655,
+      "loadMs": 262.843329,
+      "promptMs": 2331.8,
+      "generationMs": 21040.822,
+      "inputTokens": 926,
+      "outputTokens": 68,
+      "doneReason": "stop"
+    }
+  ],
+  "responses": [
+    {
+      "type": "result",
+      "text": "{\"version\":1,\"summary\":\"Laughing cartoon cat with moving and rotating tongue\",\"operations\":[{\"action\":\"add\",\"layer\":\"text\",\"values\":{\"text\":\"HAHA\",\"textColor\":\"#FFFFFF\",\"isBold\":true,\"isItalic\":false,\"isUnderline\":false,\"startTime\":0,\"endTime\":5}}]}"
+    }
+  ],
+  "requests": 1,
+  "elapsedMs": 23735.256546,
+  "applyMs": 0.08561100000224542
+}

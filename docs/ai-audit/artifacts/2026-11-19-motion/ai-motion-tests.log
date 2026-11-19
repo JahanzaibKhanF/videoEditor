@@ -1,0 +1,346 @@
+
+> clipflow@0.1.0 test:ai
+> node --test tests/ai-editor.test.mjs
+
+TAP version 13
+# Subtest: animated shapes become native editable layers; source is unchanged
+ok 1 - animated shapes become native editable layers; source is unchanged
+  ---
+  duration_ms: 8.089164
+  type: 'test'
+  ...
+# Subtest: rejects the whole batch when a later operation is invalid
+ok 2 - rejects the whole batch when a later operation is invalid
+  ---
+  duration_ms: 1.937449
+  type: 'test'
+  ...
+# Subtest: rejects prose, unknown keys, prototype payloads, bad types and timing
+ok 3 - rejects prose, unknown keys, prototype payloads, bad types and timing
+  ---
+  duration_ms: 0.831995
+  type: 'test'
+  ...
+# Subtest: validates keyframe values, duplicate tracks and duplicate times
+ok 4 - validates keyframe values, duplicate tracks and duplicate times
+  ---
+  duration_ms: 0.38533
+  type: 'test'
+  ...
+# Subtest: split preserves source, track, outgoing transition and linked audio
+ok 5 - split preserves source, track, outgoing transition and linked audio
+  ---
+  duration_ms: 1.520867
+  type: 'test'
+  ...
+# Subtest: mute, move, trim, and delete keep paired audio consistent
+ok 6 - mute, move, trim, and delete keep paired audio consistent
+  ---
+  duration_ms: 1.84996
+  type: 'test'
+  ...
+# Subtest: rejects impossible source trims and cuts of speed-ramped clips
+ok 7 - rejects impossible source trims and cuts of speed-ramped clips
+  ---
+  duration_ms: 0.702023
+  type: 'test'
+  ...
+# Subtest: model context excludes media URLs and local filenames
+ok 8 - model context excludes media URLs and local filenames
+  ---
+  duration_ms: 1.545307
+  type: 'test'
+  ...
+# Subtest: moving and trimming clips cannot leave inverted detached audio ranges
+ok 9 - moving and trimming clips cannot leave inverted detached audio ranges
+  ---
+  duration_ms: 1.644328
+  type: 'test'
+  ...
+# Subtest: adding a motion track preserves other existing tracks and supports explicit clearing
+ok 10 - adding a motion track preserves other existing tracks and supports explicit clearing
+  ---
+  duration_ms: 1.587553
+  type: 'test'
+  ...
+# Subtest: text response with redundant kind and familiar aliases becomes red bold native text
+ok 11 - text response with redundant kind and familiar aliases becomes red bold native text
+  ---
+  duration_ms: 0.967561
+  type: 'test'
+  ...
+# Subtest: layer-specific schema rejects mixed properties and ambiguous repairs
+ok 12 - layer-specific schema rejects mixed properties and ambiguous repairs
+  ---
+  duration_ms: 1.775449
+  type: 'test'
+  ...
+# Subtest: shared brush path preserves legacy lines and supports smooth closed contours
+ok 13 - shared brush path preserves legacy lines and supports smooth closed contours
+  ---
+  duration_ms: 56.411947
+  type: 'test'
+  ...
+# Subtest: all requests use identical instructions and a complete generated capability guide and retain original instructions
+ok 14 - all requests use identical instructions and a complete generated capability guide and retain original instructions
+  ---
+  duration_ms: 4.819483
+  type: 'test'
+  ...
+# Subtest: native AI payloads retain model choices and cannot invoke old shortcuts
+ok 15 - native AI payloads retain model choices and cannot invoke old shortcuts
+  ---
+  duration_ms: 0.919039
+  type: 'test'
+  ...
+# Subtest: JSON extraction accepts surrounding prose but rejects malformed and ambiguous data
+ok 16 - JSON extraction accepts surrounding prose but rejects malformed and ambiguous data
+  ---
+  duration_ms: 0.351365
+  type: 'test'
+  ...
+# Subtest: correction messages contain the exact validation error and original request
+ok 17 - correction messages contain the exact validation error and original request
+  ---
+  duration_ms: 0.192537
+  type: 'test'
+  ...
+# Subtest: editor instructions preserve every field without subject-specific routing
+ok 18 - editor instructions preserve every field without subject-specific routing
+  ---
+  duration_ms: 76.435116
+  type: 'test'
+  ...
+# Subtest: model can inspect complete tool schemas without canned prompt interpretation
+ok 19 - model can inspect complete tool schemas without canned prompt interpretation
+  ---
+  duration_ms: 41.258348
+  type: 'test'
+  ...
+# Subtest: decoder schema exposes native fields with complete action-specific payloads
+ok 20 - decoder schema exposes native fields with complete action-specific payloads
+  ---
+  duration_ms: 22.406324
+  type: 'test'
+  ...
+# Subtest: every exposed field and nested property has semantic documentation
+ok 21 - every exposed field and nested property has semantic documentation
+  ---
+  duration_ms: 0.427555
+  type: 'test'
+  ...
+# Subtest: instructions distinguish literal content, style, motion and missing text without subject routing
+ok 22 - instructions distinguish literal content, style, motion and missing text without subject routing
+  ---
+  duration_ms: 0.3518
+  type: 'test'
+  ...
+# Subtest: local director reports generation progress, preserves selected model and validates only the completed result
+ok 23 - local director reports generation progress, preserves selected model and validates only the completed result
+  ---
+  duration_ms: 141.553274
+  type: 'test'
+  ...
+# Subtest: local director corrects invalid payload once and never validates partial or cancelled streams
+ok 24 - local director corrects invalid payload once and never validates partial or cancelled streams
+  ---
+  duration_ms: 72.224682
+  type: 'test'
+  ...
+# Subtest: local route lists installed models and rejects missing/cloud models, other origins and production
+ok 25 - local route lists installed models and rejects missing/cloud models, other origins and production
+  ---
+  duration_ms: 56.470565
+  type: 'test'
+  ...
+# Subtest: assistant preview shows at most six generated words and suppresses echoed input
+ok 26 - assistant preview shows at most six generated words and suppresses echoed input
+  ---
+  duration_ms: 45.163381
+  type: 'test'
+  ...
+# [AI Director] Request started · test:local · attempt 1
+# [AI Director] test:local · initial response
+#   Raw assistant response (before validation): {"version":1,"summary":"Draft",oops}
+# [AI Director] Request started · test:local · attempt 2
+# [AI Director] Validation rejected attempt 1: Expected double-quoted property name in JSON at position 31 (line 1 column 32) Raw assistant response: {"version":1,"summary":"Draft",oops}
+# [AI Director] test:local · correction response
+#   Raw assistant response (before validation): {"version":1,"summary":"Prepared a title.","operations":[{"action":"add","layer":"text","values":{"text":"Hello"}}]}
+# [AI Director] Plan validation/application ms: 0.12499300000013136
+# Subtest: malformed JSON passes through route to one correction before any document validation
+ok 27 - malformed JSON passes through route to one correction before any document validation
+  ---
+  duration_ms: 69.712154
+  type: 'test'
+  ...
+# Subtest: Ollama grammar avoids expanded repetition limits without weakening final validation
+ok 28 - Ollama grammar avoids expanded repetition limits without weakening final validation
+  ---
+  duration_ms: 17.670029
+  type: 'test'
+  ...
+# Subtest: development diagnostics include partial responses when a stream fails
+ok 29 - development diagnostics include partial responses when a stream fails
+  ---
+  duration_ms: 32.823239
+  type: 'test'
+  ...
+# Subtest: scene-constrained generation cannot invent existing targets and keeps motion after content
+ok 30 - scene-constrained generation cannot invent existing targets and keeps motion after content
+  ---
+  duration_ms: 16.333904
+  type: 'test'
+  ...
+# Subtest: shared compositor paints underlines for wrapped and curved text only when enabled
+ok 31 - shared compositor paints underlines for wrapped and curved text only when enabled
+  ---
+  duration_ms: 48.24578
+  type: 'test'
+  ...
+# Subtest: unselected layers retain geometry and style for relative edits without exposing asset URLs
+ok 32 - unselected layers retain geometry and style for relative edits without exposing asset URLs
+  ---
+  duration_ms: 0.4289
+  type: 'test'
+  ...
+# Subtest: AI exposes only rendered per-layer animation tracks
+ok 33 - AI exposes only rendered per-layer animation tracks
+  ---
+  duration_ms: 0.214037
+  type: 'test'
+  ...
+# Subtest: new static layers reject redundant motion without changing the source document
+ok 34 - new static layers reject redundant motion without changing the source document
+  ---
+  duration_ms: 0.32918
+  type: 'test'
+  ...
+# Subtest: brush reveal follows pixel arc length, supports smooth closed curves, and preserves complete geometry
+ok 35 - brush reveal follows pixel arc length, supports smooth closed curves, and preserves complete geometry
+  ---
+  duration_ms: 7.447438
+  type: 'test'
+  ...
+# Subtest: capability lookup is unavailable after the one permitted inspection
+ok 36 - capability lookup is unavailable after the one permitted inspection
+  ---
+  duration_ms: 13.520203
+  type: 'test'
+  ...
+# Subtest: scene conflict check permits no-op replacements and rejects actual concurrent edits
+ok 37 - scene conflict check permits no-op replacements and rejects actual concurrent edits
+  ---
+  duration_ms: 0.746666
+  type: 'test'
+  ...
+# Subtest: advanced text fields are available through model-chosen inspection
+ok 38 - advanced text fields are available through model-chosen inspection
+  ---
+  duration_ms: 15.755692
+  type: 'test'
+  ...
+# Subtest: compact named parts compile into validated native editable layers without mutating input
+ok 39 - compact named parts compile into validated native editable layers without mutating input
+  ---
+  duration_ms: 6.427465
+  type: 'test'
+  ...
+# Subtest: compiled shared-pivot paths follow true rotation and scale between keys within a pixel
+ok 40 - compiled shared-pivot paths follow true rotation and scale between keys within a pixel
+  ---
+  duration_ms: 5.288439
+  type: 'test'
+  ...
+# Subtest: drawing geometry rejects cycles, invalid colors, degenerate paths, off-canvas and meaningless animation
+ok 41 - drawing geometry rejects cycles, invalid colors, degenerate paths, off-canvas and meaningless animation
+  ---
+  duration_ms: 1.970871
+  type: 'test'
+  ...
+# Subtest: nested parents compose their local rotation with ancestor translation and scale
+ok 42 - nested parents compose their local rotation with ancestor translation and scale
+  ---
+  duration_ms: 0.295524
+  type: 'test'
+  ...
+# Subtest: full-turn parent rotation follows an arc instead of collapsing equal endpoint positions
+ok 43 - full-turn parent rotation follows an arc instead of collapsing equal endpoint positions
+  ---
+  duration_ms: 3.332361
+  type: 'test'
+  ...
+# Subtest: decoder requires complete path payloads, while native text remains independently available
+ok 44 - decoder requires complete path payloads, while native text remains independently available
+  ---
+  duration_ms: 16.958914
+  type: 'test'
+  ...
+# Subtest: decoder asks for an explicit edit/draw choice before either payload
+ok 45 - decoder asks for an explicit edit/draw choice before either payload
+  ---
+  duration_ms: 15.887066
+  type: 'test'
+  ...
+# Subtest: registered media actions expose chroma key with strict paint and parameter bounds
+ok 46 - registered media actions expose chroma key with strict paint and parameter bounds
+  ---
+  duration_ms: 15.161629
+  type: 'test'
+  ...
+# Subtest: timeline context keeps source ranges, linked audio, effects and playhead without leaking sources
+ok 47 - timeline context keeps source ranges, linked audio, effects and playhead without leaking sources
+  ---
+  duration_ms: 0.825206
+  type: 'test'
+  ...
+# Subtest: media multi-step executor prepares one immutable transaction and rejects no-ops and unsupported requests
+ok 48 - media multi-step executor prepares one immutable transaction and rejects no-ops and unsupported requests
+  ---
+  duration_ms: 0.703387
+  type: 'test'
+  ...
+# Subtest: model contract distinguishes Canvas motion from scheduling; decoder preserves native timeline semantics
+ok 49 - model contract distinguishes Canvas motion from scheduling; decoder preserves native timeline semantics
+  ---
+  duration_ms: 13.759061
+  type: 'test'
+  ...
+# Subtest: deadline and cancellation settle even stalled fetch/read and permit a subsequent request
+ok 50 - deadline and cancellation settle even stalled fetch/read and permit a subsequent request
+  ---
+  duration_ms: 106.116656
+  type: 'test'
+  ...
+# Subtest: tool inspection consumes the second inference slot and invalid result cannot start a third call
+ok 51 - tool inspection consumes the second inference slot and invalid result cannot start a third call
+  ---
+  duration_ms: 26.667413
+  type: 'test'
+  ...
+# Subtest: valid generated plans report validation but never success before the panel commits
+ok 52 - valid generated plans report validation but never success before the panel commits
+  ---
+  duration_ms: 22.425328
+  type: 'test'
+  ...
+# Subtest: server deadline terminates a stalled Ollama stream with an explicit timeout; output exhaustion is not retried
+ok 53 - server deadline terminates a stalled Ollama stream with an explicit timeout; output exhaustion is not retried
+  ---
+  duration_ms: 54.996974
+  type: 'test'
+  ...
+# Subtest: terminal result settles without waiting for stream closure; final event need not have a newline
+ok 54 - terminal result settles without waiting for stream closure; final event need not have a newline
+  ---
+  duration_ms: 23.012125
+  type: 'test'
+  ...
+1..54
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2132.48809

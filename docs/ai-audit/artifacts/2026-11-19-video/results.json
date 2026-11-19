@@ -1,0 +1,221 @@
+{
+  "original": {
+    "green": 51200,
+    "red": 6400,
+    "pink": 0,
+    "redX": 159.5
+  },
+  "edited": {
+    "green": 0,
+    "red": 6400,
+    "pink": 51200,
+    "redX": 159.5
+  },
+  "moved": {
+    "green": 0,
+    "red": 6400,
+    "pink": 51200,
+    "redX": 239.5
+  },
+  "undone": {
+    "green": 51200,
+    "red": 6400,
+    "pink": 0,
+    "redX": 159.5
+  },
+  "redone": {
+    "green": 0,
+    "red": 6400,
+    "pink": 51200,
+    "redX": 159.5
+  },
+  "noChange": {
+    "green": 0,
+    "red": 6400,
+    "pink": 51200,
+    "redX": 159.5
+  },
+  "contexts": [
+    {
+      "model": "qwen2.5:7b",
+      "prompt": "Trim selected video to source .2–1.7 seconds, remove its green screen over pink, mute it and move it right.",
+      "scene": {
+        "shape": [],
+        "brush": [],
+        "text": [],
+        "image": [],
+        "blur": [],
+        "video": [
+          {
+            "id": "be7b60a5-5bf0-47cc-972a-8156ec909985",
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 180,
+            "scale": 1,
+            "zIndex": 0,
+            "transition": "none",
+            "startTime": 0,
+            "endTime": 2,
+            "startPosition": 0,
+            "endPosition": 2,
+            "duration": 2,
+            "label": "Video 1",
+            "timelineStart": 0,
+            "timelineEnd": 2,
+            "sourceRef": "source-1",
+            "sourceStart": 0,
+            "sourceEnd": 2,
+            "mediaAvailable": true,
+            "backgroundRemoved": false,
+            "linkedAudioIds": [
+              "19d53082-ca9c-4e45-9582-fbcc3695d9cb"
+            ],
+            "effects": []
+          }
+        ],
+        "audio": [
+          {
+            "id": "19d53082-ca9c-4e45-9582-fbcc3695d9cb",
+            "volume": 1,
+            "muted": false,
+            "startTime": 0,
+            "endTime": 2,
+            "clipId": "be7b60a5-5bf0-47cc-972a-8156ec909985",
+            "label": "Audio 1",
+            "timelineStart": 0,
+            "timelineEnd": 2
+          }
+        ]
+      },
+      "canvas": {
+        "width": 320,
+        "height": 180
+      },
+      "totalTime": 5,
+      "playhead": 0,
+      "selectedIds": [
+        "be7b60a5-5bf0-47cc-972a-8156ec909985"
+      ]
+    },
+    {
+      "model": "qwen2.5:7b",
+      "prompt": "Remove the subject background automatically.",
+      "scene": {
+        "shape": [
+          {
+            "id": "cd298307-a302-49b4-aa7e-730fa2f2ba7c",
+            "width": 320,
+            "height": 180,
+            "opacity": 1,
+            "startTime": 0,
+            "endTime": 5,
+            "zIndex": 100,
+            "animation": "none",
+            "x": 0,
+            "y": 0,
+            "kind": "rectangle",
+            "fill": "#ff80c0",
+            "label": "Shape 1",
+            "timelineStart": 0,
+            "timelineEnd": 5
+          }
+        ],
+        "brush": [],
+        "text": [],
+        "image": [],
+        "blur": [],
+        "video": [
+          {
+            "id": "be7b60a5-5bf0-47cc-972a-8156ec909985",
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 180,
+            "scale": 1,
+            "zIndex": 0,
+            "muted": true,
+            "transition": "none",
+            "keyframes": [
+              {
+                "prop": "x",
+                "keys": [
+                  {
+                    "t": 0,
+                    "value": 0,
+                    "id": "c17a582a-0380-4910-910c-a52a8a3926b2",
+                    "ease": [
+                      0,
+                      0,
+                      1,
+                      1
+                    ]
+                  },
+                  {
+                    "t": 1.5,
+                    "value": 120,
+                    "id": "a663759f-5b86-430a-877b-b8e46a777a3b",
+                    "ease": [
+                      0,
+                      0,
+                      1,
+                      1
+                    ]
+                  }
+                ]
+              }
+            ],
+            "chromaKey": {
+              "enabled": true,
+              "color": "#00ff00",
+              "tolerance": 0.4,
+              "edgeFeather": 0.12,
+              "edgeThin": 0
+            },
+            "startTime": 0.2,
+            "endTime": 1.7,
+            "startPosition": 0,
+            "endPosition": 1.5,
+            "duration": 2,
+            "label": "Video 1",
+            "timelineStart": 0,
+            "timelineEnd": 1.5,
+            "sourceRef": "source-1",
+            "sourceStart": 0.2,
+            "sourceEnd": 1.7,
+            "mediaAvailable": true,
+            "backgroundRemoved": false,
+            "linkedAudioIds": [
+              "19d53082-ca9c-4e45-9582-fbcc3695d9cb"
+            ],
+            "effects": []
+          }
+        ],
+        "audio": [
+          {
+            "id": "19d53082-ca9c-4e45-9582-fbcc3695d9cb",
+            "volume": 1,
+            "muted": true,
+            "startTime": 0,
+            "endTime": 1.5,
+            "clipId": "be7b60a5-5bf0-47cc-972a-8156ec909985",
+            "label": "Audio 1",
+            "timelineStart": 0,
+            "timelineEnd": 1.5
+          }
+        ]
+      },
+      "canvas": {
+        "width": 320,
+        "height": 180
+      },
+      "totalTime": 5,
+      "playhead": 0,
+      "selectedIds": [
+        "be7b60a5-5bf0-47cc-972a-8156ec909985"
+      ]
+    }
+  ],
+  "errors": [],
+  "modelCalls": 0
+}

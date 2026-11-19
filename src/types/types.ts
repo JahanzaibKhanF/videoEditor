@@ -263,6 +263,8 @@ export interface BrushPoint {
 }
 
 export interface BrushDetails {
+  /** Duration of progressive path tracing for the drawIn preset. */
+  drawDuration?: number;
   id: string;
   points: BrushPoint[];
   x: number;

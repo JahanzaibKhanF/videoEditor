@@ -1,0 +1,39 @@
+{
+  "input": {
+    "prompt": "Create a laughing cartoon cat with a tongue moving and rotating.",
+    "model": "qwen2.5:7b",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "totalTime": 5,
+    "selectedIds": [],
+    "scene": {}
+  },
+  "error": "This operation was aborted",
+  "metrics": [
+    {
+      "type": "metrics",
+      "model": "qwen2.5:7b",
+      "correction": false,
+      "call": 1,
+      "promptChars": 4699,
+      "schemaChars": 9086,
+      "wallMs": 332086,
+      "loadMs": 237.691833,
+      "promptMs": 63212.955,
+      "generationMs": 268515.438,
+      "inputTokens": 1039,
+      "outputTokens": 693,
+      "doneReason": "stop"
+    }
+  ],
+  "responses": [
+    {
+      "type": "result",
+      "text": "{\n  \"summary\": \"Laughing cat with moving tongue\",\n  \"parts\": [\n    {\n      \"n\": \"body\",\n      \"g\": \"ellipse\",\n      \"b\": [0.5, 0.6, 0.3, 0.2],\n      \"c\": \"#F7CA18\",\n      \"a\": 30,\n      \"m\": [[0, 0, 0, 0, 1]]\n    },\n    {\n      \"n\": \"ears\",\n      \"g\": \"ellipse\",\n      \"b\": [0.45, 0.62, 0.05, 0.08],\n      \"c\": \"#F7CA18\",\n      \"parent\": \"body\"\n    },\n    {\n      \"n\": \"eyes\",\n      \"g\": \"ellipse\",\n      \"b\": [0.49, 0.63, 0.02, 0.02],\n      \"c\": \"#000000\",\n      \"parent\": \"body\"\n    },\n    {\n      \"n\": \"tongue\",\n      \"g\": \"path\",\n      \"b\": [0.5, 0.48, 0.1, 0.06],\n      \"c\": \"#F7CA18\",\n      \"p\": [\n        [0, 0], [0.2, -0.1], [0.3, -0.15], [0.4, -0.2], [0.5, -0.25],\n        [0.6, -0.2], [0.7, -0.15], [0.8, -0.1], [1, 0]\n      ],\n      \"closed\": true,\n      \"smooth\": true,\n      \"m\": [\n        [0, 0, 0, 0, 1],\n        [2, 0.03, 0, 5, 1.1],\n        [4, -0.03, 0, 5, 1]\n      ]\n    },\n    {\n      \"n\": \"mouth\",\n      \"g\": \"path\",\n      \"b\": [0.5, 0.48, 0.2, 0.06],\n      \"c\": \"#F7CA18\",\n      \"p\": [\n        [-0.1, -0.1], [0, -0.15], [0.1, -0.2], [0.3, -0.25], [0.4, -0.3],\n        [0.6, -0.3], [0.7, -0.25], [0.8, -0.2], [1, -0.15]\n      ],\n      \"closed\": true,\n      \"smooth\": true,\n      \"m\": [\n        [0, 0, 0, 0, 1],\n        [2, 0.03, 0, 5, 1.1],\n        [4, -0.03, 0, 5, 1]\n      ]\n    }\n  ],\n  \"duration\": 5\n}"
+    }
+  ],
+  "requests": 2,
+  "elapsedMs": 600002.397809
+}

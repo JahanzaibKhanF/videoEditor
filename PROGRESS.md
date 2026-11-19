@@ -1,3 +1,248 @@
+## 2026-11-19 — Canvas movement and bounded AI lifecycle
+
+Model-facing moveOnTimeline now explicitly means scheduling; native move remains
+unchanged. Instructions distinguish Canvas direction/duration/keyframes from
+start-time changes. No prompt-specific routing. Added shared 180s budget, at most
+2 calls across lookup/correction, skip automatic repair after 60s, terminal output
+limit handling, robust cancellation and result processing without waiting for EOF.
+Draft model summaries hidden until commit; UI reports actual processing stages.
+
+Verified TypeScript, 54/54 tests, production build; real imported video animated
+for 3s without changing source/timeline/audio timing; actual playback + undo/redo.
+Browser cancellation, accelerated real timeout and failed-retry recovery passed.
+Previous real-video chroma/trim/mute/motion/WebCodecs decoded export passed again.
+One bounded live Qwen movement check timed out at 90.016s without any output or
+completion metrics. No retry; no cat inference. Cannot claim live semantic fix or
+drawing quality solved. Original 400s request has no captured metrics; documented
+code causes and uncertainty in docs/ai-audit/2026-11-19-motion-lifecycle.md.
+Next: if requested, inspect Ollama loading/grammar/prefill telemetry before another
+live test. Preserve these changes; do not rerun slow drawing prompts by default.
+
+## 2026-11-19 — Existing-video AI integration
+
+Audited actual manual processors and renderer before implementation. Added native
+video/image chromaKey schemas, EDIT_ACTIONS capability registry shared by decoder
+and executor, complete timeline/source/audio context and readable layer labels.
+AI plans use existing applyPlan/applyAiDocument; empty or unchanged plans now show
+an explanation. Experimental part compiler and all previous work preserved.
+
+Verified: TypeScript, 48/48 tests, production build, real video import/chroma key/
+trim/mute/X animation, selected context, undo/redo and decoded WebCodecs export.
+No Qwen calls: browser tests stub only model transport. Background changes from
+green to pink, red foreground moves 80px at 1s, disappears after 1.5s trim; source
+AAC tone is absent from muted export. See tests/ai-video.browser.mjs.
+
+Automatic SUBJECT background removal remains unavailable to AI. Manual utility
+processes real video frames but its WebM contains no audio; original-audio
+preservation and transparent encoding must be tested before connecting it.
+Stacked effects, speed, captions and enhancement also remain manual-only.
+Full matrix, evidence, changed files and limits:
+docs/ai-audit/2026-11-19-video-editor.md.
+
+## 2026-11-19 — Compact drawing verification complete; AI quality unresolved
+
+Preserved the saved compact compiler and final explicit edit/draw decoder. No
+model request was running; no new inference was launched. Last saved cat response:
+23.735s / 68 output tokens, but ONLY white bold HAHA text, not a cat or animation.
+The earlier compact attempt took 260.3s / 497 tokens and failed paint validation.
+Saved native text: 89.625s / 66 tokens, correct green bold underlined Hello.
+Final explicit mode revision has NOT been live-benchmarked; do not claim it fixes
+model drawing. Do not rerun slow prompts without a specific new validation need.
+
+Verified: TypeScript, 45/45 AI tests, production build; actual Canvas/Offscreen
+pixel equality; shared-pivot translation/rotation/scale; native text motion and
+brush reveal; both edit/draw UI payloads; atomic undo/redo; real WebCodecs MP4 and
+decoded frames. Export position error <=.649px, rotation error <=.018 degrees.
+Build retains existing ONNX warnings. No regression found in tested paths.
+
+Full results, limitations, changed files and raw evidence:
+docs/ai-audit/2026-11-18.md. Compiler safe to keep experimentally; creative AI
+quality is still unreliable. No architecture rewrite or further inference pending.
+
+## 2026-11-17 — AI Director incremental audit (partial, drawing quality unresolved)
+
+Continued from staged prior work. Corrected per-layer AI animation schemas, retained
+unselected layer geometry/style, implemented true brush path reveal + editable
+Draw time, limited capability inspection to one round, added timing/token metrics,
+filtered embedding-only models, and replaced reference-only scene conflict checks
+with value comparisons. Native document, canvas, timeline and undo/redo retained.
+
+Real warm Qwen2.5:7b text request: 20.44s, one call, correct green bold underlined
+Hello with no keyframes. Actual rendered frame inspected. Exact laughing cat with
+moving/rotating tongue: 278s, valid JSON but disconnected ellipses, visually wrong.
+Do not call arbitrary drawing fixed. Fixture animation verified in browser AND
+actual UI H.264 export; undo/redo batch verified.
+
+Audit, capability matrix, raw model results, images, measurements and exact next
+steps: docs/ai-audit/2026-11-17.md. Next: general named-part/local-coordinate scene
+compiler for complex drawings plus temporary-render geometry preflight; preserve
+direct simple edits. No hardcoded subjects. See report for explicit limitations.
+
+## 2026-11-17 — Fix schema transmission in the actual app route
+
+Found and fixed a route wiring mistake: the format argument referenced the schema
+builder function instead of the constructed schema object. JSON serialization dropped
+that function. Strengthened the route/client test to inspect the serialized format.
+Exact prompt completed through real HTTP endpoint in 49.7s with correct text/color/
+bold/underline fields; applied unchanged in UI. Model chose overly low placement.
+Fixed independent missing isUnderline painting in the shared preview/export
+compositor; wrapped and curved text covered. 31 tests and TypeScript pass.
+
+## 2026-11-17 — Diagnose Ollama constraint failure
+
+Service logs identified grammar compilation failures caused by nested bounded
+repetitions in the full editor schema. Derived a smaller decoding schema without
+expanded upper repetition limits, retaining native post-generation validation.
+Added diagnostics for starts, lookups, validation failures and partial responses.
+Regression coverage verifies decoder constraints and untouched application bounds.
+Added scene-specific target ID constraints and ordered animation after content.
+Real Qwen green bold Welcome + horizontal motion passed native application without
+repair (~74s). Replayed unchanged response in editor: applied, rendered green text,
+no page errors. 30 tests, TypeScript and production build pass.
+
+## 2026-11-13 — Repair malformed response handling and remove browser inference
+
+Malformed JSON from schema-lookup detection now reaches the client's single repair
+attempt instead of surfacing parser exceptions. Stream preview shows six assistant
+words at a time and suppresses prompt echoes. Added integrated route-to-client repair
+and preview regressions. Removed unused browser director/worker, Wllama runtime,
+copy script and generated assets; renamed shared browserPlan to editorProtocol.
+Caption/enhancement/background-removal dependencies remain in use.
+
+## 2026-11-13 — Switch active AI Director to local Ollama
+
+Added Ollama SDK, a localhost/development-only streaming bridge, installed local model
+selection and refresh inside the prompt box. Streamed draft summaries appear below
+Create; only complete validated plans are applied. Cancellation, model absence, service
+absence and one correction attempt are handled. No automatic weight downloads.
+Current machine lists llama3.2:latest and gemma3:1b; Qwen is not installed.
+Browser inference remains inactive reference code. Deployment integration is deferred.
+
+## 2026-11-13 — Described AI editor schemas
+
+Added titles and semantic descriptions to every AI-exposed property, including nested
+brush points, grading and keyframes, and regenerated docs/AI_EDITOR_SCHEMA.json.
+The shared model instructions separate literal content, styling, count and motion,
+require schema inspection when uncertain, and request clarification for missing text.
+No subject templates or prompt-specific semantic overrides were added. Browser-only
+runtime is unchanged. 25 regression tests and TypeScript pass; this is a contract
+improvement, not a claim of live-model drawing accuracy.
+
+## Offline visual acceptance (2026-11-13)
+
+- Continued the saved real browser-worker test, not a mocked response. After
+  generating purple `hi buddy`, networking was disabled; the warm model returned
+  a valid seven-operation flower plan in 349,794 ms with no cloud service.
+- Rendered it through the actual compositeFrame implementation. It contains
+  overlapping circles/polygons and a separate flower emoji: drawing acceptance
+  FAILED. Do not claim arbitrary drawing or the user's full AI objective fixed.
+- Purple text passed native application and compositor pixel verification.
+  Browser startup/cancel passed with no page errors; 23 regression tests,
+  TypeScript and production build passed (existing ONNX warnings).
+- Kept all drawing geometry model-generated, with no canned fallback. UI and docs
+  explicitly mark drawings experimental. Offline integration is implemented;
+  reliable drawing quality and acceptable CPU latency remain unresolved.
+- Local inspection artifacts: /tmp/clipflow-real-text.png,
+  /tmp/clipflow-real-flower.png, /tmp/clipflow-real-worker.log.
+
+## Browser-only AI Director (2026-11-12)
+
+- Supersedes the hosted Gemini entry below: the user explicitly requires browser
+  inference only, with no API key, paid quota, Ollama or separate service.
+- Uses pinned Wllama 3.13.0 and Qwen3-4B-Instruct-2507 Q4_K_M (about 2.5 GB first
+  download). Model weights and app-served WASM are saved in browser storage.
+- All prompts use the same native-plan contract. No subject recipes, emoji
+  dictionaries, prompt-color rewrites or literal-command shortcuts are active.
+- The model can inspect full tool fields generated from FIELD_SCHEMAS. Decoding
+  is constrained to native operation schemas or a capability lookup, with one
+  automatic semantic/format correction before failing without scene changes.
+- Uses available WebGPU with CPU loading fallback, real prompt/output activity
+  for stall detection, immediate worker cancellation, and warm model reuse while
+  the panel is open. No full offline page-reload support is implied.
+- Earlier 0.8B/2B browser trials produced wrong or invalid flower/emoji plans even
+  when some text edits succeeded. Those results are not accepted as quality proof.
+- 23 regression tests, TypeScript and the production build pass. Existing ONNX
+  dependency warnings remain. Real Next.js UI starts download and cancels with
+  no page errors. Development and production build output remain separate.
+- Actual Chrome CPU worker test: exact `hi buddy` text and #800080 purple applied
+  successfully in 289 seconds on first inference. The real compositor rendered
+  purple pixels. The loaded prompt context was reused for the next request;
+  do not treat first-run or warmed timings as promises for other hardware.
+- Documentation and UI explain the download, device limits and need to review
+  artwork. Complex drawing quality is checked separately from valid JSON.
+
+## Hosted AI Director (2026-11-11)
+
+- User allowed Gemini/free-tier hosted AI after repeated browser failures.
+- Replaced browser-worker inference with same-origin server requests to Gemini
+  3.5 Flash-Lite; API key stays server-side. No subject recipes or prompt routing.
+- Sends native PLAN_SCHEMA as structured-output schema and full field guide.
+- Preserves validation, one AI correction, atomic apply, stale-scene guard,
+  cancellation and Undo. Bounds requests, deadlines and per-instance guest usage.
+- Updated privacy copy and GitHub-to-Netlify secret sync for GEMINI_API_KEY.
+- 20 regression tests pass, including mocked provider requests, errors and route boundaries.
+- TypeScript and production build pass (existing ONNX dependency warnings).
+- Live local route returns explicit HTTP 503 setup message without a key.
+- Live Gemini quality remains unverified: no GEMINI_API_KEY configured locally.
+  Do not claim flower/cat generation is fixed until actual model tests pass.
+
+## One schema-driven AI path, no command shortcuts (2026-11-11)
+
+- Removed all literal/styled/repeated-text parsing, emoji-name dictionaries,
+  prompt-color overrides, drawing/title payload adapters and keyword routing.
+  Every prompt now reaches the model through the same native-plan contract.
+- The capability reference is derived from every FIELD_SCHEMAS entry, including
+  ranges, nested properties and enums. Full exported PLAN_SCHEMA is available in
+  docs/AI_EDITOR_SCHEMA.json; docs/AI_DIRECTOR.md describes the exact contract.
+- AI returns version/summary/operations. Strict validation precedes legacy parsing
+  so aliases and named colors cannot silently rewrite output. Native defaults for
+  omitted optional fields remain normal editor behavior, not prompt interpretation.
+- A single automatic correction sends the original request, previous output and
+  actual schema/application error back to the model. Dry-run application is atomic;
+  stale-scene checks, Undo and cancellation remain intact. No fallback artwork.
+- 18 retained/replacement regressions pass, including complete schema fidelity,
+  every-request worker use, unchanged AI values, semantic correction, retry bound
+  and cancellation. TypeScript and production build pass with existing ONNX warnings.
+- Real Chrome `create a flower`: first response invented layer `flower`; rejected
+  and passed back for correction. Second attempt generated over 540 tokens but
+  timed out at 180 seconds. Nothing was applied. No successful flower generation
+  is claimed; instruction/schema integration does not upgrade model capability.
+
+## Explicit text colors and instant emoji (2026-11-11)
+
+- `add purple text says hi buddy` creates the exact text with #800080 directly.
+  Explicit unambiguous text-color instructions also override contradictory model
+  colors in title and single-text edit responses; quoted content is excluded.
+- Emoji insertion resolves Unicode names/characters and counts to editable text
+  layers. The exact typo-filled request `add laghing emojee and 10 hearts` adds
+  one laughing emoji and ten hearts, laid out inside the canvas. No model needed.
+  Unknown clauses are not silently dropped. Counts are bounded to 80.
+- Real Chrome: purple text applied in 201 ms, emoji in 163 ms, zero model requests;
+  purple pixel check passed, emoji screenshot visually verified, Undo worked.
+  Screenshots: /tmp/clipflow-instant-purple.png and /tmp/clipflow-instant-emoji.png.
+- 36 regression tests and TypeScript pass. Arbitrary lion/animal drawing remains
+  limited by the model; this change does not reintroduce hardcoded artwork.
+
+## Remove fixed AI artwork and expose generated motion (2026-11-11)
+
+- Removed catPlan, badgePlan, heart contour generation and all subject recipe
+  routing/parsing. Cats, lions and hearts now require model-returned geometry;
+  no hardcoded character is substituted. Replaced Running cat UI example with
+  Moving sketch. Ordinary literal typing/repetition commands remain available.
+- Shared intent rules distinguish content/instructions and create/edit. General
+  drawing JSON supports model-specified duration, shared motion and per-stroke
+  keyframes. Tests verify geometry and jump offsets are preserved exactly.
+- Raised output allowance to 768 tokens and generation deadline to 180 seconds.
+  Real Chrome exact `create cat that jumping` test failed: model emitted an
+  endless sequence of coordinates outside 0..1, ending with truncated JSON.
+  Validation left the scene unchanged; no template fallback was used. This model
+  remains unreliable for arbitrary animated animals; no visual success claimed.
+- Added a streaming guard for out-of-range drawing coordinate pairs, covered by
+  the observed failure prefix. It stops generation early with a useful message
+  instead of waiting for the entire token budget. No live retest of this guard.
+- 34 regression tests and TypeScript pass; production build verified separately.
+  Existing ONNX dependency warnings remain.
+
 ## Repeated text commands (2026-11-10)
 
 - Literal typing now recognizes repetition before adding text. The screenshot

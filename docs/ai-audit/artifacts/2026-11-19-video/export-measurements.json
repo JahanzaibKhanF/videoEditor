@@ -1,0 +1,58 @@
+{
+  "source": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 320,
+        "height": 180,
+        "r_frame_rate": "30/1",
+        "duration": "2.000000",
+        "nb_frames": "60"
+      },
+      {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "r_frame_rate": "0/0",
+        "duration": "2.000000",
+        "nb_frames": "88"
+      }
+    ]
+  },
+  "export": {
+    "programs": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 320,
+        "height": 180,
+        "r_frame_rate": "30/1",
+        "duration": "4.966667",
+        "nb_frames": "150"
+      }
+    ]
+  },
+  "frames": [
+    {
+      "green": 0,
+      "red": 6400,
+      "pink": 51200,
+      "redX": 159.5
+    },
+    {
+      "green": 0,
+      "red": 6400,
+      "pink": 51200,
+      "redX": 239.5
+    },
+    {
+      "green": 0,
+      "red": 0,
+      "pink": 57600,
+      "redX": null
+    }
+  ],
+  "mutedExportHasNoAudioTrack": true
+}

@@ -1,0 +1,58 @@
+{
+  "input": {
+    "prompt": "Create a laughing cartoon cat with a tongue moving and rotating.",
+    "model": "qwen2.5:7b",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "totalTime": 5,
+    "selectedIds": [],
+    "scene": {}
+  },
+  "error": "The assistant could not produce a valid edit after correcting it. Your scene was not changed.",
+  "metrics": [
+    {
+      "type": "metrics",
+      "model": "qwen2.5:7b",
+      "correction": false,
+      "call": 1,
+      "promptChars": 4184,
+      "schemaChars": 8341,
+      "wallMs": 264995,
+      "loadMs": 19401.163513,
+      "promptMs": 64204.153,
+      "generationMs": 181371.339,
+      "inputTokens": 931,
+      "outputTokens": 577,
+      "doneReason": "stop"
+    },
+    {
+      "type": "metrics",
+      "model": "qwen2.5:7b",
+      "correction": true,
+      "call": 1,
+      "promptChars": 5441,
+      "schemaChars": 8341,
+      "wallMs": 240216,
+      "loadMs": 231.034247,
+      "promptMs": 4996.919,
+      "generationMs": 234963.836,
+      "inputTokens": 1565,
+      "outputTokens": 577,
+      "doneReason": "stop"
+    }
+  ],
+  "responses": [
+    {
+      "type": "result",
+      "text": "{\n  \"summary\": \"Laughing cat with moving tongue\",\n  \"parts\": [\n    {\n      \"n\": \"tongue\",\n      \"g\": \"path\",\n      \"b\": [0.5, 0.65, 0.1, 0.04],\n      \"c\": \"#f90\",\n      \"m\": [[0, 0, 0, 0, 1], [0.2, 0, -0.02, 0, 1], [0.6, 0, 0.03, 0, 1]]\n    },\n    {\n      \"n\": \"mouth\",\n      \"g\": \"ellipse\",\n      \"b\": [0.5, 0.65, 0.12, 0.04],\n      \"c\": \"#f90\",\n      \"a\": -30,\n      \"m\": [[0, 0, 0, 0, 1], [0.2, 0, -0.02, 0, 1], [0.6, 0, 0.03, 0, 1]]\n    },\n    {\n      \"n\": \"eye\",\n      \"g\": \"ellipse\",\n      \"b\": [0.45, 0.75, 0.02, 0.02],\n      \"c\": \"#fff\"\n    },\n    {\n      \"n\": \"ear1\",\n      \"g\": \"path\",\n      \"b\": [0.35, 0.6, 0.1, 0.08],\n      \"c\": \"#f90\",\n      \"p\": [[-0.04, -0.02], [-0.02, 0.02], [0.02, 0.05], [0.06, 0]]\n    },\n    {\n      \"n\": \"ear2\",\n      \"g\": \"path\",\n      \"b\": [0.65, 0.6, 0.1, 0.08],\n      \"c\": \"#f90\",\n      \"p\": [[-0.04, -0.02], [-0.02, 0.02], [0.02, 0.05], [0.06, 0]]\n    },\n    {\n      \"n\": \"head\",\n      \"g\": \"ellipse\",\n      \"b\": [0.5, 0.45, 0.3, 0.1],\n      \"c\": \"#f90\"\n    }\n  ],\n  \"duration\": 2\n}"
+    },
+    {
+      "type": "result",
+      "text": "{\n  \"summary\": \"Laughing cat with moving tongue\",\n  \"parts\": [\n    {\n      \"n\": \"tongue\",\n      \"g\": \"path\",\n      \"b\": [0.5, 0.65, 0.1, 0.04],\n      \"c\": \"#f90\",\n      \"p\": [[-0.02, -0.01], [-0.01, 0], [0, 0.01], [0.01, 0.03], [0.02, 0.04]]\n    },\n    {\n      \"n\": \"mouth\",\n      \"g\": \"ellipse\",\n      \"b\": [0.5, 0.65, 0.12, 0.04],\n      \"c\": \"#f90\",\n      \"a\": -30,\n      \"m\": [[0, 0, 0, 0, 1], [0.2, 0, -0.02, 0, 1], [0.6, 0, 0.03, 0, 1]]\n    },\n    {\n      \"n\": \"eye\",\n      \"g\": \"ellipse\",\n      \"b\": [0.45, 0.75, 0.02, 0.02],\n      \"c\": \"#fff\"\n    },\n    {\n      \"n\": \"ear1\",\n      \"g\": \"path\",\n      \"b\": [0.35, 0.6, 0.1, 0.08],\n      \"c\": \"#f90\",\n      \"p\": [[-0.04, -0.02], [-0.02, 0.02], [0.02, 0.05], [0.06, 0]]\n    },\n    {\n      \"n\": \"ear2\",\n      \"g\": \"path\",\n      \"b\": [0.65, 0.6, 0.1, 0.08],\n      \"c\": \"#f90\",\n      \"p\": [[-0.04, -0.02], [-0.02, 0.02], [0.02, 0.05], [0.06, 0]]\n    },\n    {\n      \"n\": \"head\",\n      \"g\": \"ellipse\",\n      \"b\": [0.5, 0.45, 0.3, 0.1],\n      \"c\": \"#f90\"\n    }\n  ],\n  \"duration\": 2\n}"
+    }
+  ],
+  "requests": 2,
+  "elapsedMs": 505416.929401
+}

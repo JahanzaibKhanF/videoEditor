@@ -1,82 +1,147 @@
-# Browser AI Director
+# AI Director: local Ollama
 
-Open a composition, choose **AI Director**, describe an edit, and click **Create**.
-No connection, model selection, installation, API key, or environment setting is
-needed. Literal commands such as `write hello` and `type "Hello world"` add text
-immediately without loading AI. Styled or compound requests use the model. First use downloads the creative tools into the browser cache. Subsequent
-requests reuse the model while the panel is open; idle memory is released after
-two minutes. Cache availability depends on browser storage and eviction.
+The active panel uses the `ollama` npm client through `/api/ai/director`, a
+localhost-only development route. Ollama must be installed and running on
+127.0.0.1:11434. The SDK does not install the service or model weights.
+Production requests return 404; hosted inference is not implemented.
 
-The implementation uses `onnx-community/Qwen2.5-0.5B-Instruct`, quantized to q8,
-through the existing Transformers.js dependency in a dedicated worker. Inference
-uses WASM for compatibility with this project's existing ONNX configuration; a
-GPU is not required. The model download is about 512 MB (decimal); q8 is smaller
-than this model repository's q4 export because its embeddings are quantized too. Downloads come from Hugging Face and the ONNX runtime CDN.
-Prompts and media are not sent to a generation server. HTTPS Netlify deployments
-use the same browser flow as localhost, without an AI server route.
+The installed-model selector and Refresh control sit inside the bottom-right
+of the prompt box. Only installed local models are listed. Models are checked
+again before generation; there are no automatic downloads or silent substitutions.
+Missing services/models produce setup instructions.
 
-This is a small language model, not an image/video generation model. It is not
-necessarily smaller than the specialized background remover. The first download
-and initialization can take time; speed and memory depend on the device.
+## Shared editor contract
 
-## Edits and drawings
+- `src/utils/ai/editorPlan.ts`: native property schemas, annotations, validation,
+  scene context and atomic document application.
+- `src/utils/ai/editorProtocol.ts`: model instructions, constrained response schema,
+  model-chosen schema inspection, JSON extraction and strict response validation.
+- `src/utils/ai/localDirector.ts`: streamed requests, cancellation and one bounded
+  correction attempt before complete-plan validation.
+- `app/api/ai/director/route.ts`: Ollama discovery and streamed inference.
+- `docs/AI_EDITOR_SCHEMA.json`: exported native schema with property descriptions.
 
-- Native text, shapes, animation presets and property/keyframe edits.
-- Simple repetition commands such as `write hi how are you 50 times` create
-  separate editable text copies in rows without waiting for the model. Supports
-  1–80 copies when the phrase fits at a readable size.
-- Pen/brush sketches using normalized paths, including smooth curves, closed
-  contours and optional fills. AI-generated strokes remain editable in Brush
-  and Properties, with normal transforms, keyframes and project JSON storage.
-  A compact drawing accepts up to six strokes and 32 points per stroke; prompts
-  recommend fewer points to keep generation fast. General edits can also add
-  or update native brush layers directly.
-- Selected imported video/image/audio edits, including mute, transitions,
-  timeline movement, and normal-speed video splitting/trimming.
-- Cartoon cats use a compact instruction expanded by the editor into 16 shape
-  layers and a brush tail. Running motion includes coordinated translation,
-  bobbing, and alternating leg rotations. This is a built-in editable drawing
-  recipe, not arbitrary image generation. Color, duration and movement can vary.
-- Hearts and other simple shapes can include a centered label. Hearts use one smooth, closed, filled
-  brush contour; the label is an ordinary text layer. Explicit
-  shape and color words in the request override contradictory model guesses.
-  Labels are limited to 40 characters and compositions remain fully editable.
-- Drawing requests without a preset (for example clouds or leaves) use compact
-  pen-path instructions automatically. Labeled drawings can combine brushes and
-  text through native edit operations. Model-generated outlines may be imperfect;
-  a missing shape preset alone is not a reason to reject a drawing.
-- Other complex characters, generated photos, footage and sound are unsupported.
+Instructions distinguish text content from style, repetition and motion. The model
+chooses geometry and tools; there are no hardcoded subject drawings. Every exposed
+field has a title and semantic description. Schemas describe the AI adapter's
+supported properties, not every manual editor feature.
 
-The shared streaming/parser code extracts one complete JSON object, respecting
-quoted braces and escaped quotes. Surrounding prose and closing Markdown fences
-are ignored; malformed, truncated, ambiguous multiple-object replies and unknown
-editing fields remain rejected.
+## Streaming and failure handling
 
-Every generated instruction is independently validated. No generated code, URLs,
-or HTML is executed. Invalid output leaves the project unchanged. The entire edit
-is one undo step, uses native project JSON, and is rejected if the scene changes
-during generation. Turn off **Apply and play automatically** to review first.
+The progress display shows connection, generation (received characters), validation
+and application stages. Draft summaries are not shown: models can write a success
+claim before producing any valid edit. Only a committed result shows its summary;
+manual-apply proposals are explicitly marked not applied.
+One user request has a 180-second total deadline. At most two inference calls are
+allowed across inspection and correction; a correction is skipped if the initial
+request has already taken 60 seconds or inspection consumed the second call.
+Output-token exhaustion is terminal. Cancellation/timeouts settle even a stalled
+transport, and a terminal result is processed without waiting for stream closure.
+No partial or invalid response changes the canvas. Model JSON is never executed.
 
-The model gets a compact capability guide, canvas size, layer identities and
-selected-layer properties. Media URLs, bytes, cloud metadata and long point/track
-arrays are excluded. Large contexts are rejected. Responses are limited to 384
-new tokens and six direct edits; generation stops as soon as a complete JSON object is produced; recipes expand separately within the editor's
-normal validated limits. A small model can misunderstand requests; undo and try
-a shorter request if needed.
+The old browser inference worker/controller, Wllama dependency, WASM assets and
+runtime-copy script have been removed. Transformers.js and background-removal
+packages remain because captions, enhancement and background removal use them.
 
-Cancel terminates the worker, including active inference/downloads. Stalled
-preparation and generation each have a 90-second limit (download progress resets
-the preparation timeout). Closing the panel releases the worker. A failed or
-cancelled request can be retried without reloading the page.
+## Limitations
 
-## Verification
+Valid JSON does not guarantee good artwork or accurate interpretation. Prior live
+llama3.2 tests produced invalid fields; these are rejected. Changing the runtime or
+instructions does not establish model quality. Use the selector to compare your
+installed models. Qwen2.5:7b is installed at the 2026-11-17 model check.
 
-- `npm run test:ai`: validated editing, media handling, text aliases, compact
-  browser instructions, cat/heart layouts, pen geometry/styles and validation.
-- `npx tsc --noEmit` and `npm run build`.
-- Browser smoke: create a running cat, add red bold welcome text, replay/undo,
-  cancel generation, and retry. Check no localhost:11434 or AI API requests occur.
+## Structured generation failure diagnosed on 2026-11-17
 
-Model/runtime references:
-- https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct
-- https://huggingface.co/docs/transformers.js/guides/dtypes
+Ollama's service logs showed repeated `failed to parse grammar` errors: nested
+bounded repetitions in the full schema exceeded llama.cpp's grammar rule budget.
+Simple schema probes worked, while the editor's schema did not. Passing that schema
+therefore did not reliably constrain the generated field names.
+
+`generationSchema` now derives a decoding-only schema without `maxItems` and
+`maxLength` expansions or descriptive metadata. Property names, required keys,
+types, enums and operation branches remain constrained. The original annotated
+schema is unchanged and still enforces every bound before application. Output
+size and generation-token limits also remain in place.
+
+Development console diagnostics now log request starts, schema-lookup responses,
+complete responses, validation failures, and raw partial text on interrupted or
+failed requests. No response text is available to log if the service fails before
+sending any. The visible progress panel shows processing stages rather than draft summaries
+or the underlying JSON payload.
+
+Scene-specific decoding also removes existing-layer operations when no matching
+layers exist, and constrains targetId to the actual IDs for each layer. Newly
+created layers include animation inside their add payload. Animation fields are
+ordered after content/style in the generated grammar so they remain available
+when the model finishes specifying the content.
+
+Verification on 2026-11-17: 30 regression tests, TypeScript and production build
+pass. A real Qwen 2.5 7B request for green bold Welcome text moving horizontally
+returned a valid native text layer and x keyframes without correction in about
+74 seconds. Replaying that exact response through the editor's UI applied one
+edit and rendered green text (6,261 detected green pixels), with no page errors.
+This verifies that case, not arbitrary drawing quality or fast CPU inference.
+
+The screenshot's blue-outline prompt was also tried on Gemma 3 1B with the repaired
+constraints. Its partial response repeated tiny transparent rectangles instead of a
+blue moving outline; the test was stopped. This is a semantic model failure even
+though the generated operation keys now follow the contract. Do not describe this
+model or arbitrary drawings as fixed.
+
+A subsequent route wiring regression passed the schema-builder function to the SDK
+rather than the generated object, causing JSON serialization to omit `format`.
+The route now passes the constructed scene-specific `format` object. The integrated
+route/client regression serializes the SDK request and requires its schema and
+scene-specific operation branches, so this omission cannot pass unnoticed again.
+
+The exact reported prompt for green, bold, underlined “hi buddy how are u doing”
+was tested through the real app HTTP endpoint with Qwen 2.5 7B. It completed in
+49.7 seconds and returned the correct text, color, bold and underline flags. It
+also added unnecessary constant position keyframes, placing the text low in the
+canvas; semantic layout quality is still imperfect. The unchanged response was
+replayed through the editor and applied with no page errors.
+
+Visual inspection uncovered an independent compositor bug: isUnderline was stored
+but never painted. The shared preview/export renderer now paints underlines for
+wrapped and curved text using the text fill, transform and shadow. A regression
+covers disabled, wrapped and curved underline rendering. 31 tests and TypeScript
+checks pass.
+
+## Incremental audit and verification
+
+See [the 2026-11-17 audit](ai-audit/2026-11-17.md) for the capability matrix,
+current measurements, actual visual failures, and exact next steps. Brush drawIn
+now traces the native path, with editable drawDuration. AI schemas match rendered
+per-layer tracks; unselected layers retain layout/style context. Capability lookup
+is limited to one round per request; text starts with common controls and exposes
+advanced controls on inspection. Development diagnostics include inference metrics.
+The latest warm text case completed in 20.4s without correction. The laughing cat
+case took 278s and was visually WRONG. These results do not establish arbitrary
+drawing reliability or a general 20-second latency guarantee.
+
+
+## Existing-media capability increment (2026-11-19)
+
+The shared EDIT_ACTIONS registry generates native operation choices and enforces
+executor layer eligibility. FIELD_SCHEMAS now exposes chromaKey on existing videos
+and images; this reuses manual color-key rendering and WebCodecs export. Scene
+context includes source/timeline ranges, playhead, linked audio, existing effects,
+anonymous source groups and reference labels. Empty/unchanged plans show an
+explanation without committing history. Multi-step native plans remain atomic.
+
+Automatic subject segmentation, stacked clip effects, speed changes, speech
+transcription and enhancement remain manual-only. Color keying is not automatic
+subject background removal. The model receives metadata, not video pixels/audio.
+A real imported-video regression verified trimming, color keying, X animation,
+muting, undo/redo and decoded export, using stubbed model transport (zero Qwen
+calls). Model interpretation of these new capabilities is not yet benchmarked.
+
+Full capability matrix and evidence: [video-editor audit](ai-audit/2026-11-19-video-editor.md).
+
+## Canvas motion versus timeline scheduling
+
+The model-facing action is `moveOnTimeline` for explicit scheduling only; it maps
+to the unchanged native `move` transaction. Spatial travel uses `update` with
+X/Y keyframes, preserving timeline start/end and linked audio timing. Instructions
+distinguish duration from start time and support combined scheduling plus motion
+without prompt-specific routing. See [verification](ai-audit/2026-11-19-motion-lifecycle.md).

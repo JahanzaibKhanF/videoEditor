@@ -1,0 +1,92 @@
+[
+  {
+    "name": "fixture",
+    "t": 0,
+    "green": 2446,
+    "greenCenter": 159.10793131643499,
+    "blue": 0,
+    "lit": 2683,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "fixture",
+    "t": 0.75,
+    "green": 2446,
+    "greenCenter": 234.10793131643499,
+    "blue": 1252,
+    "lit": 3943,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "fixture",
+    "t": 1.5,
+    "green": 2446,
+    "greenCenter": 309.107931316435,
+    "blue": 2452,
+    "lit": 5143,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "fixture",
+    "t": 3,
+    "green": 2446,
+    "greenCenter": 459.107931316435,
+    "blue": 4849,
+    "lit": 7542,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "fixture",
+    "t": 4.5,
+    "green": 2446,
+    "greenCenter": 459.107931316435,
+    "blue": 4849,
+    "lit": 7542,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "live",
+    "t": 0,
+    "green": 4209,
+    "greenCenter": 334.4979805179378,
+    "blue": 0,
+    "lit": 4486,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "live",
+    "t": 0.75,
+    "green": 4209,
+    "greenCenter": 334.4979805179378,
+    "blue": 0,
+    "lit": 4486,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "live",
+    "t": 1.5,
+    "green": 4209,
+    "greenCenter": 334.4979805179378,
+    "blue": 0,
+    "lit": 4486,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "live",
+    "t": 3,
+    "green": 4209,
+    "greenCenter": 334.4979805179378,
+    "blue": 0,
+    "lit": 4486,
+    "previewExportPixelDifference": 0
+  },
+  {
+    "name": "live",
+    "t": 4.5,
+    "green": 4209,
+    "greenCenter": 334.4979805179378,
+    "blue": 0,
+    "lit": 4486,
+    "previewExportPixelDifference": 0
+  }
+]

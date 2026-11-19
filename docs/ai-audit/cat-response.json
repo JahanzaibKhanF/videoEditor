@@ -1,0 +1,637 @@
+{
+  "input": {
+    "prompt": "Create a laughing cartoon cat face with a moving and rotating tongue.",
+    "model": "qwen2.5:7b",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "totalTime": 5,
+    "selectedIds": [],
+    "scene": {}
+  },
+  "plan": {
+    "version": 1,
+    "summary": "Laughing cat with moving and rotating tongue",
+    "operations": [
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 200,
+          "height": 200,
+          "x": 540,
+          "y": 260,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 10,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 540
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 30,
+          "height": 20,
+          "x": 180,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 180
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 50,
+          "height": 40,
+          "x": 360,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 1,
+                  "value": 380
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 40,
+          "height": 50,
+          "x": 560,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 1.5,
+                  "value": 580
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 60,
+          "height": 40,
+          "x": 760,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 2,
+                  "value": 780
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 40,
+          "height": 50,
+          "x": 960,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 2.5,
+                  "value": 980
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 30,
+          "height": 40,
+          "x": 1160,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 3,
+                  "value": 1180
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 50,
+          "height": 40,
+          "x": 1360,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 3.5,
+                  "value": 1380
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 40,
+          "height": 60,
+          "x": 1560,
+          "y": 360,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 2,
+          "keyframes": [
+            {
+              "prop": "x",
+              "keys": [
+                {
+                  "t": 4,
+                  "value": 1580
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "action": "add",
+        "layer": "shape",
+        "values": {
+          "width": 200,
+          "height": 200,
+          "x": 360,
+          "y": 260,
+          "kind": "ellipse",
+          "fill": "#FEC7B0",
+          "strokeWidth": 10,
+          "keyframes": [
+            {
+              "prop": "rotation",
+              "keys": [
+                {
+                  "t": 0,
+                  "value": 0
+                },
+                {
+                  "t": 5,
+                  "value": 360
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "doc": {
+    "clips": [],
+    "texts": [],
+    "images": [],
+    "blurs": [],
+    "shapes": [
+      {
+        "id": "ef33ae1c-1e91-44fe-981a-52a5d592e81f",
+        "x": 540,
+        "y": 260,
+        "width": 200,
+        "height": 200,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -1,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 10,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 0,
+                "value": 540,
+                "id": "071fd411-0e3c-4871-a82b-afc5eb9262ac",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cd9f88ca-ebb3-4006-a7af-49b3fc9c454e",
+        "x": 180,
+        "y": 360,
+        "width": 30,
+        "height": 20,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -2,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 0,
+                "value": 180,
+                "id": "180376c8-4552-414e-bcad-20531b0b78b8",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "beb57351-2406-4662-a07b-c9fd8d14765f",
+        "x": 360,
+        "y": 360,
+        "width": 50,
+        "height": 40,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -3,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 1,
+                "value": 380,
+                "id": "fb5b5d97-e5b7-4f35-adb0-64bd0a880c9e",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "99fc411e-fb00-4d9c-b6d5-7f94c608d110",
+        "x": 560,
+        "y": 360,
+        "width": 40,
+        "height": 50,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -4,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 1.5,
+                "value": 580,
+                "id": "e88f26df-7c98-4448-9dc6-c40a0bf382e0",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "96ccb2c3-8873-4a67-856d-47561571693a",
+        "x": 760,
+        "y": 360,
+        "width": 60,
+        "height": 40,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -5,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 2,
+                "value": 780,
+                "id": "47cf9b4c-18f7-44c1-8b60-cac387fbdade",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "dfdd5072-a41b-4c61-b27a-5e65ae822c11",
+        "x": 960,
+        "y": 360,
+        "width": 40,
+        "height": 50,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -6,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 2.5,
+                "value": 980,
+                "id": "c3239985-580b-4d0a-8f78-8f588f64f338",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "31aa2dcc-592e-4bec-957c-5cf502670982",
+        "x": 1160,
+        "y": 360,
+        "width": 30,
+        "height": 40,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -7,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 3,
+                "value": 1180,
+                "id": "466aedca-e8a7-4f8b-8b16-f893dd7d6726",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "611d9d03-5ecb-4a24-8148-345443acd5cd",
+        "x": 1360,
+        "y": 360,
+        "width": 50,
+        "height": 40,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -8,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 3.5,
+                "value": 1380,
+                "id": "a76d5907-983d-44c1-a3a9-f4345e54806a",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "9d46085f-849e-4bd4-8eef-5b667e0bd202",
+        "x": 1560,
+        "y": 360,
+        "width": 40,
+        "height": 60,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -9,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 2,
+        "keyframes": [
+          {
+            "prop": "x",
+            "keys": [
+              {
+                "t": 4,
+                "value": 1580,
+                "id": "a37d0288-7599-4202-9fb1-10a19d52b027",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "de762587-8b7f-41dd-bb30-6c73fce32855",
+        "x": 360,
+        "y": 260,
+        "width": 200,
+        "height": 200,
+        "startTime": 0,
+        "endTime": 5,
+        "zIndex": -10,
+        "kind": "ellipse",
+        "fill": "#FEC7B0",
+        "opacity": 1,
+        "animation": "none",
+        "strokeWidth": 10,
+        "keyframes": [
+          {
+            "prop": "rotation",
+            "keys": [
+              {
+                "t": 0,
+                "value": 0,
+                "id": "edbc7a48-a33a-46d0-ad16-f4991d51f41a",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              },
+              {
+                "t": 5,
+                "value": 360,
+                "id": "aa0ba0c9-e0ce-4df4-8873-300a42811658",
+                "ease": [
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "brushes": [],
+    "audio": [],
+    "effects": [],
+    "layerOrder": [],
+    "totalTime": 5
+  },
+  "metrics": [
+    {
+      "type": "metrics",
+      "model": "qwen2.5:7b",
+      "correction": false,
+      "call": 1,
+      "promptChars": 2680,
+      "schemaChars": 7546,
+      "wallMs": 277733,
+      "loadMs": 236.356892,
+      "promptMs": 1794.005,
+      "generationMs": 275688.694,
+      "inputTokens": 579,
+      "outputTokens": 795,
+      "doneReason": "stop"
+    }
+  ],
+  "requests": 1,
+  "elapsedMs": 278154.32583499997,
+  "applyMs": 0.34145200002240017
+}

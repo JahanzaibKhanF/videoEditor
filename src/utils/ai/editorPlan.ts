@@ -7,6 +7,7 @@ export interface EditorDocument {
 }
 
 type Schema = {
+  title?: string; description?: string;
   anyOf?: Schema[];
   type?: string; enum?: readonly unknown[]; properties?: Record<string, Schema>; required?: string[];
   additionalProperties?: boolean; items?: Schema; minItems?: number; maxItems?: number;
@@ -34,25 +35,125 @@ const common: Record<string, Schema> = {
   animation: choice(...AI_ANIMATIONS), keyframes,
 };
 const xy = { x: position, y: position };
+const chromaKey = obj({ enabled: bool, color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, tolerance: num(0, 1), edgeFeather: num(0.01, 1), edgeThin: num(-1, 1) }, ["enabled", "color", "tolerance", "edgeFeather", "edgeThin"]);
 const grading = obj({ brightness: num(0, 3), contrast: num(0, 3), saturation: num(0, 3), temperature: num(-100, 100) }, ["brightness", "contrast", "saturation", "temperature"]);
 export const FIELD_SCHEMAS: Record<string, Record<string, Schema>> = {
   shape: { ...common, ...xy, kind: choice("rectangle", "ellipse", "polygon"), fill: color, stroke: color, strokeWidth: num(0, 100), sides: { type: "integer", minimum: 3, maximum: 12 } },
-  brush: { ...common, ...xy, smooth: bool, closed: bool, fill: color, points: list(obj({ x: num(0, 1), y: num(0, 1) }, ["x", "y"]), 256, 2), color, strokeWidth: num(1, 100) },
+  brush: { ...common, ...xy, drawDuration: num(0.05, 3600), smooth: bool, closed: bool, fill: color, points: list(obj({ x: num(0, 1), y: num(0, 1) }, ["x", "y"]), 256, 2), color, strokeWidth: num(1, 100) },
   text: { ...common, text: str(2000), textX: position, textY: position, fontSize: num(8, 600), lineHeight: num(0.5, 4),
     fontFamily: choice("Inter", "Arial", "Space Grotesk", "Anton", "Bebas Neue", "Oswald", "Permanent Marker", "Caveat", "Archivo Black", "Righteous", "Bangers"),
     textColor: color, backgroundColor: color, isBold: bool, isItalic: bool, isUnderline: bool,
     shadowColor: color, shadowBlur: num(0, 100), shadowOffsetX: num(-100, 100), shadowOffsetY: num(-100, 100),
     fillMode: choice("solid", "gradient"), gradientColorStart: color, gradientColorEnd: color, gradientAngle: num(-360, 360), strokeColor: color, strokeWidth: num(0, 100), curve: num(-100, 100) },
-  image: { ...common, imageX: position, imageY: position, scaleX: num(0.01, 20), scaleY: num(0.01, 20), colorAdjustments: grading },
+  image: { ...common, imageX: position, imageY: position, scaleX: num(0.01, 20), scaleY: num(0.01, 20), colorAdjustments: grading, chromaKey },
   blur: { ...xy, width: size, height: size, startTime: time, endTime: time, blurAmount: num(0, 100), zIndex: common.zIndex, keyframes },
   video: { ...xy, width: size, height: size, scale: num(0.01, 20), rotation: common.rotation, zIndex: common.zIndex,
-    muted: bool, animation: common.animation, transition: choice(...AI_TRANSITIONS), keyframes, colorAdjustments: grading },
+    muted: bool, animation: common.animation, transition: choice(...AI_TRANSITIONS), keyframes, colorAdjustments: grading, chromaKey },
   audio: { volume: num(0, 1), muted: bool },
 };
+// Documentation lives on the actual validated fields, so tool inspection and
+// constrained generation share the same contract. These are tool semantics,
+// never prompt matching or predefined drawings.
+const FIELD_HELP: Record<string, string> = {
+  width: "Bounding-box width in canvas pixels.", height: "Bounding-box height in canvas pixels.",
+  x: "Base left position in canvas pixels; animation x is an offset from this position.",
+  y: "Base top position in canvas pixels; positive y goes down.",
+  textX: "Text box left position in canvas pixels.", textY: "Text box top position in canvas pixels.",
+  imageX: "Image left position in canvas pixels.", imageY: "Image top position in canvas pixels.",
+  rotation: "Base rotation in degrees.", opacity: "Visibility: 0 is invisible, 1 is fully opaque.",
+  startTime: "Layer visibility begins at this absolute timeline second.",
+  endTime: "Layer visibility ends at this absolute timeline second; must exceed startTime.",
+  zIndex: "Stacking order: smaller numbers appear in front. Add background parts before foreground parts.",
+  animation: "Optional built-in animation preset. Use keyframes for precise requested movement; omit unrequested animation.",
+  keyframes: "Animation tracks. One track per property; distinct absolute timeline times per track. Updates replace matching tracks; [] clears all tracks.",
+  prop: "Animated property: x/y are pixel offsets from the base position; negative y moves up. Scale is a multiplier; rotation is degrees; opacity is 0..1; blur is 0..100; curve is -100..100 and text only.",
+  keys: "Ordered animation samples. Use at least two distinct times to create movement, within the layer's visible time window.",
+  t: "Absolute timeline time in seconds, not a frame number or delay.",
+  value: "Value for this track's property: scale/scaleX/scaleY 0.01..20, opacity 0..1, blur 0..100, curve -100..100; x/y pixels, rotation degrees.",
+  ease: "Interpolation toward the next sample: linear constant speed, easeIn accelerates, easeOut decelerates, easeInOut/smooth soften movement, hold keeps the value until the next sample.",
+  kind: "Primitive geometry only: rectangle, ellipse, or regular polygon. Compose several parts or use brush contours for other silhouettes.",
+  fill: "Interior color as hexadecimal or transparent; a brush fill requires a closed contour.",
+  stroke: "Shape outline color as hexadecimal or transparent.", strokeWidth: "Outline or brush line thickness in pixels; text/shape allow 0 for no outline.",
+  sides: "Number of vertices for a regular polygon, integer 3..12; irrelevant to rectangles and ellipses.",
+  drawDuration: "Seconds to trace a brush path when animation is drawIn, starting at startTime. Afterwards the complete drawing stays visible until endTime. Omit for a one-second reveal.",
+  smooth: "Interpolate the brush points into a smooth curve instead of straight line segments.",
+  closed: "Connect the final brush point to the first to form a closed contour. Use at least three points for a filled silhouette.",
+  points: "Ordered custom contour points normalized to this brush's box, each coordinate 0..1. Separate disconnected strokes into separate brush layers.",
+  color: "Brush line color as hexadecimal or transparent; does not set text color or interior fill.",
+  text: "Only the words or Unicode characters to display, preserving requested spelling, case and punctuation. Exclude styling, repetition and animation instructions unless explicitly requested as literal text.",
+  fontSize: "Text size in pixels; choose a size that fits the box and requested repetitions.",
+  lineHeight: "Line spacing multiplier relative to font size.", fontFamily: "Typeface from the supported font names.",
+  textColor: "Color of the displayed letters for solid text, as hexadecimal. This is the field for requests to color text.",
+  backgroundColor: "Color behind the text box, not the letter color. Use transparent for no background.",
+  isBold: "True makes the letters bold; false uses normal weight.", isItalic: "True slants the letters.", isUnderline: "True underlines the letters.",
+  shadowColor: "Text shadow color; transparent disables visible shadow.", shadowBlur: "Text shadow softness in pixels.",
+  shadowOffsetX: "Horizontal text shadow displacement in pixels; positive is right.", shadowOffsetY: "Vertical text shadow displacement in pixels; positive is down.",
+  fillMode: "Use solid for one textColor, gradient for a blend of gradientColorStart and gradientColorEnd.",
+  gradientColorStart: "First text gradient color in hexadecimal.", gradientColorEnd: "Second text gradient color in hexadecimal.",
+  gradientAngle: "Text gradient direction in degrees.", strokeColor: "Text outline color, not the letter fill.",
+  curve: "Text curvature from -100 to 100; 0 is straight.",
+  scale: "Uniform size multiplier: 1 is original size.", scaleX: "Horizontal size multiplier: 1 is original width.", scaleY: "Vertical size multiplier: 1 is original height.",
+  chromaKey: "Live color-screen removal on this existing video/image, shared by preview and WebCodecs export. Supply all five settings. This is NOT subject segmentation of arbitrary backgrounds.",
+  enabled: "Whether this color-key filter is active.",
+  tolerance: "Normalized RGB-distance threshold, 0..1. Larger values remove more colors; start conservatively.",
+  edgeFeather: "Soft-edge width, .01..1; .12 is the manual default.",
+  edgeThin: "Shrink (negative) or grow (positive) the remaining foreground edge, -1..1; 0 leaves it unchanged.",
+  colorAdjustments: "Media color correction; provide all four values when setting this object.",
+  brightness: "Brightness multiplier; 1 is unchanged.", contrast: "Contrast multiplier; 1 is unchanged.", saturation: "Color saturation multiplier; 1 is unchanged, 0 is grayscale.",
+  temperature: "Color temperature adjustment: negative cooler, positive warmer, 0 unchanged.",
+  blurAmount: "Strength of the rectangular blur region, 0..100.",
+  muted: "True silences audio. Muting a video also mutes its linked audio.",
+  volume: "Audio gain from 0 (silent) to 1 (full volume).",
+  transition: "Supported video transition preset; applies to existing video media.",
+};
+function describeFields(fields: Record<string, Schema>, parent = ""): Record<string, Schema> {
+  return Object.fromEntries(Object.entries(fields).map(([name, schema]) => {
+    const description = parent === "chromaKey" && name === "color" ? "Backdrop color to remove, six-digit hex RGB. Use the actual requested screen color; do not guess an arbitrary background." : parent === "points" && (name === "x" || name === "y")
+      ? `Normalized ${name === "x" ? "horizontal" : "vertical"} position inside the brush box, from 0 to 1.`
+      : FIELD_HELP[name];
+    if (!description) throw new Error(`Missing AI field documentation: ${name}`);
+    const result: Schema = { ...schema, title: name.replace(/([A-Z])/g, " $1").replace(/^./, c => c.toUpperCase()), description };
+    if (schema.properties) result.properties = describeFields(schema.properties, name);
+    if (schema.items) result.items = { ...schema.items, ...(schema.items.properties ? { properties: describeFields(schema.items.properties, name) } : {}) };
+    return [name, result];
+  }));
+}
+for (const layer of Object.keys(FIELD_SCHEMAS)) {
+  const fields = FIELD_SCHEMAS[layer];
+  if (fields.keyframes) {
+    const props = layer === "blur" ? ["x", "y", "blur"] : layer === "text"
+      ? [...keyframes.items!.properties!.prop.enum!] : keyframes.items!.properties!.prop.enum!.filter(p => p !== "curve");
+    fields.keyframes = { ...keyframes, items: { ...keyframes.items!, properties: { ...keyframes.items!.properties!, prop: choice(...props as string[]) } } };
+  }
+  FIELD_SCHEMAS[layer] = describeFields(fields);
+}
+
+/** One action registry drives constrained decoding and executor eligibility.
+ * Field payloads remain FIELD_SCHEMAS; all mutations stay in applyPlan. */
+export const EDIT_ACTIONS: Record<string, { title: string; layers: string[]; args: string[]; description: string }> = {
+  add: { title: "Add native layer", layers: ["text", "shape", "brush", "blur"], args: ["values"], description: "Create editable native overlays; media must already be imported." },
+  update: { title: "Edit existing layer", layers: Object.keys(FIELD_SCHEMAS), args: ["targetId", "values"], description: "Change supported properties, including video/image chromaKey, colorAdjustments and transforms; audio volume/mute." },
+  delete: { title: "Delete existing layer", layers: Object.keys(FIELD_SCHEMAS), args: ["targetId"], description: "Remove a layer; video deletion also removes its linked audio and effects." },
+  move: { title: "Move on timeline", layers: Object.keys(FIELD_SCHEMAS), args: ["targetId", "at"], description: "Scheduling ONLY: at is the new start in timeline seconds. For spatial travel use update.values.keyframes x/y and preserve timing. The model-facing action name is moveOnTimeline. Shifts associated timing." },
+  split: { title: "Split video", layers: ["video"], args: ["targetId", "at"], description: "at is strictly inside the clip in timeline seconds. Normal speed and no clip effects only. New right-half ID is assigned by editor; do not invent it for subsequent steps." },
+  trim: { title: "Trim video", layers: ["video"], args: ["targetId", "sourceStart", "sourceEnd"], description: "Keep a source-second range inside the existing trim; normal speed and no clip effects only. Timeline start is preserved." },
+};
+export const UNAVAILABLE_AI_CAPABILITIES = {
+  removeBackground: "Automatic subject background removal is not connected to AI yet. The manual BG Remove panel processes the selected video frame by frame, but transparent encoding and original audio need verification. For a known solid screen, use chromaKey instead; never silently substitute it for subject segmentation.",
+  clipEffects: "Stacked shake, wiggle, color burst, particles and gradient sweep are manual-only; use the Effects panel. Basic colorAdjustments and animation/keyframes are available to AI.",
+  speed: "Speed changes and ramps are manual-only. AI cannot safely retime their source, audio and keyframes yet.",
+  captions: "Automatic speech transcription is manual-only through Captions. AI may edit existing text but cannot hear or transcribe the attached video.",
+  enhance: "Video enhancement is manual-only through Enhance; AI has no processing action for it.",
+  mediaGeneration: "AI cannot generate or import video/audio files, inspect their pixels, or hear their content. Refer to existing timeline IDs and labels; ask for clarification when visual information is needed.",
+};
+export function editorCapabilityRegistry() {
+  return { actions: EDIT_ACTIONS, layers: FIELD_SCHEMAS, unavailable: UNAVAILABLE_AI_CAPABILITIES };
+}
+
 export const PLAN_SCHEMA: Schema = obj({
-  version: { type: "integer", enum: [1] }, summary: str(500),
+  version: { type: "integer", enum: [1], title: "Protocol version", description: "Use version 1 for native editor operations." }, summary: { ...str(500), title: "Outcome or clarification", description: "Describe actual edits, or ask a specific question with operations empty when essential details are missing." },
   operations: list({ anyOf: Object.entries(FIELD_SCHEMAS).map(([layer, fields]) => obj({
-    action: choice("add", "update", "delete", "split", "trim", "move"),
+    action: choice(...Object.keys(EDIT_ACTIONS)),
     layer: choice(layer), targetId: str(100), values: obj(fields),
     at: time, sourceStart: time, sourceEnd: time,
   }, ["action", "layer"])) }, 80),
@@ -86,7 +187,7 @@ export function validateSchema(value: unknown, schema: Schema, path = "response"
     if (typeof value !== "number" || !Number.isFinite(value)) fail("expected a finite number");
     const n = value as number;
     if (schema.type === "integer" && !Number.isInteger(n)) fail("expected an integer");
-    if (n < (schema.minimum ?? -Infinity) || n > (schema.maximum ?? Infinity)) fail("number outside supported range");
+    if (n < (schema.minimum ?? -Infinity) || n > (schema.maximum ?? Infinity)) fail(`number outside supported range ${schema.minimum ?? "-infinity"}..${schema.maximum ?? "infinity"}; received ${n}`);
   } else if (schema.type === "string") {
     if (typeof value !== "string") fail("expected text");
     const s = value as string;
@@ -158,6 +259,7 @@ export function applyPlan(doc: EditorDocument, plan: EditorPlan, canvas: { width
   const next: EditorDocument = { ...doc, clips: [...doc.clips], texts: [...doc.texts], images: [...doc.images], blurs: [...doc.blurs], shapes: [...doc.shapes], brushes: [...doc.brushes], audio: [...doc.audio], effects: [...doc.effects] };
   let z = Math.min(0, ...[...doc.clips, ...doc.texts, ...doc.images, ...doc.blurs, ...doc.shapes, ...doc.brushes].map(l => l.zIndex ?? 0));
   for (const op of plan.operations) {
+    if (!EDIT_ACTIONS[op.action]?.layers.includes(op.layer)) throw new Error(`Unsupported ${op.action} operation for ${op.layer}. No changes were applied.`);
     const field = collection[op.layer];
     // Heterogeneous collections are narrowed and validated by the layer schema above.
     const rows = next[field] as unknown as Record<string, any>[];
@@ -177,6 +279,11 @@ export function applyPlan(doc: EditorDocument, plan: EditorPlan, canvas: { width
         if (typeof values.text !== "string" || !values.text.trim()) throw new Error("A text layer needs text.");
         const { x, y, ...textBase } = base;
         added = { ...textBase, width: canvas.width * 0.6, textX: canvas.width * 0.2, textY: y, fontSize: 64, lineHeight: 1.2, fontFamily: "Inter", textColor: "#FFFFFF", backgroundColor: "transparent", shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, isBold: false, isItalic: false, isUnderline: false, opacity: 1, animation: "none", ...values };
+      }
+      for (const track of added.keyframes ?? []) {
+        if (track.keys.length > 1 && track.keys.every((key: { value: number }) => key.value === track.keys[0].value)) {
+          throw new Error(`New ${op.layer}: ${track.prop} keyframes are constant. Use the base property for static placement, or distinct values for requested animation.`);
+        }
       }
       checkWindow(added, op.layer);
       rows.push(added);
@@ -263,9 +370,45 @@ function checkWindow(row: Record<string, any>, layer: string) {
 
 /** Removes media URLs, Files and cloud metadata; only edit-relevant data goes to the assistant. */
 export function sceneForModel(doc: EditorDocument) {
-  return Object.fromEntries(Object.entries(collection).map(([layer, field]) => [layer, (doc[field] as { id: string }[]).map(row => {
+  const sources = [...new Set(doc.clips.map(c => c.src))];
+  return Object.fromEntries(Object.entries(collection).map(([layer, field]) => [layer, (doc[field] as { id: string }[]).map((row, index) => {
     const source = row as Record<string, unknown>;
-    const keys = ["id", ...Object.keys(FIELD_SCHEMAS[layer]), ...(layer === "video" ? ["name", "startTime", "endTime", "startPosition", "endPosition", "duration", "speed"] : [])];
-    return Object.fromEntries(keys.filter(k => source[k] !== undefined).map(k => [k, source[k]]));
+    const keys = ["id", ...Object.keys(FIELD_SCHEMAS[layer]), "startTime", "endTime", ...(layer === "video" ? ["startPosition", "endPosition", "duration", "sourceDuration", "speed"] : []), ...(layer === "audio" ? ["clipId"] : [])];
+    const metadata: Record<string, unknown> = {
+      label: `${layer[0].toUpperCase() + layer.slice(1)} ${index + 1}`,
+      timelineStart: layer === "video" ? source.startPosition : source.startTime,
+      timelineEnd: layer === "video" ? source.endPosition : source.endTime,
+    };
+    if (layer === "video") Object.assign(metadata, {
+      sourceRef: `source-${sources.indexOf(source.src as string) + 1}`,
+      sourceStart: source.startTime ?? 0, sourceEnd: source.endTime ?? source.duration,
+      mediaAvailable: !!source.src, backgroundRemoved: !!source.bgRemoved,
+      linkedAudioIds: doc.audio.filter(a => a.clipId === row.id).map(a => a.id),
+      effects: doc.effects.filter(e => e.clipId === row.id).map(e => ({ type: e.type, startTime: e.startTime, endTime: e.endTime })),
+    });
+    if (layer === "image") metadata.mediaAvailable = !!source.src;
+    return { ...Object.fromEntries(keys.filter(k => source[k] !== undefined).map(k => [k, source[k]])), ...metadata };
   })]));
+}
+
+/** Validate and prepare one atomic native transaction. This never changes React
+ * state or evaluates model code. The caller commits once via applyAiDocument. */
+export function executeEditorPlan(doc: EditorDocument, plan: EditorPlan, canvas: { width: number; height: number }): EditorDocument {
+  const next = applyPlan(doc, plan, canvas);
+  if (!plan.operations.length) throw new Error(`No edits applied. ${plan.summary || "The assistant did not provide a supported operation. Please specify the target layer and edit."}`);
+  if (sameEditorDocument(doc, next)) throw new Error("No edits applied: those settings already match the timeline. The assistant did not change your media.");
+  return next;
+}
+
+/** Ignore immutable no-op array/object replacements, but never ignore changed
+ * values or replaced media objects when checking an in-flight AI transaction. */
+export function sameEditorDocument(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b)
+    && a.length === b.length && a.every((entry, i) => sameEditorDocument(entry, b[i]));
+  if (Object.getPrototypeOf(a) !== Object.prototype || Object.getPrototypeOf(b) !== Object.prototype) return false;
+  const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every(k => Object.hasOwn(right, k) && sameEditorDocument(left[k], right[k]));
 }

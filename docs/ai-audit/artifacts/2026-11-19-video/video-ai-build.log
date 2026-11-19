@@ -1,0 +1,106 @@
+
+> clipflow@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings
+
+./node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort.wasm.min.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort.wasm.min.js
+./node_modules/@huggingface/transformers/dist/transformers.web.js
+./src/workers/enhanceWorker.ts
+./src/utils/enhanceClipVideo.ts
+./src/components/panels/EnhancePanel.tsx
+./src/components/panels/MediaPanel.tsx
+./src/components/editor/EditorDesktop.tsx
+./src/components/editor/EditorShell.tsx
+./src/components/app/ClipFlowApp.tsx
+
+./node_modules/onnxruntime-web/dist/ort.wasm.min.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/onnxruntime-web/dist/ort.wasm.min.js
+./node_modules/@imgly/background-removal/dist/index.mjs
+./src/utils/backgroundRemoval.ts
+./src/components/panels/BackgroundRemovalPanel.tsx
+./src/components/panels/MediaPanel.tsx
+./src/components/editor/EditorDesktop.tsx
+./src/components/editor/EditorShell.tsx
+./src/components/app/ClipFlowApp.tsx
+
+./node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort.wasm.min.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/@huggingface/transformers/node_modules/onnxruntime-web/dist/ort.wasm.min.js
+./node_modules/@huggingface/transformers/dist/transformers.web.js
+./src/workers/enhanceWorker.ts
+./src/utils/enhanceClipVideo.ts
+./src/components/panels/EnhancePanel.tsx
+./src/components/panels/MediaPanel.tsx
+./src/components/editor/EditorDesktop.tsx
+./src/components/editor/EditorShell.tsx
+./src/components/app/ClipFlowApp.tsx
+
+./node_modules/onnxruntime-web/dist/ort.wasm.min.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/onnxruntime-web/dist/ort.wasm.min.js
+./node_modules/@imgly/background-removal/dist/index.mjs
+./src/utils/backgroundRemoval.ts
+./src/components/panels/BackgroundRemovalPanel.tsx
+./src/components/panels/MediaPanel.tsx
+./src/components/editor/EditorDesktop.tsx
+./src/components/editor/EditorShell.tsx
+./src/components/app/ClipFlowApp.tsx
+
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/19) ...
+   Generating static pages (4/19) 
+   Generating static pages (9/19) 
+   Generating static pages (14/19) 
+ ✓ Generating static pages (19/19)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    18.6 kB         106 kB
+├ ○ /_not-found                          876 B          88.7 kB
+├ ƒ /api/admin/login                     0 B                0 B
+├ ƒ /api/admin/motion-presets            0 B                0 B
+├ ƒ /api/admin/motion-presets/[id]       0 B                0 B
+├ ƒ /api/admin/templates                 0 B                0 B
+├ ƒ /api/admin/templates/[id]            0 B                0 B
+├ ƒ /api/admin/upload-image              0 B                0 B
+├ ƒ /api/admin/users                     0 B                0 B
+├ ƒ /api/ai/director                     0 B                0 B
+├ ƒ /api/auth/google                     0 B                0 B
+├ ƒ /api/auth/google/callback            0 B                0 B
+├ ƒ /api/auth/login                      0 B                0 B
+├ ƒ /api/auth/logout                     0 B                0 B
+├ ƒ /api/auth/me                         0 B                0 B
+├ ƒ /api/auth/signup                     0 B                0 B
+├ ƒ /api/bg-removed                      0 B                0 B
+├ ƒ /api/motion-presets                  0 B                0 B
+├ ƒ /api/projects                        0 B                0 B
+├ ƒ /api/projects/[id]                   0 B                0 B
+├ ƒ /api/templates                       0 B                0 B
+├ ƒ /editor                              12.9 kB         108 kB
+└ ○ /settings                            262 kB          357 kB
++ First Load JS shared by all            87.8 kB
+  ├ chunks/117-4fbba79ae5224ec8.js       31.9 kB
+  ├ chunks/fd9d1056-1896e71a469c999e.js  53.6 kB
+  └ other shared chunks (total)          2.26 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
